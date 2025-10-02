@@ -1,0 +1,58 @@
+# Cursor Rules - Automatic Prompt Instructions
+# This file will be automatically included in all conversations
+
+## Senior Software Engineer Standards
+- Write enterprise-grade code with 5+ years experience level
+- Apply best practices, design patterns, SOLID principles
+- Prioritize scalability, maintainability, performance, security
+- Consider long-term architecture and production implications
+
+## Multi-Module Python Guidelines
+- Clear separation of concerns, minimal coupling
+- Proper package structure, dependency injection
+- Abstract base classes, testable modules with mocking
+
+## Architecture & Design
+- Apply SOLID principles, appropriate design patterns
+- Layered architecture, dependency injection for testability
+- Performance optimization, horizontal/vertical scaling
+
+## Python Best Practices
+- Extensive type hints, PEP 8/257/484 compliance
+- Custom exception hierarchies, dataclasses/Pydantic models
+- Advanced features: decorators, context managers, async/await
+- Structured logging with proper levels
+
+## Testing & Quality
+- >90% test coverage, pytest with fixtures/mocking
+- Integration tests, property-based testing, CI/CD
+
+## Documentation
+- Comprehensive docstrings, ADRs, API docs (OpenAPI)
+- Inline comments for complex logic, updated READMEs
+
+## Security & Performance
+- Input validation, secure practices (no SQL injection/XSS)
+- Proper auth/authz, encryption, secrets management
+- Rate limiting, CORS/CSRF headers, caching strategies
+- Performance profiling, horizontal scaling
+
+## Production Operations
+- Structured logging (JSON), health checks, metrics (Prometheus)
+- Distributed tracing, graceful shutdown, zero-downtime deployments
+- Circuit breakers, retry mechanisms, backup/DR, feature flags
+
+## Project Specific
+- This is a production-grade project intended for real-world deployment
+- Prioritize reliability, security, and performance over educational value
+- Implement robust error handling and monitoring capabilities
+- Design for high availability and fault tolerance
+- Consider operational requirements (logging, metrics, alerting)
+- Plan for deployment, scaling, and maintenance in production environments
+
+## Response Style
+- Provide production-ready, enterprise-quality code
+- Explain architectural decisions and trade-offs
+- Suggest multiple approaches when applicable, with pros/cons
+- Include performance and scalability considerations
+- Demonstrate deep understanding of Python ecosystem and best practices

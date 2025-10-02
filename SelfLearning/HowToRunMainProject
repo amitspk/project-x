@@ -1,0 +1,33 @@
+# How to Run Main Project
+
+## Quick Start
+```bash
+# 1. Setup environment
+source venv/bin/activate
+export OPENAI_API_KEY="sk-your-key-here"
+
+# 2. Run main processor
+python3 blog_processor.py --url "https://medium.com/article-url"
+
+# 3. Use generated questions with Chrome extension
+# File: processed_content/*.questions.json
+```
+
+## Alternative Commands
+```bash
+# Process with custom output
+python3 blog_processor.py --url "https://example.com/blog" --output-dir results
+
+# Debug mode
+python3 blog_processor.py --url "https://example.com/blog" --debug
+```
+
+## Chrome Extension Setup
+1. Chrome → chrome://extensions/
+2. Enable "Developer mode"
+3. Load unpacked → Select chrome-extension/ folder
+4. Upload .questions.json file and inject on any website
+
+## Files Generated
+- processed_content/{id}.summary.json
+- processed_content/{id}.questions.json ← Use this with extension

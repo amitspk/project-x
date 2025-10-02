@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Blog Question Injector",
+  "version": "1.0.0",
+  "description": "Inject interactive questions into any blog or article to enhance reader engagement",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Blog Question Injector"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "simple-question-injector.js",
+        "sample-questions.json"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

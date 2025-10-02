@@ -1,0 +1,54 @@
+# Web Crawler Dependencies
+# Production-grade web crawling with async support
+
+# HTTP client with async support
+aiohttp>=3.9.0,<4.0.0
+
+# HTML parsing
+beautifulsoup4>=4.12.0,<5.0.0
+
+# HTML parser (faster than built-in) - optional
+# lxml>=4.9.0,<5.0.0  # Commented out due to compilation issues on some systems
+
+# URL parsing and validation
+urllib3>=2.0.0,<3.0.0
+
+# Development and testing dependencies
+pytest>=7.4.0,<8.0.0
+pytest-asyncio>=0.21.0,<1.0.0
+pytest-cov>=4.1.0,<5.0.0
+pytest-mock>=3.11.0,<4.0.0
+
+# Code quality
+black>=23.0.0,<24.0.0
+isort>=5.12.0,<6.0.0
+flake8>=6.0.0,<7.0.0
+mypy>=1.5.0,<2.0.0
+
+# Type stubs
+types-requests>=2.31.0
+types-beautifulsoup4>=4.12.0
+
+# Logging (structured)
+structlog>=23.1.0,<24.0.0
+
+# Configuration management
+python-dotenv>=1.0.0,<2.0.0
+
+# Performance monitoring (optional)
+psutil>=5.9.0,<6.0.0
+
+# LLM Service Dependencies
+# Production-grade LLM integration with multiple providers
+
+# OpenAI API client
+openai>=1.0.0,<2.0.0
+
+# Anthropic Claude API client
+anthropic>=0.25.0,<1.0.0
+
+# Google Generative AI (optional)
+# google-generativeai>=0.3.0,<1.0.0
+
+# Ollama local LLM client (optional)
+# ollama>=0.1.0,<1.0.0
