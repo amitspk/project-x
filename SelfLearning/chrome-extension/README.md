@@ -279,3 +279,19 @@ chrome-extension/
 **Ready to test your question injection system on any website!** 🎉
 
 Install the extension, upload your generated JSON files, and see your questions come to life on any webpage.
+
+---
+
+## 🔄 Relationship to ui-js/
+
+**IMPORTANT**: This chrome-extension is a **test harness only**!
+
+The actual production library is in: `../ui-js/auto-blog-question-injector.js`
+
+This extension:
+- ✅ Tests the library in a browser environment
+- ✅ Simulates how it works on publisher sites
+- ❌ Is NOT what publishers deploy
+
+Publishers deploy: `ui-js/auto-blog-question-injector.js`
+

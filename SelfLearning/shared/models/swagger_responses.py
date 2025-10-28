@@ -1,0 +1,318 @@
+"""
+Swagger/OpenAPI response models for API documentation.
+
+These models are used to generate accurate API documentation
+with proper response schemas for UI developers.
+"""
+
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field
+from datetime import datetime
+
+
+# ============================================================================
+# Base Response Models
+# ============================================================================
+
+class ErrorDetailSchema(BaseModel):
+    """Error detail schema for Swagger."""
+    code: str = Field(..., example="NOT_FOUND")
+    detail: str = Field(..., example="Resource not found")
+    field: Optional[str] = Field(None, example="blog_url")
+
+
+class ResponseMetadataSchema(BaseModel):
+    """Metadata schema for list responses."""
+    total: int = Field(..., example=100)
+    page: int = Field(..., example=1)
+    page_size: int = Field(..., example=10)
+
+
+class StandardSuccessResponse(BaseModel):
+    """Standard success response schema."""
+    status: str = Field("success", example="success")
+    status_code: int = Field(..., example=200)
+    message: str = Field(..., example="Operation successful")
+    result: Dict[str, Any] = Field(..., example={})
+    metadata: Optional[ResponseMetadataSchema] = None
+    warnings: Optional[List[str]] = None
+    request_id: str = Field(..., example="req_abc123def456")
+    timestamp: str = Field(..., example="2025-10-18T14:30:00.123456")
+
+
+class StandardErrorResponse(BaseModel):
+    """Standard error response schema."""
+    status: str = Field("error", example="error")
+    status_code: int = Field(..., example=404)
+    message: str = Field(..., example="Resource not found")
+    error: ErrorDetailSchema
+    warnings: Optional[List[str]] = None
+    request_id: str = Field(..., example="req_abc123def456")
+    timestamp: str = Field(..., example="2025-10-18T14:30:00.123456")
+
+
+# ============================================================================
+# Questions Router Response Models
+# ============================================================================
+
+class QuestionSchema(BaseModel):
+    """Question schema."""
+    id: str = Field(..., example="68f216e74c1c51f257077318")
+    question: str = Field(..., example="What is the main topic of this article?")
+    answer: str = Field(..., example="The article discusses...")
+    icon: str = Field(..., example="💡")
+    created_at: str = Field(..., example="2025-10-18T14:30:00")
+
+
+class BlogInfoSchema(BaseModel):
+    """Blog info schema."""
+    id: str = Field(..., example="68f216e74c1c51f257077316")
+    title: str = Field(..., example="Article Title")
+    url: str = Field(..., example="https://example.com/article")
+    author: str = Field(..., example="John Doe")
+    published_date: str = Field(..., example="2025-10-18")
+    question_count: int = Field(..., example=10)
+
+
+class QuestionsByUrlResult(BaseModel):
+    """Result for questions by URL endpoint."""
+    questions: List[QuestionSchema]
+    blog_info: BlogInfoSchema
+
+
+class QuestionsByUrlResponse(StandardSuccessResponse):
+    """Response for GET /questions/by-url."""
+    result: QuestionsByUrlResult
+
+
+class QuestionByIdResponse(StandardSuccessResponse):
+    """Response for GET /questions/{question_id}."""
+    result: QuestionSchema
+
+
+class CheckAndLoadResult(BaseModel):
+    """Result for check-and-load endpoint."""
+    processing_status: str = Field(..., example="ready", description="Status: ready, processing, not_started, or failed")
+    blog_url: str = Field(..., example="https://example.com/article")
+    questions: Optional[List[QuestionSchema]] = Field(None, description="Questions if ready, None otherwise")
+    blog_info: Optional[BlogInfoSchema] = Field(None, description="Blog info if ready, None otherwise")
+    job_id: Optional[str] = Field(None, example="72815d48-7283-4a89-9004-3465d1b4c293", description="Job ID if processing or not_started")
+    message: str = Field(..., example="Questions ready - loaded from cache")
+
+
+class CheckAndLoadResponse(StandardSuccessResponse):
+    """Response for GET /questions/check-and-load."""
+    result: CheckAndLoadResult
+
+
+# ============================================================================
+# Jobs Router Response Models
+# ============================================================================
+
+class JobResultSchema(BaseModel):
+    """Job result schema."""
+    job_id: str = Field(..., example="72815d48-7283-4a89-9004-3465d1b4c293")
+    blog_url: str = Field(..., example="https://example.com/article")
+    status: str = Field(..., example="COMPLETED")
+
+
+class ProcessJobResponse(StandardSuccessResponse):
+    """Response for POST /jobs/process."""
+    status_code: int = Field(202, example=202)
+    result: JobResultSchema
+
+
+class JobStatusSchema(BaseModel):
+    """Job status schema."""
+    job_id: str = Field(..., example="72815d48-7283-4a89-9004-3465d1b4c293")
+    blog_url: str = Field(..., example="https://example.com/article")
+    status: str = Field(..., example="completed")
+    failure_count: int = Field(..., example=0)
+    error_message: Optional[str] = Field(None, example=None)
+    created_at: str = Field(..., example="2025-10-18T14:30:00")
+    started_at: Optional[str] = Field(None, example="2025-10-18T14:30:05")
+    completed_at: Optional[str] = Field(None, example="2025-10-18T14:35:00")
+    processing_time_seconds: Optional[float] = Field(None, example=295.5)
+    result: Optional[Dict[str, Any]] = Field(None, example={"summary_id": "abc123", "question_count": 5})
+    updated_at: Optional[str] = Field(None, example="2025-10-18T14:35:00")
+
+
+class JobStatusResponse(StandardSuccessResponse):
+    """Response for GET /jobs/status/{job_id}."""
+    result: JobStatusSchema
+
+
+class QueueStatsSchema(BaseModel):
+    """Queue statistics schema."""
+    queued: int = Field(..., example=5)
+    processing: int = Field(..., example=2)
+    completed: int = Field(..., example=100)
+    failed: int = Field(..., example=3)
+    cancelled: int = Field(..., example=1)
+
+
+class JobStatsResult(BaseModel):
+    """Job stats result schema."""
+    queue_stats: QueueStatsSchema
+    total_jobs: int = Field(..., example=111)
+
+
+class JobStatsResponse(StandardSuccessResponse):
+    """Response for GET /jobs/stats."""
+    result: JobStatsResult
+
+
+# ============================================================================
+# QA Router Response Models
+# ============================================================================
+
+class QAResultSchema(BaseModel):
+    """Q&A result schema."""
+    success: bool = Field(..., example=True)
+    question: str = Field(..., example="What is AI?")
+    answer: str = Field(..., example="Artificial Intelligence refers to...")
+    word_count: int = Field(..., example=150)
+    processing_time_ms: float = Field(..., example=1234.56)
+
+
+class QAResponse(StandardSuccessResponse):
+    """Response for POST /qa/ask."""
+    result: QAResultSchema
+
+
+# ============================================================================
+# Search Router Response Models
+# ============================================================================
+
+class SimilarBlogSchema(BaseModel):
+    """Similar blog schema."""
+    blog_id: str = Field(..., example="68f216e74c1c51f257077316")
+    title: str = Field(..., example="Similar Article")
+    url: str = Field(..., example="https://example.com/similar")
+    similarity_score: float = Field(..., example=0.85)
+
+
+class SearchResultSchema(BaseModel):
+    """Search result schema."""
+    similar_blogs: List[SimilarBlogSchema]
+    total: int = Field(..., example=5)
+
+
+class SearchResponse(StandardSuccessResponse):
+    """Response for POST /search/similar."""
+    result: SearchResultSchema
+
+
+# ============================================================================
+# Publishers Router Response Models
+# ============================================================================
+
+class PublisherConfigSchema(BaseModel):
+    """Publisher configuration schema."""
+    questions_per_blog: int = Field(..., example=5)
+    llm_model: str = Field(..., example="gpt-4o-mini")
+    temperature: float = Field(..., example=0.7)
+    max_tokens: int = Field(..., example=2000)
+    generate_summary: bool = Field(..., example=True)
+    generate_embeddings: bool = Field(..., example=True)
+    daily_blog_limit: int = Field(..., example=100)
+
+
+class PublisherSchema(BaseModel):
+    """Publisher schema."""
+    id: str = Field(..., example="a1a02dfd-b877-4d9d-b072-6936b39fc737")
+    name: str = Field(..., example="Tech Blog Inc")
+    domain: str = Field(..., example="techblog.com")
+    email: str = Field(..., example="admin@techblog.com")
+    status: str = Field(..., example="active")
+    config: PublisherConfigSchema
+    created_at: str = Field(..., example="2025-10-18T14:30:00")
+    subscription_tier: str = Field(..., example="free")
+
+
+class PublisherOnboardResult(BaseModel):
+    """Publisher onboard result schema."""
+    success: bool = Field(..., example=True)
+    publisher: PublisherSchema
+    api_key: str = Field(..., example="pub_abc123def456")
+    message: str = Field(..., example="Publisher onboarded successfully")
+
+
+class PublisherOnboardResponse(StandardSuccessResponse):
+    """Response for POST /publishers/onboard."""
+    status_code: int = Field(201, example=201)
+    result: PublisherOnboardResult
+
+
+class PublisherGetResult(BaseModel):
+    """Publisher get result schema."""
+    success: bool = Field(..., example=True)
+    publisher: PublisherSchema
+
+
+class PublisherGetResponse(StandardSuccessResponse):
+    """Response for GET /publishers/{publisher_id} and /publishers/by-domain/{domain}."""
+    result: PublisherGetResult
+
+
+class PublishersListResult(BaseModel):
+    """Publishers list result schema."""
+    success: bool = Field(..., example=True)
+    publishers: List[PublisherSchema]
+    total: int = Field(..., example=50)
+    page: int = Field(..., example=1)
+    page_size: int = Field(..., example=10)
+
+
+class PublishersListResponse(StandardSuccessResponse):
+    """Response for GET /publishers/."""
+    result: PublishersListResult
+    metadata: ResponseMetadataSchema
+
+
+class PublisherUpdateResult(BaseModel):
+    """Publisher update result schema."""
+    success: bool = Field(..., example=True)
+    publisher: PublisherSchema
+    message: str = Field(..., example="Publisher updated successfully")
+
+
+class PublisherUpdateResponse(StandardSuccessResponse):
+    """Response for PUT /publishers/{publisher_id}."""
+    result: PublisherUpdateResult
+
+
+class PublisherDeleteResult(BaseModel):
+    """Publisher delete result schema."""
+    success: bool = Field(..., example=True)
+    message: str = Field(..., example="Publisher deleted successfully")
+
+
+class PublisherDeleteResponse(StandardSuccessResponse):
+    """Response for DELETE /publishers/{publisher_id}."""
+    result: PublisherDeleteResult
+
+
+class PublisherConfigResult(BaseModel):
+    """Publisher config result schema."""
+    success: bool = Field(..., example=True)
+    config: PublisherConfigSchema
+
+
+class PublisherConfigResponse(StandardSuccessResponse):
+    """Response for GET /publishers/{publisher_id}/config."""
+    result: PublisherConfigResult
+
+
+class PublisherRegenerateApiKeyResult(BaseModel):
+    """Publisher regenerate API key result schema."""
+    publisher: PublisherSchema
+    api_key: str = Field(..., example="pub_NewGeneratedKey123...")
+    message: str = Field(..., example="API key regenerated successfully. Please save this key - it won't be shown again.")
+
+
+class PublisherRegenerateApiKeyResponse(StandardSuccessResponse):
+    """Response for POST /publishers/{publisher_id}/regenerate-api-key."""
+    result: PublisherRegenerateApiKeyResult = Field(..., description="Details of the publisher and the new API key")
+    message: str = "API key regenerated successfully"
+

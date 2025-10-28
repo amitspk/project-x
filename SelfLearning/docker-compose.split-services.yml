@@ -1,0 +1,141 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7
+    container_name: blog-qa-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: blog_qa_db
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - blog-qa-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL Database (for publisher configs)
+  postgres:
+    image: postgres:16
+    container_name: blog-qa-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: blog_qa_publishers
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - blog-qa-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Mongo Express - MongoDB Web UI
+  mongo-express:
+    image: mongo-express:latest
+    container_name: blog-qa-mongo-express
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: password123
+      ME_CONFIG_MONGODB_URL: mongodb://admin:password123@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: password123
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - blog-qa-network
+    restart: unless-stopped
+
+  # pgAdmin - PostgreSQL Web UI
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: blog-qa-pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - blog-qa-network
+    restart: unless-stopped
+
+  # API Service (Fast Read Path)
+  api-service:
+    build:
+      context: .
+      dockerfile: api_service/Dockerfile
+    container_name: blog-qa-api
+    ports:
+      - "8005:8005"
+    environment:
+      - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_USERNAME=admin
+      - MONGODB_PASSWORD=password123
+      - DATABASE_NAME=blog_qa_db
+      - POSTGRES_URL=postgresql+psycopg://postgres:postgres@postgres:5432/blog_qa_publishers
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
+      - API_SERVICE_PORT=8005
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - blog-qa-network
+    restart: unless-stopped
+
+  # Worker Service (Heavy Processing)
+  worker-service:
+    build:
+      context: .
+      dockerfile: worker_service/Dockerfile
+    container_name: blog-qa-worker
+    environment:
+      - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_USERNAME=admin
+      - MONGODB_PASSWORD=password123
+      - DATABASE_NAME=blog_qa_db
+      - POSTGRES_URL=postgresql+psycopg://postgres:postgres@postgres:5432/blog_qa_publishers
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - POLL_INTERVAL_SECONDS=5
+      - CONCURRENT_JOBS=1
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - blog-qa-network
+    restart: unless-stopped
+
+networks:
+  blog-qa-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  postgres_data:
+  pgadmin_data:
+

@@ -10,7 +10,7 @@ export OPENAI_API_KEY="sk-your-key-here"
 python3 blog_processor.py --url "https://medium.com/article-url"
 
 # 3. Use generated questions with Chrome extension
-# File: processed_content/*.questions.json
+# File: processed_content/questions/*.questions.json
 ```
 
 ## Alternative Commands
@@ -29,5 +29,29 @@ python3 blog_processor.py --url "https://example.com/blog" --debug
 4. Upload .questions.json file and inject on any website
 
 ## Files Generated
-- processed_content/{id}.summary.json
-- processed_content/{id}.questions.json ← Use this with extension
+- processed_content/summaries/{id}.summary.json
+- processed_content/questions/{id}.questions.json ← Use this with extension
+
+## MongoDB Integration (Optional)
+# Start MongoDB for persistent storage
+cd mongodb && ./scripts/mongodb_setup.sh start
+
+# Access MongoDB
+# Web Interface: http://localhost:8081 
+#   Login: admin / password123
+# Direct Connection: mongodb://admin:password123@localhost:27017/blog_ai_db
+# Command Line: docker exec selflearning_mongodb mongosh -u admin -p password123
+
+# Run MongoDB example
+python mongodb_example.py
+
+## Blog Processing Options
+
+# Option 1: Store in files (original behavior)
+./venv/bin/python blog_processor.py --url "https://medium.com/@alxkm/effective-use-of-threadlocal-in-java-applications-f4eb6a648d4a"
+
+# Option 2: Store in MongoDB collections
+./venv/bin/python blog_processor.py --url "https://medium.com/@alxkm/effective-use-of-threadlocal-in-java-applications-f4eb6a648d4a" --mongodb
+
+# Option 3: Use dedicated MongoDB processor
+./venv/bin/python blog_processor_mongodb.py --url "https://medium.com/@alxkm/effective-use-of-threadlocal-in-java-applications-f4eb6a648d4a"

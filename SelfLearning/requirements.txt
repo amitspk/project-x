@@ -52,3 +52,60 @@ anthropic>=0.25.0,<1.0.0
 
 # Ollama local LLM client (optional)
 # ollama>=0.1.0,<1.0.0
+
+# Vector Database Dependencies
+# Production-grade vector database and embedding capabilities
+
+# Core scientific computing
+numpy>=1.24.0,<2.0.0
+scipy>=1.10.0,<2.0.0
+
+# Vector databases (optional - install as needed)
+# chromadb>=0.4.0,<1.0.0  # For ChromaDB vector store
+# faiss-cpu>=1.7.0,<2.0.0  # For FAISS vector store (CPU version)
+# faiss-gpu>=1.7.0,<2.0.0  # For FAISS vector store (GPU version)
+# pinecone-client>=2.2.0,<3.0.0  # For Pinecone vector store
+
+# Local embedding models (optional)
+# sentence-transformers>=2.2.0,<3.0.0  # For local sentence transformers
+# torch>=2.0.0,<3.0.0  # Required by sentence-transformers
+# transformers>=4.21.0,<5.0.0  # Required by sentence-transformers
+
+# Text processing
+# nltk>=3.8.0,<4.0.0  # For advanced text processing (optional)
+# spacy>=3.6.0,<4.0.0  # For NLP processing (optional)
+
+# MongoDB Dependencies
+# Production-grade NoSQL database for persistent storage
+
+# Core MongoDB drivers
+motor>=3.3.0,<4.0.0  # Async MongoDB driver for Python
+pymongo>=4.5.0,<5.0.0  # Synchronous MongoDB driver (required by motor)
+
+# Blog Manager Microservice Dependencies
+# Production-grade REST API microservice with FastAPI
+
+# FastAPI framework and server
+fastapi>=0.104.0,<1.0.0  # Modern, fast web framework for building APIs
+uvicorn[standard]>=0.24.0,<1.0.0  # ASGI server for FastAPI
+
+# Data validation and serialization
+pydantic>=2.4.0,<3.0.0  # Data validation using Python type hints
+
+# Resilience & Production Hardening
+pybreaker>=1.0.0,<2.0.0  # Circuit breaker pattern for fault tolerance
+slowapi>=0.1.9,<1.0.0  # Rate limiting for FastAPI
+redis>=5.0.0,<6.0.0  # Redis client for caching and rate limiting
+
+# Observability & Monitoring
+opentelemetry-api>=1.20.0,<2.0.0  # OpenTelemetry API for distributed tracing
+opentelemetry-sdk>=1.20.0,<2.0.0  # OpenTelemetry SDK
+opentelemetry-instrumentation-fastapi>=0.41b0,<1.0.0  # FastAPI auto-instrumentation
+opentelemetry-exporter-jaeger>=1.20.0,<2.0.0  # Jaeger exporter for traces
+prometheus-client>=0.18.0,<1.0.0  # Prometheus metrics client
+prometheus-fastapi-instrumentator>=6.1.0,<7.0.0  # FastAPI Prometheus instrumentation
+
+# Authentication & Security
+python-jose[cryptography]>=3.3.0,<4.0.0  # JWT token handling
+passlib[bcrypt]>=1.7.4,<2.0.0  # Password hashing
+python-multipart>=0.0.6,<1.0.0  # For form data and file uploads

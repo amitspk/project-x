@@ -1,0 +1,3798 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Blog Q&A API Service",
+    "description": "\n    API for blog content processing, question generation, and retrieval.\n    \n    ## Authentication\n    \n    This API uses two types of API key authentication:\n    \n    ### Admin Authentication (X-Admin-Key)\n    - Required for all `/api/v1/publishers/*` endpoints\n    - Used for publisher management and administration\n    - Header: `X-Admin-Key: admin_your-key-here`\n    \n    ### Publisher Authentication (X-API-Key)\n    - Required for content endpoints: `/api/v1/questions/by-url`, `/api/v1/jobs/process`\n    - Each publisher gets a unique API key upon onboarding\n    - Validates domain ownership automatically\n    - Header: `X-API-Key: pub_your-key-here`\n    \n    ## Features\n    - Automated blog content processing\n    - AI-generated questions and summaries\n    - Vector similarity search\n    - Custom Q&A endpoint\n    - Publisher management and rate limiting\n    ",
+    "version": "2.0.0"
+  },
+  "paths": {
+    "/api/v1/questions/check-and-load": {
+      "get": {
+        "tags": [
+          "Questions"
+        ],
+        "summary": "Check And Load Questions",
+        "description": "Intelligent endpoint that checks if questions exist and loads them, or initiates processing.\n\n**Authentication**: Requires X-API-Key header with valid publisher API key.\n\n**Smart Loading Strategy**:\n1. First checks if questions already exist for the URL\n2. If YES → Returns questions immediately (fast path ⚡)\n3. If NO → Checks if processing job exists\n4. If job exists → Returns job status\n5. If no job → Auto-creates processing job\n\n**Response States**:\n- `ready`: Questions are available and returned\n- `processing`: Job is currently processing (returns job_id)\n- `not_started`: New job created (returns job_id)\n- `failed`: Previous processing failed (can retry)\n\n**Benefits**:\n- Single API call for UI\n- Optimal performance (returns cached questions if available)\n- Automatic job creation if needed\n- No duplicate processing jobs",
+        "operationId": "check_and_load_questions_api_v1_questions_check_and_load_get",
+        "parameters": [
+          {
+            "name": "blog_url",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "The blog URL to check and load questions for",
+              "title": "Blog Url"
+            },
+            "description": "The blog URL to check and load questions for"
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Publisher API key for accessing content",
+              "title": "X-Api-Key"
+            },
+            "description": "Publisher API key for accessing content"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Questions ready or processing initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckAndLoadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Publisher account not active or domain mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/questions/by-url": {
+      "get": {
+        "tags": [
+          "Questions"
+        ],
+        "summary": "Get Questions By Url",
+        "description": "Get all questions for a specific blog URL.\n\n**Authentication**: Requires X-API-Key header with valid publisher API key.\n\nQuestions are randomized on each request for better user experience.\n\nReturns standardized format:\n{\n    \"status\": \"success\",\n    \"status_code\": 200,\n    \"message\": \"Questions retrieved successfully\",\n    \"result\": {...},\n    \"request_id\": \"req_abc123\",\n    \"timestamp\": \"2025-10-18T14:30:00.123Z\"\n}",
+        "operationId": "get_questions_by_url_api_v1_questions_by_url_get",
+        "parameters": [
+          {
+            "name": "blog_url",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "The blog URL to get questions for",
+              "title": "Blog Url"
+            },
+            "description": "The blog URL to get questions for"
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Publisher API key for accessing content",
+              "title": "X-Api-Key"
+            },
+            "description": "Publisher API key for accessing content"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Questions retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionsByUrlResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required - X-API-Key header missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Publisher account not active or domain mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No questions found for the given URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/questions/{question_id}": {
+      "get": {
+        "tags": [
+          "Questions"
+        ],
+        "summary": "Get Question By Id",
+        "description": "Get a specific question by ID.\n\n**Authentication**: Requires X-API-Key header with valid publisher API key.\n\nReturns standardized format:\n{\n    \"status\": \"success\",\n    \"status_code\": 200,\n    \"message\": \"Question retrieved successfully\",\n    \"result\": {...},\n    \"request_id\": \"req_abc123\",\n    \"timestamp\": \"2025-10-18T14:30:00.123Z\"\n}",
+        "operationId": "get_question_by_id_api_v1_questions__question_id__get",
+        "parameters": [
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Question Id"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Publisher API key for accessing content",
+              "title": "X-Api-Key"
+            },
+            "description": "Publisher API key for accessing content"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Question retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionByIdResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required - X-API-Key header missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Publisher account not active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Question not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search/similar": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Search Similar Blogs",
+        "description": "Search for similar blogs based on a question.\n\n**Authentication**: Requires X-API-Key header with valid publisher API key.\n\nThis uses the question's embedding to find semantically similar\nblog summaries using vector search. Authentication is required to \nprevent abuse of the vector database.\n\nReturns standardized format:\n{\n    \"status\": \"success\",\n    \"status_code\": 200,\n    \"message\": \"Similar blogs found successfully\",\n    \"result\": {...},\n    \"request_id\": \"req_abc123\",\n    \"timestamp\": \"2025-10-18T14:30:00.123Z\"\n}",
+        "operationId": "search_similar_blogs_api_v1_search_similar_post",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Publisher API key for accessing content",
+              "title": "X-Api-Key"
+            },
+            "description": "Publisher API key for accessing content"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchSimilarRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Similar blogs found successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required - X-API-Key header missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Publisher account not active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Question not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/qa/ask": {
+      "post": {
+        "tags": [
+          "Q&A"
+        ],
+        "summary": "Ask Question",
+        "description": "Answer a custom question using LLM.\n\n**Authentication**: Requires X-API-Key header with valid publisher API key.\n\nThis endpoint is used by the Chrome extension's search feature\nto answer user-submitted questions. It uses the OpenAI API (costs money),\nso authentication is required to prevent abuse.\n\nReturns standardized format:\n{\n    \"status\": \"success\",\n    \"status_code\": 200,\n    \"message\": \"Question answered successfully\",\n    \"result\": {...},\n    \"request_id\": \"req_abc123\",\n    \"timestamp\": \"2025-10-18T14:30:00.123Z\"\n}",
+        "operationId": "ask_question_api_v1_qa_ask_post",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Publisher API key for accessing content",
+              "title": "X-Api-Key"
+            },
+            "description": "Publisher API key for accessing content"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QARequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Question answered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QAResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid question or empty question",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required - X-API-Key header missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Publisher account not active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/process": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Enqueue Blog Processing",
+        "description": "Enqueue a blog for processing.\n\n**Authentication:**\n- Requires X-API-Key header with valid publisher API key\n- Blog URL domain must match publisher's registered domain\n\n**Rate Limiting:**\n- Daily blog processing limit enforced per publisher\n- Trial accounts have lower limits\n\nReturns standardized 202 Accepted response with job_id for tracking.\nThe actual processing will be done asynchronously by the worker service.\n\nIf the blog has already been processed, returns the existing completed job\ninstead of creating a duplicate.",
+        "operationId": "enqueue_blog_processing_api_v1_jobs_process_post",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Publisher API key for accessing content",
+              "title": "X-Api-Key"
+            },
+            "description": "Publisher API key for accessing content"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Blog processing job enqueued successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessJobResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid blog URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required - X-API-Key header missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Domain mismatch or daily limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/status/{job_id}": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Get Job Status",
+        "description": "Get the status of a processing job.\n\n**Authentication**: Requires X-API-Key header with valid publisher API key.\n\nReturns job details including status, timestamps, error messages (if any),\nand processing results.",
+        "operationId": "get_job_status_api_v1_jobs_status__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Publisher API key for accessing content",
+              "title": "X-Api-Key"
+            },
+            "description": "Publisher API key for accessing content"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job status retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required - X-API-Key header missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Publisher account not active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Job not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/stats": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Get Queue Stats",
+        "description": "Get statistics about the job queue.\n\n**Admin Only**: This endpoint requires admin authentication (X-Admin-Key header).\n\nReturns aggregated statistics about job processing including counts by status\n(pending, processing, completed, failed) and total job count.",
+        "operationId": "get_queue_stats_api_v1_jobs_stats_get",
+        "parameters": [
+          {
+            "name": "x-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Admin API key for managing publishers",
+              "title": "X-Admin-Key"
+            },
+            "description": "Admin API key for managing publishers"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Queue statistics retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Admin authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/cancel/{job_id}": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Cancel Job",
+        "description": "Cancel a queued job.\n\n**Admin Only**: This endpoint requires admin authentication (X-Admin-Key header).\n\nJobs can only be cancelled if they are in 'pending' or 'queued' status.\nJobs that are already processing or completed cannot be cancelled.",
+        "operationId": "cancel_job_api_v1_jobs_cancel__job_id__post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "x-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Admin API key for managing publishers",
+              "title": "X-Admin-Key"
+            },
+            "description": "Admin API key for managing publishers"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job cancelled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardSuccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Admin authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Job not found or cannot be cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/publishers/onboard": {
+      "post": {
+        "tags": [
+          "Publishers"
+        ],
+        "summary": "Onboard Publisher",
+        "description": "Onboard a new publisher.\n\nCreates a new publisher account with custom configuration.\nReturns the publisher details including a generated API key.\n\nExample:\n```json\n{\n    \"name\": \"Tech Blog Inc\",\n    \"domain\": \"techblog.com\",\n    \"email\": \"admin@techblog.com\",\n    \"config\": {\n        \"questions_per_blog\": 7,\n        \"llm_model\": \"gpt-4o-mini\",\n        \"temperature\": 0.8,\n        \"daily_blog_limit\": 50\n    }\n}\n```",
+        "operationId": "onboard_publisher_api_v1_publishers_onboard_post",
+        "parameters": [
+          {
+            "name": "x-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Admin API key for managing publishers",
+              "title": "X-Admin-Key"
+            },
+            "description": "Admin API key for managing publishers"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublisherCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Publisher onboarded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublisherOnboardResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Admin authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Publisher with domain already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/publishers/{publisher_id}": {
+      "get": {
+        "tags": [
+          "Publishers"
+        ],
+        "summary": "Get Publisher",
+        "description": "Get publisher by ID.",
+        "operationId": "get_publisher_api_v1_publishers__publisher_id__get",
+        "parameters": [
+          {
+            "name": "publisher_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Publisher Id"
+            }
+          },
+          {
+            "name": "x-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Admin API key for managing publishers",
+              "title": "X-Admin-Key"
+            },
+            "description": "Admin API key for managing publishers"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Publisher retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublisherGetResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Admin authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Publisher not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Publishers"
+        ],
+        "summary": "Update Publisher",
+        "description": "Update publisher configuration.\n\n**Admin Only**: This endpoint requires admin authentication (X-Admin-Key header).\n\nAllows updating publisher name, email, status, configuration, and subscription tier.",
+        "operationId": "update_publisher_api_v1_publishers__publisher_id__put",
+        "parameters": [
+          {
+            "name": "publisher_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Publisher Id"
+            }
+          },
+          {
+            "name": "x-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Admin API key for managing publishers",
+              "title": "X-Admin-Key"
+            },
+            "description": "Admin API key for managing publishers"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublisherUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Publisher updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublisherUpdateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Admin authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Publisher not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Publishers"
+        ],
+        "summary": "Delete Publisher",
+        "description": "Delete a publisher.\n\n**Admin Only**: This endpoint requires admin authentication (X-Admin-Key header).\n\nThis is a soft delete - the publisher is marked as inactive.",
+        "operationId": "delete_publisher_api_v1_publishers__publisher_id__delete",
+        "parameters": [
+          {
+            "name": "publisher_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Publisher Id"
+            }
+          },
+          {
+            "name": "x-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Admin API key for managing publishers",
+              "title": "X-Admin-Key"
+            },
+            "description": "Admin API key for managing publishers"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Publisher deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublisherDeleteResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Admin authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Publisher not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/publishers/by-domain/{domain}": {
+      "get": {
+        "tags": [
+          "Publishers"
+        ],
+        "summary": "Get Publisher By Domain",
+        "description": "Get publisher by domain.\n\nUseful for checking if a domain is already onboarded.",
+        "operationId": "get_publisher_by_domain_api_v1_publishers_by_domain__domain__get",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Domain"
+            }
+          },
+          {
+            "name": "x-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Admin API key for managing publishers",
+              "title": "X-Admin-Key"
+            },
+            "description": "Admin API key for managing publishers"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Publisher retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublisherGetResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Admin authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Publisher not found for domain",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/publishers/": {
+      "get": {
+        "tags": [
+          "Publishers"
+        ],
+        "summary": "List Publishers",
+        "description": "List all publishers with pagination.\n\nCan filter by status (active, inactive, suspended, trial).",
+        "operationId": "list_publishers_api_v1_publishers__get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PublisherStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by status",
+              "title": "Status"
+            },
+            "description": "Filter by status"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "Page number"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Items per page",
+              "default": 50,
+              "title": "Page Size"
+            },
+            "description": "Items per page"
+          },
+          {
+            "name": "x-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Admin API key for managing publishers",
+              "title": "X-Admin-Key"
+            },
+            "description": "Admin API key for managing publishers"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Publishers retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishersListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Admin authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/publishers/{publisher_id}/config": {
+      "get": {
+        "tags": [
+          "Publishers"
+        ],
+        "summary": "Get Publisher Config",
+        "description": "Get publisher configuration.\n\nReturns only the config object, useful for workers/services.",
+        "operationId": "get_publisher_config_api_v1_publishers__publisher_id__config_get",
+        "parameters": [
+          {
+            "name": "publisher_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Publisher Id"
+            }
+          },
+          {
+            "name": "x-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Admin API key for managing publishers",
+              "title": "X-Admin-Key"
+            },
+            "description": "Admin API key for managing publishers"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Publisher configuration retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublisherConfigResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Admin authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Publisher not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/publishers/{publisher_id}/regenerate-api-key": {
+      "post": {
+        "tags": [
+          "Publishers"
+        ],
+        "summary": "Regenerate Publisher Api Key",
+        "description": "Regenerate API key for a publisher.\n\n**Admin Only**: This endpoint requires admin authentication.\n\nThis will:\n1. Generate a new API key for the publisher\n2. Invalidate the old API key immediately\n3. Return the new API key (save it - won't be shown again!)\n\n**Use cases**:\n- Publisher lost their API key\n- API key was compromised\n- Security audit requires key rotation\n\n**⚠️ Warning**: The old API key will stop working immediately!",
+        "operationId": "regenerate_publisher_api_key_api_v1_publishers__publisher_id__regenerate_api_key_post",
+        "parameters": [
+          {
+            "name": "publisher_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Publisher Id"
+            }
+          },
+          {
+            "name": "x-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Admin API key for managing publishers",
+              "title": "X-Admin-Key"
+            },
+            "description": "Admin API key for managing publishers"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API key regenerated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublisherRegenerateApiKeyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Admin authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Publisher not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Health check endpoint.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Root",
+        "description": "Root endpoint.",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BlogInfoSchema": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "example": "68f216e74c1c51f257077316"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "example": "Article Title"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "example": "https://example.com/article"
+          },
+          "author": {
+            "type": "string",
+            "title": "Author",
+            "example": "John Doe"
+          },
+          "published_date": {
+            "type": "string",
+            "title": "Published Date",
+            "example": "2025-10-18"
+          },
+          "question_count": {
+            "type": "integer",
+            "title": "Question Count",
+            "example": 10
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "url",
+          "author",
+          "published_date",
+          "question_count"
+        ],
+        "title": "BlogInfoSchema",
+        "description": "Blog info schema."
+      },
+      "CheckAndLoadResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "success",
+            "example": "success"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Operation successful"
+          },
+          "result": {
+            "$ref": "#/components/schemas/CheckAndLoadResult"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMetadataSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "example": "req_abc123def456"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2025-10-18T14:30:00.123456"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status_code",
+          "message",
+          "result",
+          "request_id",
+          "timestamp"
+        ],
+        "title": "CheckAndLoadResponse",
+        "description": "Response for GET /questions/check-and-load."
+      },
+      "CheckAndLoadResult": {
+        "properties": {
+          "processing_status": {
+            "type": "string",
+            "title": "Processing Status",
+            "description": "Status: ready, processing, not_started, or failed",
+            "example": "ready"
+          },
+          "blog_url": {
+            "type": "string",
+            "title": "Blog Url",
+            "example": "https://example.com/article"
+          },
+          "questions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/QuestionSchema"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Questions",
+            "description": "Questions if ready, None otherwise"
+          },
+          "blog_info": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BlogInfoSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Blog info if ready, None otherwise"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id",
+            "description": "Job ID if processing or not_started",
+            "example": "72815d48-7283-4a89-9004-3465d1b4c293"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Questions ready - loaded from cache"
+          }
+        },
+        "type": "object",
+        "required": [
+          "processing_status",
+          "blog_url",
+          "message"
+        ],
+        "title": "CheckAndLoadResult",
+        "description": "Result for check-and-load endpoint."
+      },
+      "ErrorDetailSchema": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "example": "NOT_FOUND"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "example": "Resource not found"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field",
+            "example": "blog_url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "detail"
+        ],
+        "title": "ErrorDetailSchema",
+        "description": "Error detail schema for Swagger."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "JobCreateRequest": {
+        "properties": {
+          "blog_url": {
+            "type": "string",
+            "title": "Blog Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "blog_url"
+        ],
+        "title": "JobCreateRequest",
+        "description": "Request to create a new job."
+      },
+      "JobResultSchema": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id",
+            "example": "72815d48-7283-4a89-9004-3465d1b4c293"
+          },
+          "blog_url": {
+            "type": "string",
+            "title": "Blog Url",
+            "example": "https://example.com/article"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "example": "COMPLETED"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "blog_url",
+          "status"
+        ],
+        "title": "JobResultSchema",
+        "description": "Job result schema."
+      },
+      "JobStatsResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "success",
+            "example": "success"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Operation successful"
+          },
+          "result": {
+            "$ref": "#/components/schemas/JobStatsResult"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMetadataSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "example": "req_abc123def456"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2025-10-18T14:30:00.123456"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status_code",
+          "message",
+          "result",
+          "request_id",
+          "timestamp"
+        ],
+        "title": "JobStatsResponse",
+        "description": "Response for GET /jobs/stats."
+      },
+      "JobStatsResult": {
+        "properties": {
+          "queue_stats": {
+            "$ref": "#/components/schemas/QueueStatsSchema"
+          },
+          "total_jobs": {
+            "type": "integer",
+            "title": "Total Jobs",
+            "example": 111
+          }
+        },
+        "type": "object",
+        "required": [
+          "queue_stats",
+          "total_jobs"
+        ],
+        "title": "JobStatsResult",
+        "description": "Job stats result schema."
+      },
+      "JobStatusResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "success",
+            "example": "success"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Operation successful"
+          },
+          "result": {
+            "$ref": "#/components/schemas/JobStatusSchema"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMetadataSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "example": "req_abc123def456"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2025-10-18T14:30:00.123456"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status_code",
+          "message",
+          "result",
+          "request_id",
+          "timestamp"
+        ],
+        "title": "JobStatusResponse",
+        "description": "Response for GET /jobs/status/{job_id}."
+      },
+      "JobStatusSchema": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id",
+            "example": "72815d48-7283-4a89-9004-3465d1b4c293"
+          },
+          "blog_url": {
+            "type": "string",
+            "title": "Blog Url",
+            "example": "https://example.com/article"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "example": "completed"
+          },
+          "failure_count": {
+            "type": "integer",
+            "title": "Failure Count",
+            "example": 0
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At",
+            "example": "2025-10-18T14:30:00"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At",
+            "example": "2025-10-18T14:30:05"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At",
+            "example": "2025-10-18T14:35:00"
+          },
+          "processing_time_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processing Time Seconds",
+            "example": 295.5
+          },
+          "result": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result",
+            "example": {
+              "question_count": 5,
+              "summary_id": "abc123"
+            }
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "example": "2025-10-18T14:35:00"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "blog_url",
+          "status",
+          "failure_count",
+          "created_at"
+        ],
+        "title": "JobStatusSchema",
+        "description": "Job status schema."
+      },
+      "LLMModel": {
+        "type": "string",
+        "enum": [
+          "gpt-4o-mini",
+          "gpt-4o",
+          "gpt-3.5-turbo",
+          "claude-3-5-sonnet-20241022",
+          "claude-3-5-haiku-20241022"
+        ],
+        "title": "LLMModel",
+        "description": "Supported LLM models."
+      },
+      "ProcessJobResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "success",
+            "example": "success"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "default": 202,
+            "example": 202
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Operation successful"
+          },
+          "result": {
+            "$ref": "#/components/schemas/JobResultSchema"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMetadataSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "example": "req_abc123def456"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2025-10-18T14:30:00.123456"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "result",
+          "request_id",
+          "timestamp"
+        ],
+        "title": "ProcessJobResponse",
+        "description": "Response for POST /jobs/process."
+      },
+      "PublisherConfig": {
+        "properties": {
+          "questions_per_blog": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Questions Per Blog",
+            "description": "Number of Q&A pairs to generate per blog",
+            "default": 5
+          },
+          "llm_model": {
+            "$ref": "#/components/schemas/LLMModel",
+            "description": "LLM model to use for generation",
+            "default": "gpt-4o-mini"
+          },
+          "temperature": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Temperature",
+            "description": "LLM temperature for generation",
+            "default": 0.7
+          },
+          "max_tokens": {
+            "type": "integer",
+            "maximum": 4000.0,
+            "minimum": 100.0,
+            "title": "Max Tokens",
+            "description": "Maximum tokens per LLM request",
+            "default": 2000
+          },
+          "generate_summary": {
+            "type": "boolean",
+            "title": "Generate Summary",
+            "description": "Whether to generate blog summaries",
+            "default": true
+          },
+          "generate_embeddings": {
+            "type": "boolean",
+            "title": "Generate Embeddings",
+            "description": "Whether to generate embeddings for search",
+            "default": true
+          },
+          "daily_blog_limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Blog Limit",
+            "description": "Maximum blogs to process per day (None for unlimited)",
+            "default": 100
+          },
+          "custom_question_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Question Prompt",
+            "description": "Custom prompt template for question generation"
+          },
+          "custom_summary_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Summary Prompt",
+            "description": "Custom prompt template for summary generation"
+          },
+          "ui_theme_color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ui Theme Color",
+            "description": "Primary color for question cards",
+            "default": "#6366f1"
+          },
+          "ui_icon_style": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ui Icon Style",
+            "description": "Icon style: emoji, material, fontawesome",
+            "default": "emoji"
+          }
+        },
+        "type": "object",
+        "title": "PublisherConfig",
+        "description": "Configuration for a publisher's content processing."
+      },
+      "PublisherConfigResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "success",
+            "example": "success"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Operation successful"
+          },
+          "result": {
+            "$ref": "#/components/schemas/PublisherConfigResult"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMetadataSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "example": "req_abc123def456"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2025-10-18T14:30:00.123456"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status_code",
+          "message",
+          "result",
+          "request_id",
+          "timestamp"
+        ],
+        "title": "PublisherConfigResponse",
+        "description": "Response for GET /publishers/{publisher_id}/config."
+      },
+      "PublisherConfigResult": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "example": true
+          },
+          "config": {
+            "$ref": "#/components/schemas/PublisherConfigSchema"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "config"
+        ],
+        "title": "PublisherConfigResult",
+        "description": "Publisher config result schema."
+      },
+      "PublisherConfigSchema": {
+        "properties": {
+          "questions_per_blog": {
+            "type": "integer",
+            "title": "Questions Per Blog",
+            "example": 5
+          },
+          "llm_model": {
+            "type": "string",
+            "title": "Llm Model",
+            "example": "gpt-4o-mini"
+          },
+          "temperature": {
+            "type": "number",
+            "title": "Temperature",
+            "example": 0.7
+          },
+          "max_tokens": {
+            "type": "integer",
+            "title": "Max Tokens",
+            "example": 2000
+          },
+          "generate_summary": {
+            "type": "boolean",
+            "title": "Generate Summary",
+            "example": true
+          },
+          "generate_embeddings": {
+            "type": "boolean",
+            "title": "Generate Embeddings",
+            "example": true
+          },
+          "daily_blog_limit": {
+            "type": "integer",
+            "title": "Daily Blog Limit",
+            "example": 100
+          }
+        },
+        "type": "object",
+        "required": [
+          "questions_per_blog",
+          "llm_model",
+          "temperature",
+          "max_tokens",
+          "generate_summary",
+          "generate_embeddings",
+          "daily_blog_limit"
+        ],
+        "title": "PublisherConfigSchema",
+        "description": "Publisher configuration schema."
+      },
+      "PublisherCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublisherConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "subscription_tier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subscription Tier",
+            "default": "free"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "domain",
+          "email"
+        ],
+        "title": "PublisherCreateRequest",
+        "description": "Request model for creating a new publisher."
+      },
+      "PublisherDeleteResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "success",
+            "example": "success"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Operation successful"
+          },
+          "result": {
+            "$ref": "#/components/schemas/PublisherDeleteResult"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMetadataSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "example": "req_abc123def456"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2025-10-18T14:30:00.123456"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status_code",
+          "message",
+          "result",
+          "request_id",
+          "timestamp"
+        ],
+        "title": "PublisherDeleteResponse",
+        "description": "Response for DELETE /publishers/{publisher_id}."
+      },
+      "PublisherDeleteResult": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Publisher deleted successfully"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "title": "PublisherDeleteResult",
+        "description": "Publisher delete result schema."
+      },
+      "PublisherGetResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "success",
+            "example": "success"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Operation successful"
+          },
+          "result": {
+            "$ref": "#/components/schemas/PublisherGetResult"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMetadataSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "example": "req_abc123def456"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2025-10-18T14:30:00.123456"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status_code",
+          "message",
+          "result",
+          "request_id",
+          "timestamp"
+        ],
+        "title": "PublisherGetResponse",
+        "description": "Response for GET /publishers/{publisher_id} and /publishers/by-domain/{domain}."
+      },
+      "PublisherGetResult": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "example": true
+          },
+          "publisher": {
+            "$ref": "#/components/schemas/PublisherSchema"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "publisher"
+        ],
+        "title": "PublisherGetResult",
+        "description": "Publisher get result schema."
+      },
+      "PublisherOnboardResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "success",
+            "example": "success"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "default": 201,
+            "example": 201
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Operation successful"
+          },
+          "result": {
+            "$ref": "#/components/schemas/PublisherOnboardResult"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMetadataSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "example": "req_abc123def456"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2025-10-18T14:30:00.123456"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "result",
+          "request_id",
+          "timestamp"
+        ],
+        "title": "PublisherOnboardResponse",
+        "description": "Response for POST /publishers/onboard."
+      },
+      "PublisherOnboardResult": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "example": true
+          },
+          "publisher": {
+            "$ref": "#/components/schemas/PublisherSchema"
+          },
+          "api_key": {
+            "type": "string",
+            "title": "Api Key",
+            "example": "pub_abc123def456"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Publisher onboarded successfully"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "publisher",
+          "api_key",
+          "message"
+        ],
+        "title": "PublisherOnboardResult",
+        "description": "Publisher onboard result schema."
+      },
+      "PublisherRegenerateApiKeyResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "success",
+            "example": "success"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "API key regenerated successfully"
+          },
+          "result": {
+            "$ref": "#/components/schemas/PublisherRegenerateApiKeyResult",
+            "description": "Details of the publisher and the new API key"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMetadataSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "example": "req_abc123def456"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2025-10-18T14:30:00.123456"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status_code",
+          "result",
+          "request_id",
+          "timestamp"
+        ],
+        "title": "PublisherRegenerateApiKeyResponse",
+        "description": "Response for POST /publishers/{publisher_id}/regenerate-api-key."
+      },
+      "PublisherRegenerateApiKeyResult": {
+        "properties": {
+          "publisher": {
+            "$ref": "#/components/schemas/PublisherSchema"
+          },
+          "api_key": {
+            "type": "string",
+            "title": "Api Key",
+            "example": "pub_NewGeneratedKey123..."
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "API key regenerated successfully. Please save this key - it won't be shown again."
+          }
+        },
+        "type": "object",
+        "required": [
+          "publisher",
+          "api_key",
+          "message"
+        ],
+        "title": "PublisherRegenerateApiKeyResult",
+        "description": "Publisher regenerate API key result schema."
+      },
+      "PublisherSchema": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "example": "a1a02dfd-b877-4d9d-b072-6936b39fc737"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "example": "Tech Blog Inc"
+          },
+          "domain": {
+            "type": "string",
+            "title": "Domain",
+            "example": "techblog.com"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email",
+            "example": "admin@techblog.com"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "example": "active"
+          },
+          "config": {
+            "$ref": "#/components/schemas/PublisherConfigSchema"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At",
+            "example": "2025-10-18T14:30:00"
+          },
+          "subscription_tier": {
+            "type": "string",
+            "title": "Subscription Tier",
+            "example": "free"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "domain",
+          "email",
+          "status",
+          "config",
+          "created_at",
+          "subscription_tier"
+        ],
+        "title": "PublisherSchema",
+        "description": "Publisher schema."
+      },
+      "PublisherStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "inactive",
+          "suspended",
+          "trial"
+        ],
+        "title": "PublisherStatus",
+        "description": "Publisher account status."
+      },
+      "PublisherUpdateRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublisherStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublisherConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "subscription_tier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subscription Tier"
+          }
+        },
+        "type": "object",
+        "title": "PublisherUpdateRequest",
+        "description": "Request model for updating a publisher."
+      },
+      "PublisherUpdateResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "success",
+            "example": "success"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Operation successful"
+          },
+          "result": {
+            "$ref": "#/components/schemas/PublisherUpdateResult"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMetadataSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "example": "req_abc123def456"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2025-10-18T14:30:00.123456"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status_code",
+          "message",
+          "result",
+          "request_id",
+          "timestamp"
+        ],
+        "title": "PublisherUpdateResponse",
+        "description": "Response for PUT /publishers/{publisher_id}."
+      },
+      "PublisherUpdateResult": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "example": true
+          },
+          "publisher": {
+            "$ref": "#/components/schemas/PublisherSchema"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Publisher updated successfully"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "publisher",
+          "message"
+        ],
+        "title": "PublisherUpdateResult",
+        "description": "Publisher update result schema."
+      },
+      "PublishersListResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "success",
+            "example": "success"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Operation successful"
+          },
+          "result": {
+            "$ref": "#/components/schemas/PublishersListResult"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/ResponseMetadataSchema"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "example": "req_abc123def456"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2025-10-18T14:30:00.123456"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status_code",
+          "message",
+          "result",
+          "metadata",
+          "request_id",
+          "timestamp"
+        ],
+        "title": "PublishersListResponse",
+        "description": "Response for GET /publishers/."
+      },
+      "PublishersListResult": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "example": true
+          },
+          "publishers": {
+            "items": {
+              "$ref": "#/components/schemas/PublisherSchema"
+            },
+            "type": "array",
+            "title": "Publishers"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "example": 50
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page",
+            "example": 1
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size",
+            "example": 10
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "publishers",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "PublishersListResult",
+        "description": "Publishers list result schema."
+      },
+      "QARequest": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "QARequest",
+        "description": "Request for Q&A endpoint."
+      },
+      "QAResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "success",
+            "example": "success"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Operation successful"
+          },
+          "result": {
+            "$ref": "#/components/schemas/QAResultSchema"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMetadataSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "example": "req_abc123def456"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2025-10-18T14:30:00.123456"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status_code",
+          "message",
+          "result",
+          "request_id",
+          "timestamp"
+        ],
+        "title": "QAResponse",
+        "description": "Response for POST /qa/ask."
+      },
+      "QAResultSchema": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "example": true
+          },
+          "question": {
+            "type": "string",
+            "title": "Question",
+            "example": "What is AI?"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer",
+            "example": "Artificial Intelligence refers to..."
+          },
+          "word_count": {
+            "type": "integer",
+            "title": "Word Count",
+            "example": 150
+          },
+          "processing_time_ms": {
+            "type": "number",
+            "title": "Processing Time Ms",
+            "example": 1234.56
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "question",
+          "answer",
+          "word_count",
+          "processing_time_ms"
+        ],
+        "title": "QAResultSchema",
+        "description": "Q&A result schema."
+      },
+      "QuestionByIdResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "success",
+            "example": "success"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Operation successful"
+          },
+          "result": {
+            "$ref": "#/components/schemas/QuestionSchema"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMetadataSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "example": "req_abc123def456"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2025-10-18T14:30:00.123456"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status_code",
+          "message",
+          "result",
+          "request_id",
+          "timestamp"
+        ],
+        "title": "QuestionByIdResponse",
+        "description": "Response for GET /questions/{question_id}."
+      },
+      "QuestionSchema": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "example": "68f216e74c1c51f257077318"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question",
+            "example": "What is the main topic of this article?"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer",
+            "example": "The article discusses..."
+          },
+          "icon": {
+            "type": "string",
+            "title": "Icon",
+            "example": "💡"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At",
+            "example": "2025-10-18T14:30:00"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "question",
+          "answer",
+          "icon",
+          "created_at"
+        ],
+        "title": "QuestionSchema",
+        "description": "Question schema."
+      },
+      "QuestionsByUrlResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "success",
+            "example": "success"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Operation successful"
+          },
+          "result": {
+            "$ref": "#/components/schemas/QuestionsByUrlResult"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMetadataSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "example": "req_abc123def456"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2025-10-18T14:30:00.123456"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status_code",
+          "message",
+          "result",
+          "request_id",
+          "timestamp"
+        ],
+        "title": "QuestionsByUrlResponse",
+        "description": "Response for GET /questions/by-url."
+      },
+      "QuestionsByUrlResult": {
+        "properties": {
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/QuestionSchema"
+            },
+            "type": "array",
+            "title": "Questions"
+          },
+          "blog_info": {
+            "$ref": "#/components/schemas/BlogInfoSchema"
+          }
+        },
+        "type": "object",
+        "required": [
+          "questions",
+          "blog_info"
+        ],
+        "title": "QuestionsByUrlResult",
+        "description": "Result for questions by URL endpoint."
+      },
+      "QueueStatsSchema": {
+        "properties": {
+          "queued": {
+            "type": "integer",
+            "title": "Queued",
+            "example": 5
+          },
+          "processing": {
+            "type": "integer",
+            "title": "Processing",
+            "example": 2
+          },
+          "completed": {
+            "type": "integer",
+            "title": "Completed",
+            "example": 100
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed",
+            "example": 3
+          },
+          "cancelled": {
+            "type": "integer",
+            "title": "Cancelled",
+            "example": 1
+          }
+        },
+        "type": "object",
+        "required": [
+          "queued",
+          "processing",
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "title": "QueueStatsSchema",
+        "description": "Queue statistics schema."
+      },
+      "ResponseMetadataSchema": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "example": 100
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page",
+            "example": 1
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size",
+            "example": 10
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "ResponseMetadataSchema",
+        "description": "Metadata schema for list responses."
+      },
+      "SearchResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "success",
+            "example": "success"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Operation successful"
+          },
+          "result": {
+            "$ref": "#/components/schemas/SearchResultSchema"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMetadataSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "example": "req_abc123def456"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2025-10-18T14:30:00.123456"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status_code",
+          "message",
+          "result",
+          "request_id",
+          "timestamp"
+        ],
+        "title": "SearchResponse",
+        "description": "Response for POST /search/similar."
+      },
+      "SearchResultSchema": {
+        "properties": {
+          "similar_blogs": {
+            "items": {
+              "$ref": "#/components/schemas/SimilarBlogSchema"
+            },
+            "type": "array",
+            "title": "Similar Blogs"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "example": 5
+          }
+        },
+        "type": "object",
+        "required": [
+          "similar_blogs",
+          "total"
+        ],
+        "title": "SearchResultSchema",
+        "description": "Search result schema."
+      },
+      "SearchSimilarRequest": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "title": "Question Id",
+            "description": "Question ID to find similar blogs for"
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "default": 3
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_id"
+        ],
+        "title": "SearchSimilarRequest",
+        "description": "Request to search for similar blogs."
+      },
+      "SimilarBlogSchema": {
+        "properties": {
+          "blog_id": {
+            "type": "string",
+            "title": "Blog Id",
+            "example": "68f216e74c1c51f257077316"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "example": "Similar Article"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "example": "https://example.com/similar"
+          },
+          "similarity_score": {
+            "type": "number",
+            "title": "Similarity Score",
+            "example": 0.85
+          }
+        },
+        "type": "object",
+        "required": [
+          "blog_id",
+          "title",
+          "url",
+          "similarity_score"
+        ],
+        "title": "SimilarBlogSchema",
+        "description": "Similar blog schema."
+      },
+      "StandardErrorResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "error",
+            "example": "error"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "example": 404
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Resource not found"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetailSchema"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "example": "req_abc123def456"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2025-10-18T14:30:00.123456"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status_code",
+          "message",
+          "error",
+          "request_id",
+          "timestamp"
+        ],
+        "title": "StandardErrorResponse",
+        "description": "Standard error response schema."
+      },
+      "StandardSuccessResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "success",
+            "example": "success"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "example": "Operation successful"
+          },
+          "result": {
+            "type": "object",
+            "title": "Result",
+            "example": {}
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMetadataSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "example": "req_abc123def456"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2025-10-18T14:30:00.123456"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status_code",
+          "message",
+          "result",
+          "request_id",
+          "timestamp"
+        ],
+        "title": "StandardSuccessResponse",
+        "description": "Standard success response schema."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "AdminKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Admin-Key",
+        "description": "Admin API key for publisher management endpoints"
+      },
+      "PublisherKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Publisher API key for content access and processing"
+      }
+    }
+  }
+}

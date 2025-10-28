@@ -1,0 +1,482 @@
+=== METADATA ===
+Title: An Introduction to ThreadLocal in Java | Baeldung
+Description: A quick and practical guide to using ThreadLocal for storing thread-specific data in Java.
+Og_Title: An Introduction to ThreadLocal in Java | Baeldung
+Og_Description: A quick and practical guide to using ThreadLocal for storing thread-specific data in Java.
+Canonical_Url: https://www.baeldung.com/java-threadlocal
+Language: en-US
+Charset: utf-8
+====================
+
+=== HEADLINES ===
+## 1. Overview
+   [DOM: h2]
+## 2.ThreadLocalAPI
+   [DOM: h2]
+## 3. Storing User Data in a Map
+   [DOM: h2]
+## 4. Storing User Data inThreadLocal
+   [DOM: h2]
+## 5.ThreadLocals and Thread Pools
+   [DOM: h2]
+### 5.1. Extending theThreadPoolExecutor
+   [DOM: h3]
+## 6. Conclusion
+   [DOM: h2]
+
+=== CONTENT PARAGRAPHS ===
+[Paragraph 1] (25 words)
+   [DOM: p, parent: div]
+   Modern software architecture is often broken. Slow delivery
+leads to missed opportunities, innovation is stalled due to
+architectural complexities, and engineering resources are
+exceedingly expensive.
+
+[Paragraph 2] (25 words)
+   [DOM: p, parent: div]
+   Orkes is the leading workflow orchestration platformbuilt to enable teams to transform the way they develop, connect,
+and deploy applications, microservices, AI agents, and more.
+
+[Paragraph 3] (37 words)
+   [DOM: p, parent: div]
+   With Orkes Conductor managed through Orkes Cloud, developers can
+focus on building mission critical applications without worrying
+about infrastructure maintenance to meet goals and, simply put,
+taking new products live faster and reducing total cost of
+ownership.
+
+[Paragraph 4] (7 words)
+   [DOM: p, parent: div]
+   Try a14-Day Free
+Trial of OrkesConductor today.
+
+[Paragraph 5] (25 words)
+   [DOM: p, parent: div]
+   Modern software architecture is often broken. Slow delivery
+leads to missed opportunities, innovation is stalled due to
+architectural complexities, and engineering resources are
+exceedingly expensive.
+
+[Paragraph 6] (25 words)
+   [DOM: p, parent: div]
+   Orkes is the leading workflow orchestration platformbuilt to enable teams to transform the way they develop, connect,
+and deploy applications, microservices, AI agents, and more.
+
+[Paragraph 7] (37 words)
+   [DOM: p, parent: div]
+   With Orkes Conductor managed through Orkes Cloud, developers can
+focus on building mission critical applications without worrying
+about infrastructure maintenance to meet goals and, simply put,
+taking new products live faster and reducing total cost of
+ownership.
+
+[Paragraph 8] (7 words)
+   [DOM: p, parent: div]
+   Try a14-Day
+Free Trial of OrkesConductor today.
+
+[Paragraph 9] (10 words)
+   [DOM: p, parent: div]
+   Let's get started with a Microservice Architecture with Spring
+Cloud:
+
+[Paragraph 10] (7 words)
+   [DOM: p, parent: div]
+   >> Join Pro and download the
+eBook
+
+[Paragraph 11] (24 words)
+   [DOM: p, parent: div]
+   Mocking is an essential part of unit testing, and the Mockito
+library makes it easy to writeclean and intuitive unit
+testsfor your Java code.
+
+[Paragraph 12] (12 words)
+   [DOM: p, parent: div]
+   Get started with mocking and improve your application tests
+using ourMockito guide:
+
+[Paragraph 13] (29 words)
+   [DOM: p, parent: div]
+   Handling concurrency in an application can be a tricky process
+with manypotential pitfalls. A solid grasp of the
+fundamentals will go a long way to help minimize these issues.
+
+[Paragraph 14] (9 words)
+   [DOM: p, parent: div]
+   Get started with understanding multi-threaded applications with
+ourJava Concurrencyguide:
+
+[Paragraph 15] (30 words)
+   [DOM: p, parent: div]
+   Spring 5 added support for reactive programming with the Spring
+WebFlux module, which has been improved upon ever since. Get
+started with the Reactor project basics andreactive programming
+in SpringBoot:
+
+[Paragraph 16] (7 words)
+   [DOM: p, parent: div]
+   >> Join Pro and
+download the eBook
+
+[Paragraph 17] (31 words)
+   [DOM: p, parent: div]
+   Since its introduction in Java 8, the Stream API has become a
+staple of Java development. The basic operations like iterating,
+filtering, mapping sequences of elements are deceptively simple to
+use.
+
+[Paragraph 18] (12 words)
+   [DOM: p, parent: div]
+   But these can also be overused and fall into some common
+pitfalls.
+
+[Paragraph 19] (23 words)
+   [DOM: p, parent: div]
+   Toget a better understanding on how Streams workand how
+to combine them with other language features, check out our guide
+to Java Streams:
+
+[Paragraph 20] (7 words)
+   [DOM: p, parent: div]
+   >> Join Pro
+and download the eBook
+
+[Paragraph 21] (5 words)
+   [DOM: p, parent: div]
+   Do JSON right with Jackson
+
+[Paragraph 22] (9 words)
+   [DOM: p, parent: div]
+   Get the most out of the Apache HTTP Client
+
+[Paragraph 23] (5 words)
+   [DOM: p, parent: div]
+   Get Started with Apache Maven:
+
+[Paragraph 24] (9 words)
+   [DOM: p, parent: div]
+   Working on getting your persistence layer right with Spring?
+
+[Paragraph 25] (6 words)
+   [DOM: p, parent: div]
+   Building a REST API with Spring?
+
+[Paragraph 26] (10 words)
+   [DOM: p, parent: div]
+   Get started with Spring and Spring Boot, through theLearn
+Springcourse:
+
+[Paragraph 27] (15 words)
+   [DOM: p, parent: div]
+   Explore Spring Boot 3 and Spring 6 in-depth through building a
+fullREST APIwith the framework:
+
+[Paragraph 28] (7 words)
+   [DOM: p, parent: div]
+   >>
+The New “REST With Spring Boot”
+
+[Paragraph 29] (22 words)
+   [DOM: p, parent: div]
+   Yes, Spring Security can be complex, from the more advanced
+functionality within the Core to the deep OAuth support in the
+framework.
+
+[Paragraph 30] (36 words)
+   [DOM: p, parent: div]
+   I built the security material astwo full courses - Core and
+OAuth, to get practical with these more complex scenarios. We
+explore when and how to use each feature andcode through it on
+the backing project.
+
+[Paragraph 31] (6 words)
+   [DOM: p, parent: div]
+   You can explore the course here:
+
+[Paragraph 32] (19 words)
+   [DOM: p, parent: div]
+   Spring Data JPA is a great way to handle thecomplexity of
+JPA with the powerful simplicity of Spring Boot.
+
+[Paragraph 33] (11 words)
+   [DOM: p, parent: div]
+   Get started with Spring Data JPA through the guided reference
+course:
+
+[Paragraph 34] (5 words)
+   [DOM: p, parent: div]
+   >> CHECK OUT THE
+COURSE
+
+[Paragraph 35] (22 words)
+   [DOM: p, parent: div]
+   Accessibility testingis a crucial aspect to ensure thatyour application is usable for everyoneand meets
+accessibility standards that are required in many countries.
+
+[Paragraph 36] (33 words)
+   [DOM: p, parent: div]
+   By automating these tests, teams canquickly detect
+issuesrelated to screen reader compatibility, keyboard
+navigation, color contrast, and other aspects that could pose a
+barrier to using the software effectively for people with
+disabilities.
+
+[Paragraph 37] (25 words)
+   [DOM: p, parent: div]
+   Learn how to automate accessibility testing with Selenium and
+theLambdaTest cloud-based testing platformthat lets
+developers and testers perform accessibility automation on over
+3000+ real environments:
+
+[Paragraph 38] (5 words)
+   [DOM: p, parent: div]
+   Automated Accessibility Testing
+With Selenium
+
+[Paragraph 39] (29 words)
+   [DOM: p, parent: div]
+   Handling concurrency in an application can be a tricky process
+with manypotential pitfalls. A solid grasp of the
+fundamentals will go a long way to help minimize these issues.
+
+[Paragraph 40] (9 words)
+   [DOM: p, parent: div]
+   Get started with understanding multi-threaded applications with
+ourJava Concurrencyguide:
+
+[Paragraph 41] (33 words)
+   [DOM: p, parent: section]
+   In this tutorial, we’ll be looking at theThreadLocalconstruct from thejava.langpackage. This gives us the ability to store data individually for the current thread and simply wrap it within a special type of object.
+
+[Paragraph 42] (12 words)
+   [DOM: p, parent: section]
+   TheTheadLocalconstruct allows us to store data that will beaccessible onlybya specific thread.
+
+[Paragraph 43] (16 words)
+   [DOM: p, parent: section]
+   Let’s say that we want to have anIntegervalue that will be bundled with the specific thread:
+
+[Paragraph 44] (34 words)
+   [DOM: p, parent: section]
+   Next, when we want to use this value from a thread, we only need to call aget()orset()method. Simply put, we can imagine thatThreadLocalstores data inside of a map with the thread as the key.
+
+[Paragraph 45] (16 words)
+   [DOM: p, parent: section]
+   As a result, when we call aget()method on thethreadLocalValue, we’ll get anIntegervalue for the requesting thread:
+
+[Paragraph 46] (16 words)
+   [DOM: p, parent: section]
+   We can construct an instance of theThreadLocalby using thewithInitial()static method and passing a supplier to it:
+
+[Paragraph 47] (10 words)
+   [DOM: p, parent: section]
+   To remove the value from theThreadLocal, we can call theremove()method:
+
+[Paragraph 48] (26 words)
+   [DOM: p, parent: section]
+   To see how to use theThreadLocalproperly, we’ll first look at an example that doesn’t use aThreadLocal, and then we’ll rewrite our example to leverage that construct.
+
+[Paragraph 49] (14 words)
+   [DOM: p, parent: section]
+   Let’s consider a program that needs to store the user-specificContextdata per given user id:
+
+[Paragraph 50] (30 words)
+   [DOM: p, parent: section]
+   We want to have one thread per user id. We’ll create aSharedMapWithUserContextclass that implements theRunnableinterface. The implementation in therun()method calls some database through theUserRepositoryclass that returns aContextobject for a givenuserId.
+
+[Paragraph 51] (8 words)
+   [DOM: p, parent: section]
+   Next, we store that context in theConcurentHashMapkeyed byuserId:
+
+[Paragraph 52] (23 words)
+   [DOM: p, parent: section]
+   We can easily test our code by creating and starting two threads for two differentuserIds,and asserting that we have two entries in theuserContextPerUserIdmap:
+
+[Paragraph 53] (16 words)
+   [DOM: p, parent: section]
+   We can rewrite our example using a sharedThreadLocalinstance. Each thread will have its ownContextstored in theThreadLocalobject.
+
+[Paragraph 54] (43 words)
+   [DOM: p, parent: section]
+   When usingThreadLocal, we need to be very careful because every object stored inThreadLocalis associated with a specific thread. In our example, we have a dedicated thread for each particularuserId, and this thread is created by us, so we have full control over it.
+
+[Paragraph 55] (13 words)
+   [DOM: p, parent: section]
+   Therun()method will fetch the user context and store it into theThreadLocalvariable using theset()method:
+
+[Paragraph 56] (16 words)
+   [DOM: p, parent: section]
+   We can test it by starting two threads that will execute the action for a givenuserId:
+
+[Paragraph 57] (15 words)
+   [DOM: p, parent: section]
+   After running this code, we’ll see on the standard output thatThreadLocalwas set per given thread:
+
+[Paragraph 58] (11 words)
+   [DOM: p, parent: section]
+   We can see that each of the users has its ownContext.
+
+[Paragraph 59] (29 words)
+   [DOM: p, parent: section]
+   ThreadLocalprovides an easy-to-use API to confine some values to each thread. This is a reasonable way of achievingthread-safetyin Java. However,we should be extra careful when we’re usingThreadLocals andthread poolstogether.
+
+[Paragraph 60] (13 words)
+   [DOM: p, parent: section]
+   In order to better understand this possible caveat, let’s consider the following scenario:
+
+[Paragraph 61] (9 words)
+   [DOM: p, parent: section]
+   This may cause surprising consequences in highly concurrent applications.
+
+[Paragraph 62] (26 words)
+   [DOM: p, parent: section]
+   One way to solve this problem is to manually remove eachThreadLocalonce we’re done using it. Because this approach needs rigorous code reviews, it can be error-prone.
+
+[Paragraph 63] (39 words)
+   [DOM: p, parent: section]
+   As it turns out,it’s possible to extend theThreadPoolExecutorclass and provide a custom hook implementation for thebeforeExecute()andafterExecute()methods.The thread pool will call thebeforeExecute()method before running anything using the borrowed thread. On the other hand, it’ll call theafterExecute()method after executing our logic.
+
+[Paragraph 64] (10 words)
+   [DOM: p, parent: section]
+   Therefore, we can extend theThreadPoolExecutorclass and remove theThreadLocaldata in theafterExecute()method:
+
+[Paragraph 65] (25 words)
+   [DOM: p, parent: section]
+   If we submit our requests to this implementation ofExecutorService, then we can be sure that usingThreadLocaland thread pools won’t introduce safety hazards for our application.
+
+[Paragraph 66] (40 words)
+   [DOM: p, parent: section]
+   In this brief article, we examined theThreadLocalconstruct. We implemented the logic that usesConcurrentHashMapthat was shared between threads to store the context associated with a particularuserId.Then we rewrote our example to leverageThreadLocalto store data associated with a particularuserIdand a particular thread.
+
+[Paragraph 67] (16 words)
+   [DOM: p, parent: div]
+   Baeldung Pro comes with both absolutelyNo-Adsas well as
+finally withDark Mode, for a clean learning experience:
+
+[Paragraph 68] (5 words)
+   [DOM: p, parent: div]
+   >> Explore a clean
+Baeldung
+
+[Paragraph 69] (15 words)
+   [DOM: p, parent: div]
+   Once the early-adopter seats are all used,the price will go
+up and stay at $33/year.
+
+[Paragraph 70] (25 words)
+   [DOM: p, parent: div]
+   Modern software architecture is often broken. Slow delivery
+leads to missed opportunities, innovation is stalled due to
+architectural complexities, and engineering resources are
+exceedingly expensive.
+
+[Paragraph 71] (25 words)
+   [DOM: p, parent: div]
+   Orkes is the leading workflow orchestration platformbuilt to enable teams to transform the way they develop, connect,
+and deploy applications, microservices, AI agents, and more.
+
+[Paragraph 72] (37 words)
+   [DOM: p, parent: div]
+   With Orkes Conductor managed through Orkes Cloud, developers can
+focus on building mission critical applications without worrying
+about infrastructure maintenance to meet goals and, simply put,
+taking new products live faster and reducing total cost of
+ownership.
+
+[Paragraph 73] (7 words)
+   [DOM: p, parent: div]
+   Try a14-Day Free
+Trial of OrkesConductor today.
+
+[Paragraph 74] (25 words)
+   [DOM: p, parent: div]
+   Modern software architecture is often broken. Slow delivery
+leads to missed opportunities, innovation is stalled due to
+architectural complexities, and engineering resources are
+exceedingly expensive.
+
+[Paragraph 75] (25 words)
+   [DOM: p, parent: div]
+   Orkes is the leading workflow orchestration platformbuilt to enable teams to transform the way they develop, connect,
+and deploy applications, microservices, AI agents, and more.
+
+[Paragraph 76] (37 words)
+   [DOM: p, parent: div]
+   With Orkes Conductor managed through Orkes Cloud, developers can
+focus on building mission critical applications without worrying
+about infrastructure maintenance to meet goals and, simply put,
+taking new products live faster and reducing total cost of
+ownership.
+
+[Paragraph 77] (7 words)
+   [DOM: p, parent: div]
+   Try a14-Day
+Free Trial of OrkesConductor today.
+
+[Paragraph 78] (36 words)
+   [DOM: p, parent: div]
+   TheApache HTTP Clientis a very robust library, suitable
+for both simple and advanced use cases whentesting HTTP
+endpoints. Check out our guide covering basic request and
+response handling, as well as security, cookies, timeouts, and
+more:
+
+[Paragraph 79] (29 words)
+   [DOM: p, parent: div]
+   Handling concurrency in an application can be a tricky process
+with manypotential pitfalls. A solid grasp of the
+fundamentals will go a long way to help minimize these issues.
+
+[Paragraph 80] (9 words)
+   [DOM: p, parent: div]
+   Get started with understanding multi-threaded applications with
+ourJava Concurrencyguide:
+
+[Paragraph 81] (31 words)
+   [DOM: p, parent: div]
+   Since its introduction in Java 8, the Stream API has become a
+staple of Java development. The basic operations like iterating,
+filtering, mapping sequences of elements are deceptively simple to
+use.
+
+[Paragraph 82] (12 words)
+   [DOM: p, parent: div]
+   But these can also be overused and fall into some common
+pitfalls.
+
+[Paragraph 83] (23 words)
+   [DOM: p, parent: div]
+   Toget a better understanding on how Streams workand how
+to combine them with other language features, check out our guide
+to Java Streams:
+
+[Paragraph 84] (7 words)
+   [DOM: p, parent: div]
+   >> Join Pro
+and download the eBook
+
+[Paragraph 85] (9 words)
+   [DOM: p, parent: div]
+   Working on getting your persistence layer right with Spring?
+
+[Paragraph 86] (11 words)
+   [DOM: p, parent: div]
+   Get started with Spring Bootand with core Spring,
+through theLearn Springcourse:
+
+[Paragraph 87] (5 words)
+   [DOM: p, parent: div]
+   >> CHECK OUT
+THE COURSE
+
+[Paragraph 88] (29 words)
+   [DOM: p, parent: div]
+   Handling concurrency in an application can be a tricky process
+with manypotential pitfalls. A solid grasp of the
+fundamentals will go a long way to help minimize these issues.
+
+[Paragraph 89] (9 words)
+   [DOM: p, parent: div]
+   Get started with understanding multi-threaded applications with
+ourJava Concurrencyguide:
