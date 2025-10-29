@@ -54,7 +54,16 @@ echo ""
 # Start all services with docker-compose
 echo "📦 Starting all services with Docker Compose..."
 echo ""
+# Pull required images first to avoid timeout issues
+echo "📥 Pulling Docker images..."
+docker-compose -f docker-compose.split-services.yml pull mongodb postgres mongo-express pgadmin || true
+
+# Start all services
 docker-compose -f docker-compose.split-services.yml up -d
+
+# Ensure admin UIs are started (they might fail silently during initial up)
+echo "🔧 Ensuring admin UIs are running..."
+docker-compose -f docker-compose.split-services.yml up -d mongo-express pgadmin
 
 # Wait for services to be healthy
 echo ""
