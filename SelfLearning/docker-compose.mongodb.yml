@@ -1,0 +1,53 @@
+version: '3.8'
+
+# MongoDB Standalone Service
+# Deploy independently: docker-compose -f docker-compose.mongodb.yml up -d
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: blog-qa-mongodb
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27017:27017"  # Only accessible from localhost
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD}
+      MONGO_INITDB_DATABASE: ${DATABASE_NAME:-blog_qa_db}
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_backup:/backup
+    networks:
+      - blog-qa-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  blog-qa-network:
+    driver: bridge
+    name: blog-qa-network
+
+volumes:
+  mongodb_data:
+    driver: local
+  mongodb_backup:
+    driver: local
+
+
