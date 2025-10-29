@@ -210,8 +210,8 @@ curl http://localhost:8005/health
 ./scripts/backup_databases.sh
 
 # View Logs
-docker logs -f blog-qa-api-prod
-docker logs -f blog-qa-worker-prod
+docker logs -f fyi-widget-api-prod
+docker logs -f fyi-widget-worker-service-prod
 ```
 
 ---

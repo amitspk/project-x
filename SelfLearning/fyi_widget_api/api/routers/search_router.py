@@ -8,11 +8,11 @@ from fastapi import APIRouter, HTTPException, Request, Depends
 
 # Add shared to path
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-from shared.services import StorageService
-from shared.models.schemas import SearchSimilarRequest, SearchSimilarResponse
-from shared.models import SearchResponse as SwaggerSearchResponse, StandardErrorResponse
-from shared.models.publisher import Publisher
-from shared.utils import (
+from fyi_widget_shared_library.services import StorageService
+from fyi_widget_shared_library.models.schemas import SearchSimilarRequest, SearchSimilarResponse
+from fyi_widget_shared_library.models import SearchResponse as SwaggerSearchResponse, StandardErrorResponse
+from fyi_widget_shared_library.models.publisher import Publisher
+from fyi_widget_shared_library.utils import (
     success_response,
     handle_http_exception,
     handle_generic_exception,
@@ -20,7 +20,7 @@ from shared.utils import (
 )
 
 # Import auth
-from api_service.api.auth import get_current_publisher
+from fyi_widget_api.api.auth import get_current_publisher
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ router = APIRouter()
 
 # Storage service will be initialized per-request with database
 def get_storage():
-    from api_service.api.main import db_manager
+    from fyi_widget_api.api.main import db_manager
     return StorageService(database=db_manager.database)
 
 

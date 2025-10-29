@@ -101,8 +101,8 @@ services:
   api-service:
     build:
       context: .
-      dockerfile: api_service/Dockerfile
-    container_name: blog-qa-api-prod
+      dockerfile: fyi_widget_api/Dockerfile
+    container_name: fyi-widget-api-prod
     restart: always
     ports:
       - "8005:8005"
@@ -136,8 +136,8 @@ services:
   worker-service:
     build:
       context: .
-      dockerfile: worker_service/Dockerfile
-    container_name: blog-qa-worker-prod
+      dockerfile: fyi_widget_worker_service/Dockerfile
+    container_name: fyi-widget-worker-service-prod
     restart: always
     environment:
       MONGODB_URL: ${MONGODB_URL}

@@ -15,9 +15,9 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from api_service.core.config import get_config
-from shared.data.postgres_database import PostgresPublisherRepository
-from shared.models.publisher import Publisher
+from fyi_widget_api.core.config import get_config
+from fyi_widget_shared_library.data.postgres_database import PostgresPublisherRepository
+from fyi_widget_shared_library.models.publisher import Publisher
 
 logger = logging.getLogger(__name__)
 

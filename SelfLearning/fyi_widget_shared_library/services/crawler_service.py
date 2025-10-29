@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 
 # Configuration handled by service-specific configs
-from shared.models.schemas import CrawledContent
+from fyi_widget_shared_library.models.schemas import CrawledContent
 
 logger = logging.getLogger(__name__)
 

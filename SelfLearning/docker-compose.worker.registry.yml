@@ -8,12 +8,12 @@ version: '3.8'
 services:
   worker-service:
     # Use pre-built image from Docker Hub or other registry
-    image: YOUR_DOCKERHUB_USERNAME/blog-qa-worker:TAG
+    image: YOUR_DOCKERHUB_USERNAME/fyi-widget-worker-service:TAG
     # Alternative registries:
-    # image: ghcr.io/YOUR_USERNAME/blog-qa-worker:TAG  # GitHub Container Registry
-    # image: YOUR_ACCOUNT.dkr.ecr.REGION.amazonaws.com/blog-qa-worker:TAG  # AWS ECR
+    # image: ghcr.io/YOUR_USERNAME/fyi-widget-worker-service:TAG  # GitHub Container Registry
+    # image: YOUR_ACCOUNT.dkr.ecr.REGION.amazonaws.com/fyi-widget-worker-service:TAG  # AWS ECR
     
-    container_name: blog-qa-worker
+    container_name: fyi-widget-worker-service
     restart: unless-stopped
     environment:
       # MongoDB Connection

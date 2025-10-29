@@ -9,12 +9,12 @@ from bson import ObjectId
 
 # Add shared to path
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-from shared.services import StorageService
-from shared.models import QuestionsByUrlResponse, QuestionByIdResponse, CheckAndLoadResponse, StandardErrorResponse
-from shared.models.publisher import Publisher
-from shared.models.job_queue import JobStatus
-from shared.data.job_repository import JobRepository
-from shared.utils import (
+from fyi_widget_shared_library.services import StorageService
+from fyi_widget_shared_library.models import QuestionsByUrlResponse, QuestionByIdResponse, CheckAndLoadResponse, StandardErrorResponse
+from fyi_widget_shared_library.models.publisher import Publisher
+from fyi_widget_shared_library.models.job_queue import JobStatus
+from fyi_widget_shared_library.data.job_repository import JobRepository
+from fyi_widget_shared_library.utils import (
     normalize_url,
     success_response,
     handle_http_exception,
@@ -23,7 +23,7 @@ from shared.utils import (
 )
 
 # Import auth
-from api_service.api.auth import get_current_publisher, validate_blog_url_domain, verify_admin_key
+from fyi_widget_api.api.auth import get_current_publisher, validate_blog_url_domain, verify_admin_key
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +31,13 @@ router = APIRouter()
 
 # Storage service will be initialized per-request with database
 def get_storage():
-    from api_service.api.main import db_manager
+    from fyi_widget_api.api.main import db_manager
     return StorageService(database=db_manager.database)
 
 # Job repository will be initialized per-request
 async def get_job_repository() -> JobRepository:
     """Get job repository instance."""
-    from api_service.api.main import db_manager
+    from fyi_widget_api.api.main import db_manager
     return JobRepository(db_manager.database)
 
 
@@ -186,13 +186,13 @@ async def check_and_load_questions(
         
         # STEP 3: No active job - Create new processing job
         if not existing_job or existing_job.get("status") == "failed":
-            from shared.models.job_queue import JobCreateRequest, JobStatus
+            from fyi_widget_shared_library.models.job_queue import JobCreateRequest, JobStatus
             from datetime import datetime
             
             logger.info(f"[{request_id}] 🚀 Creating new processing job")
             
             # Get publisher config
-            from api_service.api import auth as auth_module
+            from fyi_widget_api.api import auth as auth_module
             publisher_config = publisher.config.dict() if publisher.config else {}
             
             # Create job

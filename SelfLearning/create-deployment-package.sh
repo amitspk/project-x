@@ -101,10 +101,10 @@ This is a minimal deployment package containing only configuration files and scr
 If you're using pre-built images from Docker Hub:
 
 1. Update docker-compose.api.yml:
-   - Replace `build:` with `image: yourname/blog-qa-api:tag`
+   - Replace `build:` with `image: yourname/fyi-widget-api:tag`
 
 2. Update docker-compose.worker.yml:
-   - Replace `build:` with `image: yourname/blog-qa-worker:tag`
+   - Replace `build:` with `image: yourname/fyi-widget-worker-service:tag`
 
 3. Pull images:
    ```bash

@@ -74,21 +74,21 @@ Copying entire project to VPS is **not ideal** because:
 # On your local machine
 
 # Build API image
-docker build -t yourname/blog-qa-api:latest -f api_service/Dockerfile .
+docker build -t yourname/fyi-widget-api:latest -f fyi_widget_api/Dockerfile .
 
 # Build Worker image  
-docker build -t yourname/blog-qa-worker:latest -f worker_service/Dockerfile .
+docker build -t yourname/fyi-widget-worker-service:latest -f fyi_widget_worker_service/Dockerfile .
 
 # Tag for registry
-docker tag yourname/blog-qa-api:latest docker.io/yourname/blog-qa-api:v1.0.0
-docker tag yourname/blog-qa-worker:latest docker.io/yourname/blog-qa-worker:v1.0.0
+docker tag yourname/fyi-widget-api:latest docker.io/yourname/fyi-widget-api:v1.0.0
+docker tag yourname/fyi-widget-worker-service:latest docker.io/yourname/fyi-widget-worker-service:v1.0.0
 
 # Login to Docker Hub
 docker login
 
 # Push images
-docker push docker.io/yourname/blog-qa-api:v1.0.0
-docker push docker.io/yourname/blog-qa-worker:v1.0.0
+docker push docker.io/yourname/fyi-widget-api:v1.0.0
+docker push docker.io/yourname/fyi-widget-worker-service:v1.0.0
 ```
 
 #### Step 2: Create Minimal Deployment Package
@@ -116,9 +116,9 @@ deployment/
 ```yaml
 services:
   api-service:
-    image: yourname/blog-qa-api:v1.0.0  # Use pre-built image
+    image: yourname/fyi-widget-api:v1.0.0  # Use pre-built image
     # Remove build section
-    container_name: blog-qa-api
+    container_name: fyi-widget-api
     # ... rest of config
 ```
 
@@ -126,9 +126,9 @@ services:
 ```yaml
 services:
   worker-service:
-    image: yourname/blog-qa-worker:v1.0.0  # Use pre-built image
+    image: yourname/fyi-widget-worker-service:v1.0.0  # Use pre-built image
     # Remove build section
-    container_name: blog-qa-worker
+    container_name: fyi-widget-worker-service
     # ... rest of config
 ```
 
@@ -199,12 +199,12 @@ cd blog-qa/deployment
 
 ```bash
 # 1. Build new images locally
-docker build -t yourname/blog-qa-api:v1.0.1 -f api_service/Dockerfile .
-docker build -t yourname/blog-qa-worker:v1.0.1 -f worker_service/Dockerfile .
+docker build -t yourname/fyi-widget-api:v1.0.1 -f fyi_widget_api/Dockerfile .
+docker build -t yourname/fyi-widget-worker-service:v1.0.1 -f fyi_widget_worker_service/Dockerfile .
 
 # 2. Push to registry
-docker push yourname/blog-qa-api:v1.0.1
-docker push yourname/blog-qa-worker:v1.0.1
+docker push yourname/fyi-widget-api:v1.0.1
+docker push yourname/fyi-widget-worker-service:v1.0.1
 
 # 3. On VPS: Update docker-compose files (or use tags like :latest)
 docker-compose -f docker-compose.api.yml pull

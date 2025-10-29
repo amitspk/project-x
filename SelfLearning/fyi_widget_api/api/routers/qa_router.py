@@ -10,10 +10,10 @@ from pydantic import BaseModel
 
 # Add shared to path
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-from shared.services import LLMService
-from shared.models import QAResponse as SwaggerQAResponse, StandardErrorResponse
-from shared.models.publisher import Publisher
-from shared.utils import (
+from fyi_widget_shared_library.services import LLMService
+from fyi_widget_shared_library.models import QAResponse as SwaggerQAResponse, StandardErrorResponse
+from fyi_widget_shared_library.models.publisher import Publisher
+from fyi_widget_shared_library.utils import (
     success_response,
     handle_http_exception,
     handle_generic_exception,
@@ -21,7 +21,7 @@ from shared.utils import (
 )
 
 # Import auth
-from api_service.api.auth import get_current_publisher
+from fyi_widget_api.api.auth import get_current_publisher
 
 logger = logging.getLogger(__name__)
 

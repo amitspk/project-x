@@ -8,12 +8,12 @@ version: '3.8'
 services:
   api-service:
     # Use pre-built image from Docker Hub or other registry
-    image: YOUR_DOCKERHUB_USERNAME/blog-qa-api:TAG
+    image: YOUR_DOCKERHUB_USERNAME/fyi-widget-api:TAG
     # Alternative registries:
-    # image: ghcr.io/YOUR_USERNAME/blog-qa-api:TAG  # GitHub Container Registry
-    # image: YOUR_ACCOUNT.dkr.ecr.REGION.amazonaws.com/blog-qa-api:TAG  # AWS ECR
+    # image: ghcr.io/YOUR_USERNAME/fyi-widget-api:TAG  # GitHub Container Registry
+    # image: YOUR_ACCOUNT.dkr.ecr.REGION.amazonaws.com/fyi-widget-api:TAG  # AWS ECR
     
-    container_name: blog-qa-api
+    container_name: fyi-widget-api
     restart: unless-stopped
     ports:
       - "127.0.0.1:8005:8005"

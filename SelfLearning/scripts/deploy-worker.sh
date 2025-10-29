@@ -90,27 +90,27 @@ sleep 10
 # Check worker status
 print_header "🧪 Checking Worker Service"
 
-if docker ps | grep -q blog-qa-worker; then
+if docker ps | grep -q fyi-widget-worker-service; then
     print_success "Worker container is running"
 else
     print_error "Worker container failed to start"
-    docker logs blog-qa-worker --tail 30
+    docker logs fyi-widget-worker-service --tail 30
     exit 1
 fi
 
 # Show worker logs
 print_info "Recent worker logs:"
-docker logs blog-qa-worker --tail 20
+docker logs fyi-widget-worker-service --tail 20
 
 print_header "✅ Worker Service Deployed!"
 
 echo ""
 echo "📊 Service Status:"
-docker ps | grep worker
+docker ps | grep fyi-widget-worker-service
 
 echo ""
 echo "📝 Useful Commands:"
-echo "  View logs:    docker logs -f blog-qa-worker"
+echo "  View logs:    docker logs -f fyi-widget-worker-service"
 echo "  Restart:      docker-compose -f docker-compose.worker.yml restart"
 echo "  Stop:         docker-compose -f docker-compose.worker.yml down"
 echo "  Scale:        docker-compose -f docker-compose.worker.yml up -d --scale worker-service=3"

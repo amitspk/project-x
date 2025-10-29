@@ -11,7 +11,7 @@ from bson import ObjectId
 
 # Database manager handled by services
 # Configuration handled by service-specific configs
-from shared.models.schemas import (
+from fyi_widget_shared_library.models.schemas import (
     BlogContentResponse, 
     QuestionAnswerPair, 
     BlogSummary,

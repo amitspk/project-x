@@ -66,15 +66,15 @@ docker ps | grep blog-qa
 # Should show:
 # blog-qa-mongodb
 # blog-qa-postgres
-# blog-qa-api
-# blog-qa-worker
+# fyi-widget-api
+# fyi-widget-worker-service
 
 # Test API
 curl http://localhost:8005/health
 
 # View logs
-docker logs -f blog-qa-api
-docker logs -f blog-qa-worker
+docker logs -f fyi-widget-api
+docker logs -f fyi-widget-worker-service
 ```
 
 ## 🔄 Update Individual Services
@@ -127,7 +127,7 @@ curl http://localhost:8005/health
 ./scripts/deploy-worker.sh
 
 # 9. Verify Worker
-docker logs blog-qa-worker --tail 20
+docker logs fyi-widget-worker-service --tail 20
 ```
 
 ## 📊 Benefits
@@ -147,8 +147,8 @@ docker logs blog-qa-worker --tail 20
 docker network ls | grep blog-qa-network
 
 # Check database connectivity
-docker exec blog-qa-api ping -c 2 mongodb
-docker exec blog-qa-api ping -c 2 postgres
+docker exec fyi-widget-api ping -c 2 mongodb
+docker exec fyi-widget-api ping -c 2 postgres
 
 # Verify connection strings in .env
 cat .env | grep -E "MONGODB_URL|POSTGRES_URL"

@@ -11,12 +11,12 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 # Add shared to path
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-from shared.models.job_queue import JobCreateRequest, JobStatusResponse, JobStatus
-from shared.models import ProcessJobResponse, SwaggerJobStatusResponse, JobStatsResponse, StandardErrorResponse, StandardSuccessResponse
-from shared.data.job_repository import JobRepository
-from shared.data.postgres_database import PostgresPublisherRepository
-from shared.models.publisher import PublisherStatus, Publisher
-from shared.utils import (
+from fyi_widget_shared_library.models.job_queue import JobCreateRequest, JobStatusResponse, JobStatus
+from fyi_widget_shared_library.models import ProcessJobResponse, SwaggerJobStatusResponse, JobStatsResponse, StandardErrorResponse, StandardSuccessResponse
+from fyi_widget_shared_library.data.job_repository import JobRepository
+from fyi_widget_shared_library.data.postgres_database import PostgresPublisherRepository
+from fyi_widget_shared_library.models.publisher import PublisherStatus, Publisher
+from fyi_widget_shared_library.utils import (
     normalize_url,
     success_response,
     handle_http_exception,
@@ -25,8 +25,8 @@ from shared.utils import (
 )
 
 # Import auth
-from api_service.api.auth import get_current_publisher, validate_blog_url_domain, verify_admin_key
-from api_service.api import auth as auth_module
+from fyi_widget_api.api.auth import get_current_publisher, validate_blog_url_domain, verify_admin_key
+from fyi_widget_api.api import auth as auth_module
 
 logger = logging.getLogger(__name__)
 
@@ -36,14 +36,14 @@ router = APIRouter()
 # Dependency to get database
 async def get_job_repository() -> JobRepository:
     """Get job repository instance."""
-    from api_service.api.main import db_manager
+    from fyi_widget_api.api.main import db_manager
     return JobRepository(db_manager.database)
 
 
 # Dependency to get publisher repository
 async def get_publisher_repository() -> PostgresPublisherRepository:
     """Get publisher repository instance."""
-    from api_service.api.main import publisher_repo_instance
+    from fyi_widget_api.api.main import publisher_repo_instance
     if not publisher_repo_instance:
         raise HTTPException(
             status_code=500,
@@ -135,7 +135,7 @@ async def enqueue_blog_processing(
         logger.info(f"✅ Publisher validation passed for: {publisher.name}")
         
         # Check if blog already exists and has been successfully processed
-        from api_service.api.main import db_manager
+        from fyi_widget_api.api.main import db_manager
         blogs_collection = db_manager.database["raw_blog_content"]
         existing_blog = await blogs_collection.find_one({"url": normalized_url})
         
@@ -152,7 +152,7 @@ async def enqueue_blog_processing(
                 logger.info(f"[{request_id}] ✅ Returning existing completed job: {existing_job['job_id']}")
                 
                 # Return existing completed job
-                from shared.models import ProcessingJob
+                from fyi_widget_shared_library.models import ProcessingJob
                 job = ProcessingJob(**existing_job)
                 
                 job_response = JobStatusResponse(

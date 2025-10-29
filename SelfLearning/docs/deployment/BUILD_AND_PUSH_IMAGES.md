@@ -19,8 +19,8 @@ This guide shows how to build your images and push them to a registry, so you **
 
 1. Go to https://hub.docker.com
 2. Create free account
-3. Create repository: `blog-qa-api`
-4. Create repository: `blog-qa-worker`
+3. Create repository: `fyi-widget-api`
+4. Create repository: `fyi-widget-worker-service`
 
 ### Step 2: Build and Push Images
 
@@ -28,24 +28,24 @@ This guide shows how to build your images and push them to a registry, so you **
 # On your local machine (from project root)
 
 # Build API image
-docker build -t YOUR_DOCKERHUB_USERNAME/blog-qa-api:latest -f api_service/Dockerfile .
+docker build -t YOUR_DOCKERHUB_USERNAME/fyi-widget-api:latest -f fyi_widget_api/Dockerfile .
 
 # Build Worker image
-docker build -t YOUR_DOCKERHUB_USERNAME/blog-qa-worker:latest -f worker_service/Dockerfile .
+docker build -t YOUR_DOCKERHUB_USERNAME/fyi-widget-worker-service:latest -f fyi_widget_fyi_widget_worker_service/Dockerfile .
 
 # Login to Docker Hub
 docker login
 
 # Push images
-docker push YOUR_DOCKERHUB_USERNAME/blog-qa-api:latest
-docker push YOUR_DOCKERHUB_USERNAME/blog-qa-worker:latest
+docker push YOUR_DOCKERHUB_USERNAME/fyi-widget-api:latest
+docker push YOUR_DOCKERHUB_USERNAME/fyi-widget-worker-service:latest
 
 # Tag specific version (recommended for production)
-docker tag YOUR_DOCKERHUB_USERNAME/blog-qa-api:latest YOUR_DOCKERHUB_USERNAME/blog-qa-api:v1.0.0
-docker tag YOUR_DOCKERHUB_USERNAME/blog-qa-worker:latest YOUR_DOCKERHUB_USERNAME/blog-qa-worker:v1.0.0
+docker tag YOUR_DOCKERHUB_USERNAME/fyi-widget-api:latest YOUR_DOCKERHUB_USERNAME/fyi-widget-api:v1.0.0
+docker tag YOUR_DOCKERHUB_USERNAME/fyi-widget-worker-service:latest YOUR_DOCKERHUB_USERNAME/fyi-widget-worker-service:v1.0.0
 
-docker push YOUR_DOCKERHUB_USERNAME/blog-qa-api:v1.0.0
-docker push YOUR_DOCKERHUB_USERNAME/blog-qa-worker:v1.0.0
+docker push YOUR_DOCKERHUB_USERNAME/fyi-widget-api:v1.0.0
+docker push YOUR_DOCKERHUB_USERNAME/fyi-widget-worker-service:v1.0.0
 ```
 
 ### Step 3: On VPS - Use Registry Images
@@ -53,7 +53,7 @@ docker push YOUR_DOCKERHUB_USERNAME/blog-qa-worker:v1.0.0
 ```bash
 # Update docker-compose files to use images:
 # In docker-compose.api.registry.yml:
-#   image: YOUR_DOCKERHUB_USERNAME/blog-qa-api:v1.0.0
+#   image: YOUR_DOCKERHUB_USERNAME/fyi-widget-api:v1.0.0
 
 # Pull and deploy
 docker-compose -f docker-compose.api.registry.yml pull
@@ -71,12 +71,12 @@ docker-compose -f docker-compose.api.registry.yml up -d
 echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
 
 # Build and tag
-docker build -t ghcr.io/YOUR_USERNAME/blog-qa-api:latest -f api_service/Dockerfile .
-docker build -t ghcr.io/YOUR_USERNAME/blog-qa-worker:latest -f worker_service/Dockerfile .
+docker build -t ghcr.io/YOUR_USERNAME/fyi-widget-api:latest -f fyi_widget_api/Dockerfile .
+docker build -t ghcr.io/YOUR_USERNAME/fyi-widget-worker-service:latest -f fyi_widget_fyi_widget_worker_service/Dockerfile .
 
 # Push
-docker push ghcr.io/YOUR_USERNAME/blog-qa-api:latest
-docker push ghcr.io/YOUR_USERNAME/blog-qa-worker:latest
+docker push ghcr.io/YOUR_USERNAME/fyi-widget-api:latest
+docker push ghcr.io/YOUR_USERNAME/fyi-widget-worker-service:latest
 ```
 
 ---
@@ -95,20 +95,20 @@ VERSION="v1.0.0"
 
 # Build API
 echo "Building API image..."
-docker build -t ${REGISTRY}/${USERNAME}/blog-qa-api:${VERSION} -f api_service/Dockerfile .
-docker tag ${REGISTRY}/${USERNAME}/blog-qa-api:${VERSION} ${REGISTRY}/${USERNAME}/blog-qa-api:latest
+docker build -t ${REGISTRY}/${USERNAME}/fyi-widget-api:${VERSION} -f fyi_widget_api/Dockerfile .
+docker tag ${REGISTRY}/${USERNAME}/fyi-widget-api:${VERSION} ${REGISTRY}/${USERNAME}/fyi-widget-api:latest
 
 # Build Worker
 echo "Building Worker image..."
-docker build -t ${REGISTRY}/${USERNAME}/blog-qa-worker:${VERSION} -f worker_service/Dockerfile .
-docker tag ${REGISTRY}/${USERNAME}/blog-qa-worker:${VERSION} ${REGISTRY}/${USERNAME}/blog-qa-worker:latest
+docker build -t ${REGISTRY}/${USERNAME}/fyi-widget-worker-service:${VERSION} -f fyi_widget_fyi_widget_worker_service/Dockerfile .
+docker tag ${REGISTRY}/${USERNAME}/fyi-widget-worker-service:${VERSION} ${REGISTRY}/${USERNAME}/fyi-widget-worker-service:latest
 
 # Push
 echo "Pushing images..."
-docker push ${REGISTRY}/${USERNAME}/blog-qa-api:${VERSION}
-docker push ${REGISTRY}/${USERNAME}/blog-qa-api:latest
-docker push ${REGISTRY}/${USERNAME}/blog-qa-worker:${VERSION}
-docker push ${REGISTRY}/${USERNAME}/blog-qa-worker:latest
+docker push ${REGISTRY}/${USERNAME}/fyi-widget-api:${VERSION}
+docker push ${REGISTRY}/${USERNAME}/fyi-widget-api:latest
+docker push ${REGISTRY}/${USERNAME}/fyi-widget-worker-service:${VERSION}
+docker push ${REGISTRY}/${USERNAME}/fyi-widget-worker-service:latest
 
 echo "✅ Done!"
 ```

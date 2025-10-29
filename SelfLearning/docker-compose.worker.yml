@@ -8,8 +8,8 @@ services:
   worker-service:
     build:
       context: .
-      dockerfile: worker_service/Dockerfile
-    container_name: blog-qa-worker
+      dockerfile: fyi_widget_worker_service/Dockerfile
+    container_name: fyi-widget-worker-service
     restart: unless-stopped
     environment:
       # MongoDB Connection (can be local or external)

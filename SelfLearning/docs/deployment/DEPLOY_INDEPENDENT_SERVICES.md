@@ -94,7 +94,7 @@ docker-compose -f docker-compose.worker.yml up -d
 
 # Verify
 docker ps | grep worker
-docker logs blog-qa-worker --tail 20
+docker logs fyi-widget-worker-service --tail 20
 ```
 
 ---
@@ -230,7 +230,7 @@ docker-compose -f docker-compose.worker.yml up -d
 
 echo "✅ Worker Service Status:"
 docker ps | grep worker
-docker logs blog-qa-worker --tail 10
+docker logs fyi-widget-worker-service --tail 10
 ```
 
 ---
@@ -260,10 +260,10 @@ docker logs -f blog-qa-mongodb
 docker logs -f blog-qa-postgres
 
 # API
-docker logs -f blog-qa-api
+docker logs -f fyi-widget-api
 
 # Worker
-docker logs -f blog-qa-worker
+docker logs -f fyi-widget-worker-service
 ```
 
 ### Restart Services
@@ -377,8 +377,8 @@ docker-compose -f docker-compose.worker.yml up -d --scale worker-service=5
 docker network ls | grep blog-qa-network
 
 # Check database is accessible
-docker exec blog-qa-api ping -c 2 mongodb
-docker exec blog-qa-api ping -c 2 postgres
+docker exec fyi-widget-api ping -c 2 mongodb
+docker exec fyi-widget-api ping -c 2 postgres
 
 # Check connection string in .env
 cat .env | grep -E "MONGODB|POSTGRES"
@@ -441,7 +441,7 @@ docker-compose -f docker-compose.worker.yml up -d
 docker ps | grep blog-qa
 
 # View logs
-docker logs -f blog-qa-api
+docker logs -f fyi-widget-api
 
 # Stop specific service
 docker-compose -f docker-compose.api.yml down

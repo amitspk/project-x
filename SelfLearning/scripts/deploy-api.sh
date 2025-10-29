@@ -90,11 +90,11 @@ sleep 15
 # Check API status
 print_header "🧪 Testing API Service"
 
-if docker ps | grep -q blog-qa-api; then
+if docker ps | grep -q fyi-widget-api; then
     print_success "API container is running"
 else
     print_error "API container failed to start"
-    docker logs blog-qa-api --tail 30
+    docker logs fyi-widget-api --tail 30
     exit 1
 fi
 
@@ -106,7 +106,7 @@ if curl -f http://localhost:8005/health > /dev/null 2>&1; then
     curl -s http://localhost:8005/health | head -10
 else
     print_warning "API not responding yet, give it a few more seconds..."
-    print_info "Check logs: docker logs -f blog-qa-api"
+    print_info "Check logs: docker logs -f fyi-widget-api"
 fi
 
 print_header "✅ API Service Deployed!"
@@ -122,7 +122,7 @@ echo "  Docs:     http://localhost:8005/docs"
 echo "  Health:   http://localhost:8005/health"
 echo ""
 echo "📝 Useful Commands:"
-echo "  View logs:    docker logs -f blog-qa-api"
+echo "  View logs:    docker logs -f fyi-widget-api"
 echo "  Restart:      docker-compose -f docker-compose.api.yml restart"
 echo "  Stop:         docker-compose -f docker-compose.api.yml down"
 echo "  Update:       docker-compose -f docker-compose.api.yml build && docker-compose -f docker-compose.api.yml up -d"

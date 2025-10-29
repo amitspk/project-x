@@ -11,7 +11,7 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from shared.utils import generate_request_id
+from fyi_widget_shared_library.utils import generate_request_id
 
 logger = logging.getLogger(__name__)
 

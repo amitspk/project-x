@@ -283,8 +283,8 @@ services:
   api-service:
     build:
       context: .
-      dockerfile: api_service/Dockerfile
-    container_name: blog-qa-api-prod
+      dockerfile: fyi_widget_api/Dockerfile
+    container_name: fyi-widget-api-prod
     restart: always
     ports:
       - "8005:8005"
@@ -319,8 +319,8 @@ services:
   worker-service:
     build:
       context: .
-      dockerfile: worker_service/Dockerfile
-    container_name: blog-qa-worker-prod
+      dockerfile: fyi_widget_worker_service/Dockerfile
+    container_name: fyi-widget-worker-service-prod
     restart: always
     environment:
       MONGODB_URL: ${MONGODB_URL}
@@ -436,7 +436,7 @@ sudo firewall-cmd --list-all
 sudo apt install -y nginx
 
 # Create nginx configuration
-sudo nano /etc/nginx/sites-available/blog-qa-api
+sudo nano /etc/nginx/sites-available/fyi-widget-api
 ```
 
 **Nginx Configuration:**
@@ -475,7 +475,7 @@ server {
 ### Enable the Site
 ```bash
 # Create symlink
-sudo ln -s /etc/nginx/sites-available/blog-qa-api /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/fyi-widget-api /etc/nginx/sites-enabled/
 
 # Test nginx configuration
 sudo nginx -t
@@ -620,7 +620,7 @@ docker-compose -f docker-compose.production.yml up -d
 docker-compose -f docker-compose.production.yml down
 
 # View logs (continuous)
-docker logs -f blog-qa-worker-prod
+docker logs -f fyi-widget-worker-service-prod
 
 # Check API health
 curl http://localhost:8005/health
@@ -629,7 +629,7 @@ curl http://localhost:8005/health
 docker ps
 
 # Restart specific container
-docker restart blog-qa-api-prod
+docker restart fyi-widget-api-prod
 
 # View resource usage
 docker stats
@@ -648,7 +648,7 @@ docker system prune -a
 docker-compose -f docker-compose.production.yml logs
 
 # Check individual container
-docker logs blog-qa-api-prod
+docker logs fyi-widget-api-prod
 
 # Check if ports are available
 sudo netstat -tulpn | grep 8005

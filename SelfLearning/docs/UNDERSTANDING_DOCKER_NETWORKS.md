@@ -79,8 +79,8 @@ blog-qa-network (Virtual Network)
 │
 ├── blog-qa-mongodb    → IP: 172.28.0.2, Hostname: mongodb
 ├── blog-qa-postgres   → IP: 172.28.0.3, Hostname: postgres
-├── blog-qa-api        → IP: 172.28.0.4, Hostname: api-service
-└── blog-qa-worker     → IP: 172.28.0.5, Hostname: worker-service
+├── fyi-widget-api        → IP: 172.28.0.4, Hostname: api-service
+└── fyi-widget-worker-service     → IP: 172.28.0.5, Hostname: worker-service
 ```
 
 All these containers can communicate using their hostnames:
@@ -104,7 +104,7 @@ When containers are on `blog-qa-network`, they can:
 
 2. **Use IP addresses:**
    ```
-   docker exec blog-qa-api ping 172.28.0.2  # MongoDB IP
+   docker exec fyi-widget-api ping 172.28.0.2  # MongoDB IP
    ```
 
 3. **Use service names:**

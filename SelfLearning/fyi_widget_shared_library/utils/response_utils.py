@@ -11,7 +11,7 @@ from datetime import datetime
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from shared.models.api_response import (
+from fyi_widget_shared_library.models.api_response import (
     StandardResponse,
     SuccessResponse,
     ErrorResponse,

@@ -15,9 +15,9 @@ from fastapi import APIRouter, HTTPException, Depends, Query, Header, Request
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 # Import auth
-from api_service.api.auth import verify_admin_key
+from fyi_widget_api.api.auth import verify_admin_key
 
-from shared.models.publisher import (
+from fyi_widget_shared_library.models.publisher import (
     Publisher,
     PublisherCreateRequest,
     PublisherUpdateRequest,
@@ -25,7 +25,7 @@ from shared.models.publisher import (
     PublisherListResponse,
     PublisherStatus
 )
-from shared.models import (
+from fyi_widget_shared_library.models import (
     PublisherOnboardResponse,
     PublisherGetResponse,
     PublishersListResponse as SwaggerPublishersListResponse,
@@ -35,8 +35,8 @@ from shared.models import (
     PublisherRegenerateApiKeyResponse,
     StandardErrorResponse
 )
-from shared.data.postgres_database import PostgresPublisherRepository
-from shared.utils import (
+from fyi_widget_shared_library.data.postgres_database import PostgresPublisherRepository
+from fyi_widget_shared_library.utils import (
     success_response,
     handle_http_exception,
     handle_generic_exception,

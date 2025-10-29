@@ -232,7 +232,7 @@ sudo systemctl start nginx
 ```bash
 # Copy production config
 sudo cp ~/project-x/SelfLearning/nginx/nginx.production.conf \
-       /etc/nginx/sites-available/blog-qa-api
+       /etc/nginx/sites-available/fyi-widget-api
 
 # Copy proxy settings
 sudo mkdir -p /etc/nginx/conf.d
@@ -240,11 +240,11 @@ sudo cp ~/project-x/SelfLearning/nginx/proxy_settings.conf \
        /etc/nginx/conf.d/proxy_settings.conf
 
 # Edit and update domain name
-sudo nano /etc/nginx/sites-available/blog-qa-api
+sudo nano /etc/nginx/sites-available/fyi-widget-api
 # Replace 'yourdomain.com' with your actual domain
 
 # Enable site
-sudo ln -s /etc/nginx/sites-available/blog-qa-api /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/fyi-widget-api /etc/nginx/sites-enabled/
 sudo rm /etc/nginx/sites-enabled/default  # Remove default config
 
 # Test configuration
@@ -357,13 +357,13 @@ curl http://localhost:8005/health
 
 ```bash
 # View recent API logs
-docker logs --tail 100 blog-qa-api-prod
+docker logs --tail 100 fyi-widget-api-prod
 
 # View worker logs
-docker logs --tail 100 blog-qa-worker-prod
+docker logs --tail 100 fyi-widget-worker-service-prod
 
 # Follow logs in real-time
-docker logs -f blog-qa-worker-prod
+docker logs -f fyi-widget-worker-service-prod
 ```
 
 ### System Monitoring
@@ -469,8 +469,8 @@ rclone config
 docker-compose -f docker-compose.production.yml logs
 
 # Check individual service
-docker logs blog-qa-api-prod
-docker logs blog-qa-worker-prod
+docker logs fyi-widget-api-prod
+docker logs fyi-widget-worker-service-prod
 
 # Check if ports are in use
 sudo netstat -tulpn | grep 8005
@@ -502,7 +502,7 @@ curl http://localhost:8005/health
 # Check nginx
 sudo nginx -t
 sudo systemctl status nginx
-sudo tail -f /var/log/nginx/blog-qa-api-error.log
+sudo tail -f /var/log/nginx/fyi-widget-api-error.log
 
 # Check firewall
 sudo ufw status
@@ -573,9 +573,9 @@ docker-compose -f docker-compose.production.yml ps         # Status
 docker-compose -f docker-compose.production.yml logs -f    # Logs
 
 # Individual containers
-docker logs -f blog-qa-api-prod
-docker logs -f blog-qa-worker-prod
-docker restart blog-qa-api-prod
+docker logs -f fyi-widget-api-prod
+docker logs -f fyi-widget-worker-service-prod
+docker restart fyi-widget-api-prod
 
 # Health checks
 curl http://localhost:8005/health

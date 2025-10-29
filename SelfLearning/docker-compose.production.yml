@@ -77,8 +77,8 @@ services:
   api-service:
     build:
       context: .
-      dockerfile: api_service/Dockerfile
-    container_name: blog-qa-api-prod
+      dockerfile: fyi_widget_api/Dockerfile
+    container_name: fyi-widget-api-prod
     restart: unless-stopped
     ports:
       - "127.0.0.1:8005:8005"  # Only bind to localhost - accessed via nginx
@@ -125,8 +125,8 @@ services:
   worker-service:
     build:
       context: .
-      dockerfile: worker_service/Dockerfile
-    container_name: blog-qa-worker-prod
+      dockerfile: fyi_widget_worker_service/Dockerfile
+    container_name: fyi-widget-worker-service-prod
     restart: unless-stopped
     environment:
       - MONGODB_URL=mongodb://${MONGODB_USERNAME}:${MONGODB_PASSWORD}@mongodb:27017/${DATABASE_NAME}?authSource=admin

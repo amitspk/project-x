@@ -14,7 +14,7 @@ from datetime import datetime
 from .crawler_service import CrawlerService
 from .llm_service import LLMService
 from .storage_service import StorageService
-from shared.models.schemas import ProcessingResult, BlogSummary, QuestionAnswerPair
+from fyi_widget_shared_library.models.schemas import ProcessingResult, BlogSummary, QuestionAnswerPair
 
 logger = logging.getLogger(__name__)
 

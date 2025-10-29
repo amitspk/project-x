@@ -41,13 +41,13 @@ source venv/bin/activate
 
 # Install dependencies for API service
 echo "📦 Installing API service dependencies..."
-cd api_service
+cd fyi_widget_api
 pip install -q -r requirements.txt
 cd ..
 
 # Install dependencies for worker service
 echo "📦 Installing worker service dependencies..."
-cd worker_service
+cd fyi_widget_worker_service
 pip install -q -r requirements.txt
 cd ..
 
@@ -58,13 +58,13 @@ echo "════════════════════════�
 echo ""
 
 # Kill any existing processes
-pkill -f "api_service.api.main" 2>/dev/null
-pkill -f "worker_service.run_worker" 2>/dev/null
+pkill -f "fyi_widget_api.api.main" 2>/dev/null
+pkill -f "fyi_widget_worker_service.run_worker" 2>/dev/null
 
 # Start API service in background
 echo "🌐 Starting API Service on port 8005..."
-cd api_service
-python run_server.py > ../api_service.log 2>&1 &
+cd fyi_widget_api
+python run_server.py > ../fyi_widget_api.log 2>&1 &
 API_PID=$!
 cd ..
 
@@ -75,14 +75,14 @@ if ps -p $API_PID > /dev/null; then
     echo "✅ API Service started (PID: $API_PID)"
 else
     echo "❌ API Service failed to start"
-    cat api_service.log
+    cat fyi_widget_api.log
     exit 1
 fi
 
 # Start Worker service in background
 echo "⚙️  Starting Worker Service..."
-cd worker_service
-python run_worker.py > ../worker_service.log 2>&1 &
+cd fyi_widget_worker_service
+python run_worker.py > ../fyi_widget_worker_service.log 2>&1 &
 WORKER_PID=$!
 cd ..
 
@@ -93,7 +93,7 @@ if ps -p $WORKER_PID > /dev/null; then
     echo "✅ Worker Service started (PID: $WORKER_PID)"
 else
     echo "❌ Worker Service failed to start"
-    cat worker_service.log
+    cat fyi_widget_worker_service.log
     exit 1
 fi
 
@@ -106,16 +106,16 @@ echo "API Service:"
 echo "  URL: http://localhost:8005"
 echo "  Docs: http://localhost:8005/docs"
 echo "  Health: http://localhost:8005/health"
-echo "  Logs: tail -f api_service.log"
+echo "  Logs: tail -f fyi_widget_api.log"
 echo "  PID: $API_PID"
 echo ""
 echo "Worker Service:"
-echo "  Logs: tail -f worker_service.log"
+echo "  Logs: tail -f fyi_widget_worker_service.log"
 echo "  PID: $WORKER_PID"
 echo ""
 echo "To stop services:"
 echo "  kill $API_PID $WORKER_PID"
-echo "  or: pkill -f 'api_service|worker_service'"
+echo "  or: pkill -f 'fyi_widget_api|fyi_widget_worker_service'"
 echo ""
 echo "════════════════════════════════════════════════════════════════════"
 

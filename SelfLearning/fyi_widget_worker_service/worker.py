@@ -11,12 +11,12 @@ from typing import Optional
 # Add shared to path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from shared.data import JobRepository, DatabaseManager
-from shared.data.postgres_database import PostgresPublisherRepository
-from shared.models import ProcessingJob, JobStatus, JobResult
-from shared.models.publisher import PublisherConfig
-from shared.services import CrawlerService, LLMService, StorageService
-from shared.utils import normalize_url
+from fyi_widget_shared_library.data import JobRepository, DatabaseManager
+from fyi_widget_shared_library.data.postgres_database import PostgresPublisherRepository
+from fyi_widget_shared_library.models import ProcessingJob, JobStatus, JobResult
+from fyi_widget_shared_library.models.publisher import PublisherConfig
+from fyi_widget_shared_library.services import CrawlerService, LLMService, StorageService
+from fyi_widget_shared_library.utils import normalize_url
 
 # Configuration from environment
 import os

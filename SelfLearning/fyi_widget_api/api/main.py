@@ -13,17 +13,17 @@ from fastapi.openapi.utils import get_openapi
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 # Import routers
-from api_service.api.routers import questions_router, search_router, qa_router, jobs_router, publishers_router
+from fyi_widget_api.api.routers import questions_router, search_router, qa_router, jobs_router, publishers_router
 
 # Import middleware
-from api_service.api.middleware import RequestIDMiddleware
+from fyi_widget_api.api.middleware import RequestIDMiddleware
 
 # Import auth
-from api_service.api import auth
+from fyi_widget_api.api import auth
 
-# Import from shared
-from shared.data import DatabaseManager, JobRepository
-from shared.data.postgres_database import PostgresPublisherRepository
+# Import from fyi_widget_shared_library
+from fyi_widget_shared_library.data import DatabaseManager, JobRepository
+from fyi_widget_shared_library.data.postgres_database import PostgresPublisherRepository
 
 # Import config
 import os
@@ -165,7 +165,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         return response
     
     # Otherwise, create a simple error response
-    from shared.utils import error_response
+    from fyi_widget_shared_library.utils import error_response
     response_data = error_response(
         message=str(exc.detail),
         error_code="HTTP_ERROR",

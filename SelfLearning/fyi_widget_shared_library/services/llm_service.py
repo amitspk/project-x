@@ -16,7 +16,7 @@ import openai
 from openai import AsyncOpenAI
 
 # Configuration handled by service-specific configs
-from shared.models.schemas import LLMGenerationResult, EmbeddingResult
+from fyi_widget_shared_library.models.schemas import LLMGenerationResult, EmbeddingResult
 
 logger = logging.getLogger(__name__)
 
