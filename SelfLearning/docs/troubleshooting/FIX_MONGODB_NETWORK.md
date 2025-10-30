@@ -2,7 +2,7 @@
 
 ## Problem
 
-MongoDB container is running but not connected to `blog-qa-network`.
+MongoDB container is running but not connected to `fyi-widget-network`.
 
 ## Quick Fix (Run on VPS)
 
@@ -10,7 +10,7 @@ MongoDB container is running but not connected to `blog-qa-network`.
 
 ```bash
 # See which network MongoDB is on
-docker inspect blog-qa-mongodb --format '{{range $key, $value := .NetworkSettings.Networks}}{{$key}} {{end}}'
+docker inspect fyi-widget-mongodb --format '{{range $key, $value := .NetworkSettings.Networks}}{{$key}} {{end}}'
 
 # Check all networks
 docker network ls
@@ -20,10 +20,10 @@ docker network ls
 
 ```bash
 # Connect MongoDB container to the network
-docker network connect blog-qa-network blog-qa-mongodb
+docker network connect fyi-widget-network fyi-widget-mongodb
 
 # Verify
-docker network inspect blog-qa-network | grep -A 5 "Containers"
+docker network inspect fyi-widget-network | grep -A 5 "Containers"
 ```
 
 Now you should see both containers!
@@ -32,8 +32,8 @@ Now you should see both containers!
 
 ```bash
 # Test connectivity
-docker exec blog-qa-mongodb getent hosts postgres
-docker exec blog-qa-postgres ping -c 2 mongodb
+docker exec fyi-widget-mongodb getent hosts postgres
+docker exec fyi-widget-postgres ping -c 2 mongodb
 ```
 
 ---
@@ -56,8 +56,8 @@ To prevent this in the future, ensure MongoDB compose file uses the network corr
 The `networks` section should have:
 ```yaml
 networks:
-  blog-qa-network:
-    name: blog-qa-network
+  fyi-widget-network:
+    name: fyi-widget-network
 ```
 
 Then restart MongoDB:
@@ -72,10 +72,10 @@ docker-compose -f docker-compose.mongodb.yml up -d
 
 ```bash
 # Check network membership
-docker network inspect blog-qa-network | grep -A 10 "Containers"
+docker network inspect fyi-widget-network | grep -A 10 "Containers"
 
 # Should show both:
-# blog-qa-mongodb
-# blog-qa-postgres
+# fyi-widget-mongodb
+# fyi-widget-postgres
 ```
 

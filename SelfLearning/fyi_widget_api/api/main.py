@@ -39,14 +39,30 @@ logger = logging.getLogger(__name__)
 db_manager = DatabaseManager()
 publisher_repo_instance = None
 
-# Configuration from environment
-MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
-MONGODB_USERNAME = os.getenv("MONGODB_USERNAME", "admin")
-MONGODB_PASSWORD = os.getenv("MONGODB_PASSWORD", "password123")
-DATABASE_NAME = os.getenv("DATABASE_NAME", "blog_qa_db")
-POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/blog_qa_publishers")
+# Configuration from environment (required)
+try:
+    MONGODB_URL = os.environ["MONGODB_URL"]
+    MONGODB_USERNAME = os.environ["MONGODB_USERNAME"]
+    MONGODB_PASSWORD = os.environ["MONGODB_PASSWORD"]
+    DATABASE_NAME = os.environ["DATABASE_NAME"]
+    POSTGRES_URL = os.environ["POSTGRES_URL"]
+except KeyError as e:
+    missing = str(e).strip("'")
+    raise RuntimeError(
+        f"Missing required environment variable: {missing}. Ensure .env is set and loaded."
+    )
+
 SERVICE_PORT = int(os.getenv("API_SERVICE_PORT", "8005"))
-CORS_ORIGINS = ["*"]
+
+# CORS origins: expect JSON array; fallback to ["*"]
+raw_cors = os.getenv("CORS_ORIGINS", "[\"*\"]")
+try:
+    import json as _json
+    CORS_ORIGINS = _json.loads(raw_cors)
+    if not isinstance(CORS_ORIGINS, list):
+        raise ValueError
+except Exception:
+    CORS_ORIGINS = ["*"]
 
 
 @asynccontextmanager

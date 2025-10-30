@@ -49,7 +49,7 @@ docker-compose.worker.yml      # Worker service only
 cd /path/to/SelfLearning
 
 # Create network (first time only)
-docker network create blog-qa-network || true
+docker network create fyi-widget-network || true
 
 # Start MongoDB
 docker-compose -f docker-compose.mongodb.yml up -d
@@ -67,7 +67,7 @@ docker-compose -f docker-compose.postgres.yml up -d
 
 # Verify
 docker ps | grep postgres
-docker exec blog-qa-postgres pg_isready -U postgres
+docker exec fyi-widget-postgres pg_isready -U postgres
 ```
 
 ### Step 2: Deploy Application Services
@@ -156,7 +156,7 @@ POSTGRES_HOST=your-postgres-host
 echo "🗄️  Deploying Databases..."
 
 # Create network
-docker network create blog-qa-network 2>/dev/null || true
+docker network create fyi-widget-network 2>/dev/null || true
 
 # Deploy MongoDB
 echo "📦 Starting MongoDB..."
@@ -254,10 +254,10 @@ docker ps | grep worker
 
 ```bash
 # MongoDB
-docker logs -f blog-qa-mongodb
+docker logs -f fyi-widget-mongodb
 
 # PostgreSQL
-docker logs -f blog-qa-postgres
+docker logs -f fyi-widget-postgres
 
 # API
 docker logs -f fyi-widget-api
@@ -374,7 +374,7 @@ docker-compose -f docker-compose.worker.yml up -d --scale worker-service=5
 
 ```bash
 # Check network
-docker network ls | grep blog-qa-network
+docker network ls | grep fyi-widget-network
 
 # Check database is accessible
 docker exec fyi-widget-api ping -c 2 mongodb
@@ -400,10 +400,10 @@ sudo netstat -tulpn | grep -E "27017|5432|8005"
 curl http://localhost:8005/health
 
 # MongoDB
-docker exec blog-qa-mongodb mongosh --eval "db.runCommand('ping')"
+docker exec fyi-widget-mongodb mongosh --eval "db.runCommand('ping')"
 
 # PostgreSQL
-docker exec blog-qa-postgres pg_isready -U postgres
+docker exec fyi-widget-postgres pg_isready -U postgres
 ```
 
 ---
@@ -411,7 +411,7 @@ docker exec blog-qa-postgres pg_isready -U postgres
 ## Production Checklist
 
 - [ ] Databases deployed and running
-- [ ] Network created (`blog-qa-network`)
+- [ ] Network created (`fyi-widget-network`)
 - [ ] Environment variables configured (.env)
 - [ ] API service deployed and healthy
 - [ ] Worker service deployed and processing jobs

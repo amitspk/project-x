@@ -455,7 +455,7 @@ curl https://rclone.org/install.sh | sudo bash
 rclone config
 
 # Add to backup script to sync to cloud
-# rclone sync ~/backups remote:blog-qa-backups
+# rclone sync ~/backups remote:fyi-widget-backups
 ```
 
 ---
@@ -483,14 +483,14 @@ docker-compose -f docker-compose.production.yml restart
 
 ```bash
 # Test MongoDB connection
-docker exec -it blog-qa-mongodb-prod mongosh -u admin -p
+docker exec -it fyi-widget-mongodb-prod mongosh -u admin -p
 
 # Test PostgreSQL connection
-docker exec -it blog-qa-postgres-prod psql -U postgres -d blog_qa_publishers
+docker exec -it fyi-widget-postgres-prod psql -U postgres -d blog_qa_publishers
 
 # Check database logs
-docker logs blog-qa-mongodb-prod
-docker logs blog-qa-postgres-prod
+docker logs fyi-widget-mongodb-prod
+docker logs fyi-widget-postgres-prod
 ```
 
 ### API Not Accessible
@@ -533,7 +533,7 @@ docker stats
 # Adjust resource limits if needed
 
 # Monitor database performance
-docker exec -it blog-qa-mongodb-prod mongosh --eval "db.serverStatus()"
+docker exec -it fyi-widget-mongodb-prod mongosh --eval "db.serverStatus()"
 ```
 
 ---

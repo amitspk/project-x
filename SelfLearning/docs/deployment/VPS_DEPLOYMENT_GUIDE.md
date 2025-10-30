@@ -244,7 +244,7 @@ services:
   # MongoDB
   mongodb:
     image: mongo:7.0
-    container_name: blog-qa-mongodb-prod
+    container_name: fyi-widget-mongodb-prod
     restart: always
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME}
@@ -253,7 +253,7 @@ services:
     volumes:
       - mongodb_data:/data/db
     networks:
-      - blog-qa-network
+      - fyi-widget-network
     healthcheck:
       test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
       interval: 10s
@@ -263,7 +263,7 @@ services:
   # PostgreSQL
   postgres:
     image: postgres:16-alpine
-    container_name: blog-qa-postgres-prod
+    container_name: fyi-widget-postgres-prod
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -272,7 +272,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - blog-qa-network
+      - fyi-widget-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 10s
@@ -308,7 +308,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - blog-qa-network
+      - fyi-widget-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
       interval: 30s
@@ -341,10 +341,10 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - blog-qa-network
+      - fyi-widget-network
 
 networks:
-  blog-qa-network:
+  fyi-widget-network:
     driver: bridge
 
 volumes:
@@ -596,15 +596,15 @@ docker-compose -f docker-compose.production.yml ps
 mkdir -p ~/backups
 
 # Backup MongoDB
-docker exec blog-qa-mongodb-prod mongodump \
+docker exec fyi-widget-mongodb-prod mongodump \
   --username admin \
   --password YOUR_MONGODB_PASSWORD \
   --authenticationDatabase admin \
   --out /backup
-docker cp blog-qa-mongodb-prod:/backup ~/backups/mongodb-$(date +%Y%m%d)
+docker cp fyi-widget-mongodb-prod:/backup ~/backups/mongodb-$(date +%Y%m%d)
 
 # Backup PostgreSQL
-docker exec blog-qa-postgres-prod pg_dump \
+docker exec fyi-widget-postgres-prod pg_dump \
   -U admin blog_qa_publishers > ~/backups/postgres-$(date +%Y%m%d).sql
 ```
 
@@ -673,10 +673,10 @@ sudo systemctl status nginx
 ### Database Connection Issues
 ```bash
 # Check MongoDB
-docker exec -it blog-qa-mongodb-prod mongosh -u admin -p
+docker exec -it fyi-widget-mongodb-prod mongosh -u admin -p
 
 # Check PostgreSQL
-docker exec -it blog-qa-postgres-prod psql -U admin -d blog_qa_publishers
+docker exec -it fyi-widget-postgres-prod psql -U admin -d blog_qa_publishers
 ```
 
 ### Out of Disk Space

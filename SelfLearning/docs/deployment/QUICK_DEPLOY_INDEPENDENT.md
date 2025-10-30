@@ -64,8 +64,8 @@ docker-compose -f docker-compose.worker.yml up -d
 docker ps | grep blog-qa
 
 # Should show:
-# blog-qa-mongodb
-# blog-qa-postgres
+# fyi-widget-mongodb
+# fyi-widget-postgres
 # fyi-widget-api
 # fyi-widget-worker-service
 
@@ -144,7 +144,7 @@ docker logs fyi-widget-worker-service --tail 20
 
 ```bash
 # Check network
-docker network ls | grep blog-qa-network
+docker network ls | grep fyi-widget-network
 
 # Check database connectivity
 docker exec fyi-widget-api ping -c 2 mongodb

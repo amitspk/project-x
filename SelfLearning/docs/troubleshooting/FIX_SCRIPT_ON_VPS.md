@@ -18,19 +18,19 @@ nano ~/deployment/scripts/deploy-databases.sh
 ```bash
 # Create network (if it doesn't exist)
 print_info "Creating Docker network..."
-docker network create blog-qa-network 2>/dev/null || print_info "Network already exists"
+docker network create fyi-widget-network 2>/dev/null || print_info "Network already exists"
 ```
 
 **Replace it with:**
 ```bash
 # Clean up any existing network that might cause conflicts
 print_info "Checking for existing network..."
-if docker network inspect blog-qa-network > /dev/null 2>&1; then
+if docker network inspect fyi-widget-network > /dev/null 2>&1; then
     print_warning "Existing network found. Checking if it's safe to remove..."
-    NETWORK_CONTAINERS=$(docker network inspect blog-qa-network --format '{{len .Containers}}' 2>/dev/null || echo "0")
+    NETWORK_CONTAINERS=$(docker network inspect fyi-widget-network --format '{{len .Containers}}' 2>/dev/null || echo "0")
     if [ "$NETWORK_CONTAINERS" = "0" ]; then
         print_info "Removing existing network to avoid conflicts..."
-        docker network rm blog-qa-network 2>/dev/null || true
+        docker network rm fyi-widget-network 2>/dev/null || true
     else
         print_warning "Network is in use. Will try to use existing network."
     fi
@@ -61,7 +61,7 @@ docker-compose -f docker-compose.mongodb.yml down 2>/dev/null || true
 docker-compose -f docker-compose.postgres.yml down 2>/dev/null || true
 
 # Remove network
-docker network rm blog-qa-network 2>/dev/null || true
+docker network rm fyi-widget-network 2>/dev/null || true
 
 # Now run script (even without update, it should work after cleanup)
 ./scripts/deploy-databases.sh
@@ -105,7 +105,7 @@ cd ~/blog-qa  # or wherever your deployment is
 
 docker-compose -f docker-compose.mongodb.yml down
 docker-compose -f docker-compose.postgres.yml down
-docker network rm blog-qa-network 2>/dev/null || true
+docker network rm fyi-widget-network 2>/dev/null || true
 
 # Now run the script
 ./scripts/deploy-databases.sh

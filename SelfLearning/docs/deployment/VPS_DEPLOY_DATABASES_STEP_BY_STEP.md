@@ -138,7 +138,7 @@ chmod +x scripts/deploy-databases.sh
 
 ```bash
 # Create Docker network
-docker network create blog-qa-network
+docker network create fyi-widget-network
 
 # Deploy MongoDB
 docker-compose -f docker-compose.mongodb.yml up -d
@@ -162,18 +162,18 @@ sleep 10
 docker ps | grep -E "mongodb|postgres"
 
 # Should show:
-# blog-qa-mongodb    Up X minutes
-# blog-qa-postgres   Up X minutes
+# fyi-widget-mongodb    Up X minutes
+# fyi-widget-postgres   Up X minutes
 
 # Test MongoDB
-docker exec blog-qa-mongodb mongosh --eval "db.runCommand('ping')" --quiet
+docker exec fyi-widget-mongodb mongosh --eval "db.runCommand('ping')" --quiet
 
 # Test PostgreSQL
-docker exec blog-qa-postgres pg_isready -U postgres
+docker exec fyi-widget-postgres pg_isready -U postgres
 
 # Check logs for errors
-docker logs blog-qa-mongodb --tail 20
-docker logs blog-qa-postgres --tail 20
+docker logs fyi-widget-mongodb --tail 20
+docker logs fyi-widget-postgres --tail 20
 ```
 
 **Expected output:**
@@ -211,7 +211,7 @@ sudo ufw status
 
 ```bash
 # Create systemd service
-sudo nano /etc/systemd/system/blog-qa-databases.service
+sudo nano /etc/systemd/system/fyi-widget-databases.service
 ```
 
 **Paste this (replace YOUR_USERNAME):**
@@ -237,11 +237,11 @@ WantedBy=multi-user.target
 ```bash
 # Replace YOUR_USERNAME with your actual username
 sudo systemctl daemon-reload
-sudo systemctl enable blog-qa-databases.service
-sudo systemctl start blog-qa-databases.service
+sudo systemctl enable fyi-widget-databases.service
+sudo systemctl start fyi-widget-databases.service
 
 # Check status
-sudo systemctl status blog-qa-databases.service
+sudo systemctl status fyi-widget-databases.service
 ```
 
 ---
@@ -284,8 +284,8 @@ crontab -e
 
 ```bash
 # Check logs
-docker logs blog-qa-mongodb --tail 50
-docker logs blog-qa-postgres --tail 50
+docker logs fyi-widget-mongodb --tail 50
+docker logs fyi-widget-postgres --tail 50
 
 # Check if ports are in use
 sudo netstat -tulpn | grep -E "27017|5432"
@@ -301,10 +301,10 @@ df -h
 docker ps | grep -E "mongodb|postgres"
 
 # Check network
-docker network ls | grep blog-qa-network
+docker network ls | grep fyi-widget-network
 
 # Test connectivity
-docker exec blog-qa-mongodb ping -c 2 postgres
+docker exec fyi-widget-mongodb ping -c 2 postgres
 ```
 
 ### Password Issues
@@ -354,8 +354,8 @@ Once databases are running:
 docker ps | grep -E "mongodb|postgres"
 
 # View logs
-docker logs -f blog-qa-mongodb
-docker logs -f blog-qa-postgres
+docker logs -f fyi-widget-mongodb
+docker logs -f fyi-widget-postgres
 
 # Restart
 docker-compose -f docker-compose.mongodb.yml restart

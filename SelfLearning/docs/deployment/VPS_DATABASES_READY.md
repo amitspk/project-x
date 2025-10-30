@@ -4,7 +4,7 @@
 
 ✅ **MongoDB**: Running and connected to network  
 ✅ **PostgreSQL**: Running and connected to network  
-✅ **Network**: Both containers on `blog-qa-network`  
+✅ **Network**: Both containers on `fyi-widget-network`  
 ✅ **Health**: Both containers showing healthy status  
 
 ---
@@ -15,22 +15,22 @@ Run these commands to confirm everything is ready:
 
 ```bash
 # 1. Check network membership
-docker network inspect blog-qa-network --format '{{range .Containers}}{{.Name}} {{end}}'
-# Should show: blog-qa-mongodb blog-qa-postgres
+docker network inspect fyi-widget-network --format '{{range .Containers}}{{.Name}} {{end}}'
+# Should show: fyi-widget-mongodb fyi-widget-postgres
 
 # 2. Test MongoDB connectivity
-docker exec blog-qa-mongodb mongosh --eval "db.runCommand('ping')" --quiet
+docker exec fyi-widget-mongodb mongosh --eval "db.runCommand('ping')" --quiet
 # Should show: { ok: 1 }
 
 # 3. Test PostgreSQL connectivity
-docker exec blog-qa-postgres pg_isready -U postgres
+docker exec fyi-widget-postgres pg_isready -U postgres
 # Should show: accepting connections
 
 # 4. Test cross-container connectivity
-docker exec blog-qa-mongodb getent hosts postgres
+docker exec fyi-widget-mongodb getent hosts postgres
 # Should show PostgreSQL IP
 
-docker exec blog-qa-postgres ping -c 2 mongodb
+docker exec fyi-widget-postgres ping -c 2 mongodb
 # Should show successful ping
 ```
 
@@ -75,7 +75,7 @@ Both services will automatically connect to your databases using the hostnames a
 ## Summary
 
 - ✅ Databases deployed independently
-- ✅ Both on same network (`blog-qa-network`)
+- ✅ Both on same network (`fyi-widget-network`)
 - ✅ Network connectivity verified
 - ✅ Ready for application services
 - ✅ Production-ready setup

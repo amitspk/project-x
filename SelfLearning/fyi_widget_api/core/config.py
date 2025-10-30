@@ -12,21 +12,22 @@ class APIServiceConfig(BaseSettings):
     service_name: str = "api-service"
     service_port: int = Field(default=8005, env="API_SERVICE_PORT")
     
-    # MongoDB
-    mongodb_url: str = Field(default="mongodb://localhost:27017", env="MONGODB_URL")
-    mongodb_username: str = Field(default="admin", env="MONGODB_USERNAME")
-    mongodb_password: str = Field(default="password123", env="MONGODB_PASSWORD")
-    database_name: str = Field(default="blog_qa_db", env="DATABASE_NAME")
+    # MongoDB (required)
+    mongodb_url: str = Field(..., env="MONGODB_URL")
+    mongodb_username: str = Field(..., env="MONGODB_USERNAME")
+    mongodb_password: str = Field(..., env="MONGODB_PASSWORD")
+    database_name: str = Field(..., env="DATABASE_NAME")
     
     # OpenAI
     openai_api_key: str = Field(default="", env="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-4o-mini", env="OPENAI_MODEL")
     
-    # Security
-    admin_api_key: str = Field(default="", env="ADMIN_API_KEY")
+    # Security (required)
+    admin_api_key: str = Field(..., env="ADMIN_API_KEY")
     
     # CORS
-    cors_origins: list = Field(default=["*"])
+    # Accept a JSON array in CORS_ORIGINS or default to ["*"]
+    cors_origins: list[str] = Field(default_factory=lambda: ["*"]) 
     
     class Config:
         env_file = ".env"

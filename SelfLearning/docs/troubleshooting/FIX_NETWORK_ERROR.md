@@ -3,7 +3,7 @@
 ## Problem
 
 ```
-WARN: a network with name blog-qa-network exists but was not created by compose.
+WARN: a network with name fyi-widget-network exists but was not created by compose.
 Set `external: true` to use an existing network
 ```
 
@@ -21,10 +21,10 @@ docker-compose -f docker-compose.mongodb.yml down 2>/dev/null || true
 docker-compose -f docker-compose.postgres.yml down 2>/dev/null || true
 
 # Remove the conflicting network
-docker network rm blog-qa-network 2>/dev/null || true
+docker network rm fyi-widget-network 2>/dev/null || true
 
 # Verify it's removed
-docker network ls | grep blog-qa-network
+docker network ls | grep fyi-widget-network
 # Should show nothing
 ```
 
@@ -54,7 +54,7 @@ docker-compose -f docker-compose.mongodb.yml down
 docker-compose -f docker-compose.postgres.yml down
 
 # Remove network
-docker network rm blog-qa-network 2>/dev/null || true
+docker network rm fyi-widget-network 2>/dev/null || true
 
 # Redeploy
 ./scripts/deploy-databases.sh
@@ -66,13 +66,13 @@ If you want to manage the network manually:
 
 1. Create it once:
    ```bash
-   docker network create blog-qa-network
+   docker network create fyi-widget-network
    ```
 
 2. Update both docker-compose files to use `external: true`:
    ```yaml
    networks:
-     blog-qa-network:
+     fyi-widget-network:
        external: true
    ```
 

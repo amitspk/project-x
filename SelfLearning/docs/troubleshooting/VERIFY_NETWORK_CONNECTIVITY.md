@@ -18,7 +18,7 @@ The MongoDB container (based on `mongo:7.0` image) likely doesn't have `ping` in
 
 ```bash
 # Check if both containers are on the same network
-docker network inspect blog-qa-network | grep -A 10 "Containers"
+docker network inspect fyi-widget-network | grep -A 10 "Containers"
 
 # Should show both containers
 ```
@@ -28,10 +28,10 @@ docker network inspect blog-qa-network | grep -A 10 "Containers"
 **MongoDB container can reach PostgreSQL hostname:**
 ```bash
 # Test if MongoDB container can resolve PostgreSQL hostname
-docker exec blog-qa-mongodb getent hosts postgres
+docker exec fyi-widget-mongodb getent hosts postgres
 
 # Or check network connectivity via mongosh
-docker exec blog-qa-mongodb mongosh --eval "
+docker exec fyi-widget-mongodb mongosh --eval "
   try {
     db.runCommand({ping: 1});
     print('✅ MongoDB container is healthy');
@@ -55,13 +55,13 @@ These hostnames (`mongodb` and `postgres`) are resolved by Docker's internal DNS
 
 ```bash
 # Test MongoDB connection from a test container on same network
-docker run --rm --network blog-qa-network \
+docker run --rm --network fyi-widget-network \
   mongo:7.0 mongosh \
   "mongodb://admin:YOUR_PASSWORD@mongodb:27017/blog_qa_db?authSource=admin" \
   --eval "db.runCommand('ping')"
 
 # Test PostgreSQL connection from a test container
-docker run --rm --network blog-qa-network \
+docker run --rm --network fyi-widget-network \
   postgres:16-alpine \
   psql "postgresql://postgres:YOUR_PASSWORD@postgres:5432/blog_qa_publishers" \
   -c "SELECT 'Connected successfully!' as status;"
@@ -89,12 +89,12 @@ When you deploy your API/Worker services, they'll connect fine using the service
 
 ```bash
 # Check if MongoDB can resolve PostgreSQL hostname
-docker exec blog-qa-mongodb nslookup postgres 2>/dev/null || \
-docker exec blog-qa-mongodb getent hosts postgres || \
+docker exec fyi-widget-mongodb nslookup postgres 2>/dev/null || \
+docker exec fyi-widget-mongodb getent hosts postgres || \
 echo "nslookup/getent not available in MongoDB container"
 
 # Check if PostgreSQL can resolve MongoDB hostname
-docker exec blog-qa-postgres nslookup mongodb
+docker exec fyi-widget-postgres nslookup mongodb
 
 # Both should show the IP addresses
 ```

@@ -14,7 +14,7 @@ A **Docker network** is a virtual network that allows Docker containers to commu
 - You'd need to expose ports publicly (security risk!)
 - Harder to manage connections
 
-### With a Network (like `blog-qa-network`):
+### With a Network (like `fyi-widget-network`):
 - ✅ Containers can talk to each other using container names
 - ✅ Isolated from internet (more secure)
 - ✅ Easy hostname resolution (`mongodb` → MongoDB container IP)
@@ -31,7 +31,7 @@ A **Docker network** is a virtual network that allows Docker containers to commu
 - Uses `bridge` driver
 - Containers get IPs like `172.17.0.2`, `172.17.0.3`
 
-**Custom bridge network (like `blog-qa-network`):**
+**Custom bridge network (like `fyi-widget-network`):**
 - Containers on same network can communicate
 - Better isolation
 - DNS resolution by container name
@@ -52,18 +52,18 @@ A **Docker network** is a virtual network that allows Docker containers to commu
 
 ---
 
-## 🏗️ Our `blog-qa-network` Explained
+## 🏗️ Our `fyi-widget-network` Explained
 
 ### What It Is
 
 ```yaml
 networks:
-  blog-qa-network:
+  fyi-widget-network:
     driver: bridge
-    name: blog-qa-network
+    name: fyi-widget-network
 ```
 
-This creates a **custom bridge network** with the name `blog-qa-network`.
+This creates a **custom bridge network** with the name `fyi-widget-network`.
 
 ### What It Does
 
@@ -75,10 +75,10 @@ This creates a **custom bridge network** with the name `blog-qa-network`.
 ### Example
 
 ```
-blog-qa-network (Virtual Network)
+fyi-widget-network (Virtual Network)
 │
-├── blog-qa-mongodb    → IP: 172.28.0.2, Hostname: mongodb
-├── blog-qa-postgres   → IP: 172.28.0.3, Hostname: postgres
+├── fyi-widget-mongodb    → IP: 172.28.0.2, Hostname: mongodb
+├── fyi-widget-postgres   → IP: 172.28.0.3, Hostname: postgres
 ├── fyi-widget-api        → IP: 172.28.0.4, Hostname: api-service
 └── fyi-widget-worker-service     → IP: 172.28.0.5, Hostname: worker-service
 ```
@@ -93,7 +93,7 @@ All these containers can communicate using their hostnames:
 
 ### Inside the Network
 
-When containers are on `blog-qa-network`, they can:
+When containers are on `fyi-widget-network`, they can:
 
 1. **Use container names as hostnames:**
    ```
@@ -109,7 +109,7 @@ When containers are on `blog-qa-network`, they can:
 
 3. **Use service names:**
    ```
-   docker exec blog-qa-postgres ping mongodb
+   docker exec fyi-widget-postgres ping mongodb
    ```
 
 ### DNS Resolution
@@ -137,7 +137,7 @@ Internet → Docker Host → Containers (exposed ports)
 
 ### With Custom Network
 ```
-Internet → Docker Host → blog-qa-network
+Internet → Docker Host → fyi-widget-network
                               ↓
                     Only containers on network
                     can access each other
@@ -147,7 +147,7 @@ No external internet access!
 ```
 
 **Your databases are NOT exposed to the internet** - only accessible from:
-- Other containers on `blog-qa-network`
+- Other containers on `fyi-widget-network`
 - Localhost (127.0.0.1) - from the VPS itself
 
 ---
@@ -161,30 +161,30 @@ No external internet access!
 docker network ls
 
 # Inspect specific network
-docker network inspect blog-qa-network
+docker network inspect fyi-widget-network
 
 # See which containers are on network
-docker network inspect blog-qa-network --format '{{range .Containers}}{{.Name}} {{end}}'
+docker network inspect fyi-widget-network --format '{{range .Containers}}{{.Name}} {{end}}'
 ```
 
 ### Create Network
 
 ```bash
 # Manually create network
-docker network create blog-qa-network
+docker network create fyi-widget-network
 
 # With specific driver
-docker network create --driver bridge blog-qa-network
+docker network create --driver bridge fyi-widget-network
 ```
 
 ### Connect/Disconnect Containers
 
 ```bash
 # Connect container to network
-docker network connect blog-qa-network container-name
+docker network connect fyi-widget-network container-name
 
 # Disconnect
-docker network disconnect blog-qa-network container-name
+docker network disconnect fyi-widget-network container-name
 
 # List container networks
 docker inspect container-name --format '{{range $key, $value := .NetworkSettings.Networks}}{{$key}} {{end}}'
@@ -205,7 +205,7 @@ docker inspect container-name --format '{{range $key, $value := .NetworkSettings
 ### Real-World Example
 
 When your API service starts:
-1. API container joins `blog-qa-network`
+1. API container joins `fyi-widget-network`
 2. API gets IP: `172.28.0.4`
 3. API can resolve `mongodb` → finds MongoDB container
 4. API connects to MongoDB using: `mongodb://admin:pass@mongodb:27017/db`
@@ -230,7 +230,7 @@ All this happens automatically! No manual IP management.
 docker-compose down
 
 # Network persists (unless explicitly removed)
-docker network rm blog-qa-network
+docker network rm fyi-widget-network
 ```
 
 ---
@@ -238,7 +238,7 @@ docker network rm blog-qa-network
 ## 💡 Key Takeaways
 
 1. **Docker network = Virtual LAN** for containers
-2. **`blog-qa-network` = Private network** for your services
+2. **`fyi-widget-network` = Private network** for your services
 3. **Container names = Hostnames** (automatic DNS)
 4. **Security**: Isolates from internet
 5. **Convenience**: No need to manage IP addresses
@@ -252,7 +252,7 @@ docker network rm blog-qa-network
 │  VPS (Docker Host)                      │
 │                                         │
 │  ┌───────────────────────────────────┐  │
-│  │  blog-qa-network (Virtual LAN)    │  │
+│  │  fyi-widget-network (Virtual LAN)    │  │
 │  │                                   │  │
 │  │  ┌──────────┐    ┌──────────┐    │  │
 │  │  │ MongoDB  │◄───┤PostgreSQL│    │  │
@@ -278,7 +278,7 @@ docker network rm blog-qa-network
 **In Simple Terms:**
 
 - **Docker network** = A private chat room for your containers
-- **`blog-qa-network`** = The name of your private chat room
+- **`fyi-widget-network`** = The name of your private chat room
 - **Container names** = User names in the chat room
 - **Communication** = Containers talk using their names, Docker handles the rest!
 

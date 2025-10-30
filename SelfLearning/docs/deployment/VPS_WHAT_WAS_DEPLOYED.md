@@ -3,13 +3,13 @@
 ## ✅ What IS Deployed
 
 ### 1. MongoDB Database
-- **Container**: `blog-qa-mongodb`
+- **Container**: `fyi-widget-mongodb`
 - **Port**: 27017 (localhost only - not exposed to internet)
 - **Purpose**: Stores your blog Q&A data
 - **Admin UI**: ❌ **NOT deployed** (mongo-express)
 
 ### 2. PostgreSQL Database
-- **Container**: `blog-qa-postgres`
+- **Container**: `fyi-widget-postgres`
 - **Port**: 5432 (localhost only - not exposed to internet)
 - **Purpose**: Stores publisher configurations
 - **Admin UI**: ❌ **NOT deployed** (pgadmin)
@@ -39,8 +39,8 @@ Run this on your VPS to see what's actually deployed:
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 # Should show:
-# blog-qa-mongodb    Up X minutes    127.0.0.1:27017->27017/tcp
-# blog-qa-postgres   Up X minutes    127.0.0.1:5432->5432/tcp
+# fyi-widget-mongodb    Up X minutes    127.0.0.1:27017->27017/tcp
+# fyi-widget-postgres   Up X minutes    127.0.0.1:5432->5432/tcp
 
 # Check for admin UIs (should show nothing)
 docker ps | grep -E "mongo-express|pgadmin"
@@ -55,10 +55,10 @@ docker ps | grep -E "mongo-express|pgadmin"
 **Option 1: Command Line (via docker exec)**
 ```bash
 # Connect to MongoDB shell
-docker exec -it blog-qa-mongodb mongosh -u admin -p
+docker exec -it fyi-widget-mongodb mongosh -u admin -p
 
 # Or run commands directly
-docker exec blog-qa-mongodb mongosh -u admin -p --eval "show dbs"
+docker exec fyi-widget-mongodb mongosh -u admin -p --eval "show dbs"
 ```
 
 **Option 2: From Your Local Machine (via SSH tunnel)**
@@ -75,10 +75,10 @@ mongosh mongodb://admin:password@localhost:27017/blog_qa_db?authSource=admin
 **Option 1: Command Line (via docker exec)**
 ```bash
 # Connect to PostgreSQL
-docker exec -it blog-qa-postgres psql -U postgres -d blog_qa_publishers
+docker exec -it fyi-widget-postgres psql -U postgres -d blog_qa_publishers
 
 # Or run commands directly
-docker exec blog-qa-postgres psql -U postgres -d blog_qa_publishers -c "SELECT version();"
+docker exec fyi-widget-postgres psql -U postgres -d blog_qa_publishers -c "SELECT version();"
 ```
 
 **Option 2: From Your Local Machine (via SSH tunnel)**
@@ -110,7 +110,7 @@ version: '3.8'
 services:
   mongo-express:
     image: mongo-express:latest
-    container_name: blog-qa-mongo-express
+    container_name: fyi-widget-mongo-express
     restart: unless-stopped
     ports:
       - "127.0.0.1:8081:8081"  # Only localhost
@@ -121,13 +121,13 @@ services:
       ME_CONFIG_BASICAUTH_USERNAME: admin
       ME_CONFIG_BASICAUTH_PASSWORD: CHANGE_THIS_SECURE_PASSWORD
     networks:
-      - blog-qa-network
+      - fyi-widget-network
     depends_on:
       - mongodb
 
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: blog-qa-pgadmin
+    container_name: fyi-widget-pgadmin
     restart: unless-stopped
     ports:
       - "127.0.0.1:5050:80"  # Only localhost
@@ -139,13 +139,13 @@ services:
     volumes:
       - pgadmin_data:/var/lib/pgadmin
     networks:
-      - blog-qa-network
+      - fyi-widget-network
     depends_on:
       - postgres
 
 networks:
-  blog-qa-network:
-    name: blog-qa-network
+  fyi-widget-network:
+    name: fyi-widget-network
     external: true
 
 volumes:
@@ -178,10 +178,10 @@ ssh -L 8081:localhost:8081 -L 5050:localhost:5050 username@vps-ip
 **Use command line access instead:**
 ```bash
 # MongoDB
-docker exec -it blog-qa-mongodb mongosh -u admin -p
+docker exec -it fyi-widget-mongodb mongosh -u admin -p
 
 # PostgreSQL
-docker exec -it blog-qa-postgres psql -U postgres -d blog_qa_publishers
+docker exec -it fyi-widget-postgres psql -U postgres -d blog_qa_publishers
 ```
 
 **Benefits:**

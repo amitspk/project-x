@@ -64,7 +64,7 @@ version: '3.8'
 services:
   mongodb:
     image: mongo:7.0
-    container_name: blog-qa-mongodb-prod
+    container_name: fyi-widget-mongodb-prod
     restart: always
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME}
@@ -73,7 +73,7 @@ services:
     volumes:
       - mongodb_data:/data/db
     networks:
-      - blog-qa-network
+      - fyi-widget-network
     healthcheck:
       test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
       interval: 10s
@@ -82,7 +82,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: blog-qa-postgres-prod
+    container_name: fyi-widget-postgres-prod
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -91,7 +91,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - blog-qa-network
+      - fyi-widget-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 10s
@@ -126,7 +126,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - blog-qa-network
+      - fyi-widget-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
       interval: 30s
@@ -158,10 +158,10 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - blog-qa-network
+      - fyi-widget-network
 
 networks:
-  blog-qa-network:
+  fyi-widget-network:
     driver: bridge
 
 volumes:
