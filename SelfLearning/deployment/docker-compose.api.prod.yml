@@ -1,14 +1,15 @@
 version: '3.8'
 
 services:
-  worker-service:
-    build:
-      context: .
-      dockerfile: fyi_widget_worker_service/Dockerfile
-    container_name: fyi-widget-worker-service
+  api-service:
+    # Use prebuilt image from your registry (set your namespace and tag)
+    image: docker.io/amit11081994/fyi-widget-api:latest
+    container_name: fyi-widget-api
     restart: unless-stopped
     env_file:
       - .env
+    ports:
+      - "127.0.0.1:8005:8005"
     environment:
       - MONGODB_URL=${MONGODB_URL}
       - MONGODB_USERNAME=${MONGODB_USERNAME}
@@ -17,24 +18,31 @@ services:
       - POSTGRES_URL=${POSTGRES_URL}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
-      - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS:-5}
-      - CONCURRENT_JOBS=${CONCURRENT_JOBS:-1}
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
+      - API_SERVICE_PORT=8005
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
     networks:
       - fyi-widget-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     deploy:
       resources:
         limits:
           cpus: '2.0'
-          memory: 4G
+          memory: 2G
         reservations:
           cpus: '0.5'
-          memory: 1G
+          memory: 512M
     logging:
       driver: "json-file"
       options:
-        max-size: "100m"
-        max-file: "10"
+        max-size: "50m"
+        max-file: "5"
 
 networks:
   fyi-widget-network:
