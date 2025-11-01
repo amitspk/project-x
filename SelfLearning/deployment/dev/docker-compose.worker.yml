@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  worker-service:
+    # Build from local Dockerfile instead of pulling from registry
+    build:
+      context: ../..  # Two levels up to SelfLearning directory
+      dockerfile: fyi_widget_worker_service/Dockerfile
+    container_name: fyi-widget-worker-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGODB_USERNAME=${MONGODB_USERNAME}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+      - DATABASE_NAME=${DATABASE_NAME}
+      - POSTGRES_URL=${POSTGRES_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS:-5}
+      - CONCURRENT_JOBS=${CONCURRENT_JOBS:-1}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    networks:
+      - fyi-widget-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+
+networks:
+  fyi-widget-network:
+    external: true
+

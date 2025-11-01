@@ -234,12 +234,18 @@ async def verify_publisher_key(
         request_domain = extract_domain(origin or referer)
         publisher_domain = publisher.domain.lower()
         
-        # Allow exact match or subdomains
+        # Extract API domain from request (host header) - allow requests from API itself
+        api_host = request.headers.get("host", "")
+        api_domain = extract_domain(api_host) if api_host else None
+        
+        # Allow exact match or subdomains of publisher domain
+        # Also allow requests from the API domain itself (for Swagger, direct API clients, etc.)
         is_valid_domain = (
             request_domain == publisher_domain or
             request_domain.endswith(f".{publisher_domain}") or
             request_domain == "localhost" or  # Allow localhost for development
-            request_domain.startswith("localhost:")  # Allow localhost with port
+            request_domain.startswith("localhost:") or  # Allow localhost with port
+            (api_domain and request_domain == api_domain)  # Allow requests from API domain
         )
         
         if not is_valid_domain:

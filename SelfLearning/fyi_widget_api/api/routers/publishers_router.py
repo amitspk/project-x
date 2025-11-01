@@ -83,7 +83,12 @@ async def onboard_publisher(
     Creates a new publisher account with custom configuration.
     Returns the publisher details including a generated API key.
     
-    Example:
+    **Configuration Options:**
+    - You can omit the `config` field entirely to use all default values
+    - You can pass `config` with only the fields you want to customize
+    - All fields not provided will use their default values from the model
+    
+    Example with custom config:
     ```json
     {
         "name": "Tech Blog Inc",
@@ -91,10 +96,17 @@ async def onboard_publisher(
         "email": "admin@techblog.com",
         "config": {
             "questions_per_blog": 7,
-            "llm_model": "gpt-4o-mini",
-            "temperature": 0.8,
-            "daily_blog_limit": 50
+            "summary_model": "gpt-4o-mini"
         }
+    }
+    ```
+    
+    Example using defaults (config omitted):
+    ```json
+    {
+        "name": "Tech Blog Inc",
+        "domain": "techblog.com",
+        "email": "admin@techblog.com"
     }
     ```
     """
@@ -462,6 +474,94 @@ async def delete_publisher(
         )
 
 
+@router.post(
+    "/{publisher_id}/reactivate",
+    response_model=SwaggerPublisherUpdateResponse,
+    dependencies=[Depends(verify_admin_key)],
+    responses={
+        200: {"description": "Publisher reactivated successfully"},
+        400: {"model": StandardErrorResponse, "description": "Publisher is already active"},
+        401: {"model": StandardErrorResponse, "description": "Admin authentication required"},
+        404: {"model": StandardErrorResponse, "description": "Publisher not found"}
+    }
+)
+async def reactivate_publisher(
+    http_request: Request,
+    publisher_id: str,
+    repo: PostgresPublisherRepository = Depends(get_publisher_repo)
+) -> Dict[str, Any]:
+    """
+    Reactivate a deleted/inactive publisher.
+    
+    **Admin Only**: This endpoint requires admin authentication (X-Admin-Key header).
+    
+    Marks the publisher as ACTIVE again. Useful when you've soft-deleted a publisher
+    and want to restore it instead of creating a new one.
+    """
+    # Get request_id from middleware (fallback to generating one if not available)
+    request_id = getattr(http_request.state, 'request_id', None) or generate_request_id()
+    
+    try:
+        logger.info(f"[{request_id}] 🔄 Reactivating publisher: {publisher_id}")
+        
+        # Check if publisher exists
+        publisher = await repo.get_publisher_by_id(publisher_id)
+        if not publisher:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Publisher not found: {publisher_id}"
+            )
+        
+        # Check if already active
+        if publisher.status == PublisherStatus.ACTIVE:
+            logger.warning(f"[{request_id}] ⚠️ Publisher already active: {publisher_id}")
+            raise HTTPException(
+                status_code=400,
+                detail="Publisher is already active"
+            )
+        
+        # Reactivate - mark as active
+        await repo.update_publisher(publisher_id, {"status": PublisherStatus.ACTIVE})
+        
+        # Get updated publisher
+        updated_publisher = await repo.get_publisher_by_id(publisher_id)
+        updated_publisher.api_key = None  # Don't return API key
+        
+        logger.info(f"[{request_id}] ✅ Publisher reactivated: {publisher_id}")
+        
+        publisher_response = PublisherResponse(
+            success=True,
+            publisher=updated_publisher,
+            message="Publisher reactivated successfully"
+        )
+        
+        return success_response(
+            result=publisher_response.model_dump(),
+            message="Publisher reactivated successfully",
+            status_code=200,
+            request_id=request_id
+        )
+        
+    except HTTPException as exc:
+        logger.error(f"[{request_id}] ❌ HTTP error: {exc.detail}")
+        response_data = handle_http_exception(exc, request_id=request_id)
+        raise HTTPException(
+            status_code=response_data["status_code"],
+            detail=response_data
+        )
+    except Exception as e:
+        logger.error(f"[{request_id}] ❌ Failed to reactivate publisher: {e}", exc_info=True)
+        response_data = handle_generic_exception(
+            e,
+            message="Failed to reactivate publisher",
+            request_id=request_id
+        )
+        raise HTTPException(
+            status_code=response_data["status_code"],
+            detail=response_data
+        )
+
+
 @router.get(
     "/",
     response_model=SwaggerPublishersListResponse,
@@ -645,9 +745,15 @@ async def regenerate_publisher_api_key(
                     "status": publisher.status,
                     "config": {
                         "questions_per_blog": publisher.config.questions_per_blog,
-                        "llm_model": publisher.config.llm_model,
-                        "temperature": publisher.config.temperature,
-                        "max_tokens": publisher.config.max_tokens,
+                        "summary_model": publisher.config.summary_model.value if hasattr(publisher.config.summary_model, 'value') else str(publisher.config.summary_model),
+                        "questions_model": publisher.config.questions_model.value if hasattr(publisher.config.questions_model, 'value') else str(publisher.config.questions_model),
+                        "chat_model": publisher.config.chat_model.value if hasattr(publisher.config.chat_model, 'value') else str(publisher.config.chat_model),
+                        "summary_temperature": publisher.config.summary_temperature,
+                        "questions_temperature": publisher.config.questions_temperature,
+                        "chat_temperature": publisher.config.chat_temperature,
+                        "summary_max_tokens": publisher.config.summary_max_tokens,
+                        "questions_max_tokens": publisher.config.questions_max_tokens,
+                        "chat_max_tokens": publisher.config.chat_max_tokens,
                         "generate_summary": publisher.config.generate_summary,
                         "generate_embeddings": publisher.config.generate_embeddings,
                         "daily_blog_limit": publisher.config.daily_blog_limit

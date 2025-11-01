@@ -106,7 +106,9 @@ async def search_similar_blogs(
                     "blog_id": str(blog_doc.get("_id", "")),
                     "url": blog.url,
                     "title": blog.title,
-                    "similarity_score": blog.similarity_score
+                    "similarity_score": blog.similarity_score,
+                    "icon": "❓",
+                    "description": None
                 })
         
         # Build response in the format expected by Swagger schema

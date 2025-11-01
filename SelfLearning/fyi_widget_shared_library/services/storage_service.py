@@ -85,9 +85,20 @@ class StorageService:
         blog_url: str,
         summary_text: str,
         key_points: List[str],
-        embedding: List[float]
+        embedding: List[float],
+        title: Optional[str] = None
     ) -> str:
-        """Save blog summary with embedding."""
+        """
+        Save blog summary with embedding.
+        
+        Args:
+            blog_id: Blog ID
+            blog_url: Blog URL
+            summary_text: Summary text
+            key_points: List of key points
+            embedding: Vector embedding
+            title: Optional LLM-generated title (stored for reference)
+        """
         logger.info(f"💾 Saving summary for blog: {blog_id}")
         
         collection = self.database[self.summaries_collection]
@@ -100,6 +111,10 @@ class StorageService:
             "embedding": embedding,
             "created_at": datetime.utcnow()
         }
+        
+        # Store LLM-generated title if provided (for reference/future use)
+        if title:
+            doc["llm_title"] = title
         
         result = await collection.insert_one(doc)
         logger.info(f"✅ Summary saved: {result.inserted_id}")

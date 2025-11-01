@@ -210,9 +210,15 @@ class SearchResponse(StandardSuccessResponse):
 class PublisherConfigSchema(BaseModel):
     """Publisher configuration schema."""
     questions_per_blog: int = Field(..., example=5)
-    llm_model: str = Field(..., example="gpt-4o-mini")
-    temperature: float = Field(..., example=0.7)
-    max_tokens: int = Field(..., example=2000)
+    summary_model: str = Field(..., example="gpt-4o-mini")
+    questions_model: str = Field(..., example="gpt-4o-mini")
+    chat_model: str = Field(..., example="gpt-4o-mini")
+    summary_temperature: float = Field(..., example=0.7)
+    questions_temperature: float = Field(..., example=0.7)
+    chat_temperature: float = Field(..., example=0.7)
+    summary_max_tokens: int = Field(..., example=2000)
+    questions_max_tokens: int = Field(..., example=4000)
+    chat_max_tokens: int = Field(..., example=2000)
     generate_summary: bool = Field(..., example=True)
     generate_embeddings: bool = Field(..., example=True)
     daily_blog_limit: int = Field(..., example=100)

@@ -202,12 +202,8 @@ async def check_and_load_questions(
                 config=publisher_config
             )
             
-            # Track usage
-            if auth_module.publisher_repo:
-                await auth_module.publisher_repo.increment_usage(
-                    publisher_id=publisher.id,
-                    blogs_processed=1
-                )
+            # Note: Usage tracking (blogs_processed) will be handled by worker when job completes
+            # This prevents double counting since worker also increments on completion
             
             logger.info(f"[{request_id}] ✅ Processing job created: {job_id}")
             

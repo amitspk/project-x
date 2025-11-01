@@ -27,9 +27,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# LLM service will be initialized per-request
-def get_llm_service():
-    return LLMService()
+# LLM service will be initialized per-request with publisher's configured model
+def get_llm_service(publisher: Publisher):
+    """Get LLM service configured with publisher's model."""
+    # Use chat_model for the Q&A endpoint
+    model_name = publisher.config.chat_model.value if hasattr(publisher.config.chat_model, 'value') else str(publisher.config.chat_model)
+    logger.info(f"🤖 Using publisher's configured model: {model_name} for {publisher.name}")
+    return LLMService(api_key=None, model=model_name)
 
 
 class QARequest(BaseModel):
@@ -94,11 +98,21 @@ async def ask_question(
                 detail="Question cannot be empty"
             )
         
-        llm_service = get_llm_service()
-        # Generate answer using LLM
+        # Use publisher's configured chat model
+        llm_service = get_llm_service(publisher)
+        
+        # Get chat model from config
+        chat_model = publisher.config.chat_model.value if hasattr(publisher.config.chat_model, 'value') else str(publisher.config.chat_model)
+        
+        logger.info(f"[{request_id}] 💬 Using chat model: {chat_model}, temp: {publisher.config.chat_temperature}, max_tokens: {publisher.config.chat_max_tokens} for publisher {publisher.name}")
+        
+        # Generate answer using LLM with publisher's chat model and parameters
         result = await llm_service.answer_question(
             question=request.question,
-            context=""  # No context, general Q&A
+            context="",  # No context, general Q&A
+            model=chat_model,  # Use per-operation model
+            temperature=publisher.config.chat_temperature,  # Use per-operation temperature
+            max_tokens=publisher.config.chat_max_tokens  # Use per-operation max_tokens
         )
         
         answer = result.text

@@ -1,7 +1,8 @@
 """
-Internal LLM service - uses OpenAI directly.
+LLM Service - Multi-provider LLM abstraction layer.
 
 Handles all LLM operations: summarization, question generation, embeddings.
+Uses factory pattern to route to appropriate provider (OpenAI, Anthropic, etc.).
 
 Three-Layer Prompt Architecture:
     1. System Prompt (Non-negotiable): Defines AI role + enforces JSON format
@@ -12,101 +13,121 @@ Three-Layer Prompt Architecture:
 import logging
 import json
 from typing import List, Dict, Any, Tuple, Optional
-import openai
-from openai import AsyncOpenAI
 
 # Configuration handled by service-specific configs
 from fyi_widget_shared_library.models.schemas import LLMGenerationResult, EmbeddingResult
+from .llm_providers.factory import LLMProviderFactory
+from .llm_providers.base import LLMProvider
+from .llm_providers.model_config import LLMModelConfig
+# Import shared prompts and format templates (moved to separate module to avoid circular imports)
+from .llm_prompts import (
+    OUTPUT_FORMAT_INSTRUCTION,
+    DEFAULT_QUESTIONS_PROMPT,
+    DEFAULT_SUMMARY_PROMPT,
+    QUESTIONS_JSON_FORMAT,
+    SUMMARY_JSON_FORMAT
+)
 
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# TWO-PART PROMPT ARCHITECTURE
-# ============================================================================
-
-# PART 1: OUTPUT FORMAT ENFORCEMENT (Non-negotiable, always used)
-# ----------------------------------------------------------------
-# Pure format instruction - no role, just format rules
-
-OUTPUT_FORMAT_INSTRUCTION = """You MUST respond ONLY with valid JSON in the exact format specified below.
-Do not include any text, explanation, or markdown outside the JSON structure.
-Never deviate from the required JSON schema."""
-
-
-# PART 2: ROLE + INSTRUCTIONS (Customizable with fallback)
-# ----------------------------------------------------------
-# Combines the LLM's role and content generation instructions
-# Publishers can customize this entire section
-
-DEFAULT_QUESTIONS_PROMPT = """You are an expert at creating educational Q&A content.
-
-Generate insightful question-answer pairs that:
-1. Are diverse and cover key concepts from the content
-2. Have comprehensive answers (50-100 words each)
-3. Are engaging and start with varied interrogatives (What, How, Why, When, etc.)
-4. Focus on practical understanding and key takeaways
-5. Are educational and help readers deepen their understanding"""
-
-DEFAULT_SUMMARY_PROMPT = """You are a helpful assistant that summarizes blog posts.
-
-Create a concise summary that:
-1. Captures the main message in 2-3 sentences
-2. Extracts 3-5 key points that represent the most important ideas
-3. Is informative, well-structured, and easy to understand
-4. Focuses on actionable insights when applicable"""
-
-
-# FORMAT TEMPLATES (Non-negotiable - Schema Definition)
-# -------------------------------------------------------
-# Shown to LLM as examples of exact JSON structure required
-
-QUESTIONS_JSON_FORMAT = """{
-    "questions": [
-        {
-            "question": "Question text here?",
-            "answer": "Detailed answer here.",
-            "icon": "💡"
-        }
-    ]
-}"""
-
-SUMMARY_JSON_FORMAT = """{
-    "summary": "A 2-3 sentence summary of the main content",
-    "key_points": ["key point 1", "key point 2", "key point 3"]
-}"""
-
-
 class LLMService:
-    """Internal LLM service using OpenAI."""
+    """
+    LLM Service - Facade for multi-provider LLM operations.
+    
+    Automatically routes to the correct provider (OpenAI, Anthropic, etc.)
+    based on the model name. Uses factory pattern for provider creation.
+    """
     
     def __init__(
         self,
         api_key: str = None,
-        model: str = "gpt-4o-mini",
+        model: str = None,
         temperature: float = 0.7,
         max_tokens: int = 4000,  # Increased for detailed Q&A generation
-        embedding_model: str = "text-embedding-3-small"
+        embedding_model: str = None
     ):
-        import os
-        if not api_key:
-            api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OpenAI API key is required")
+        """
+        Initialize LLM Service.
         
-        self.client = AsyncOpenAI(api_key=api_key)
-        self.model = model
+        Args:
+            api_key: Optional API key (if not provided, fetched from env vars based on provider)
+            model: Model identifier (determines provider automatically). If None, uses DEFAULT_MODEL from LLMModelConfig
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate
+            embedding_model: Embedding model (only used for OpenAI). If None, uses DEFAULT_EMBEDDING_MODEL from LLMModelConfig
+        """
+        # Use default model from config if not specified
+        self.model = model if model is not None else LLMModelConfig.DEFAULT_MODEL
         self.temperature = temperature
         self.max_tokens = max_tokens
-        self.embedding_model = embedding_model
+        self.embedding_model = embedding_model if embedding_model is not None else LLMModelConfig.DEFAULT_EMBEDDING_MODEL
         
-        logger.info(f"✅ LLM Service initialized (model: {self.model})")
+        # Create provider instance using factory
+        # Use self.model (which has default applied) instead of raw model parameter
+        self.provider: LLMProvider = LLMProviderFactory.create(
+            model=self.model,
+            api_key=api_key,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            embedding_model=embedding_model  # Factory will apply default if None
+        )
+        
+        logger.info(f"✅ LLM Service initialized (model: {self.model}, provider: {self.provider.provider_name})")
+    
+    def _get_provider_for_model(
+        self, 
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None
+    ) -> LLMProvider:
+        """
+        Get provider for a specific model and parameters. 
+        If model/params match instance, uses instance provider.
+        
+        Args:
+            model: Optional model name to override instance model
+            temperature: Optional temperature to override instance temperature
+            max_tokens: Optional max_tokens to override instance max_tokens
+            
+        Returns:
+            LLMProvider instance
+        """
+        # Use instance provider if all parameters match
+        use_instance = (
+            (model is None or model == self.model) and
+            (temperature is None or temperature == self.temperature) and
+            (max_tokens is None or max_tokens == self.max_tokens)
+        )
+        
+        if use_instance:
+            return self.provider
+        
+        # Create a new provider with specified parameters
+        final_model = model if model is not None else self.model
+        final_temperature = temperature if temperature is not None else self.temperature
+        final_max_tokens = max_tokens if max_tokens is not None else self.max_tokens
+        
+        logger.debug(
+            f"🔄 Creating provider: model={final_model}, "
+            f"temp={final_temperature}, max_tokens={final_max_tokens}"
+        )
+        return LLMProviderFactory.create(
+            model=final_model,
+            api_key=None,  # Factory will fetch from env vars
+            temperature=final_temperature,
+            max_tokens=final_max_tokens,
+            embedding_model=self.embedding_model
+        )
     
     async def generate_summary(
         self, 
         content: str, 
         title: str = "",
-        custom_prompt: Optional[str] = None
+        custom_prompt: Optional[str] = None,
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None
     ) -> LLMGenerationResult:
         """
         Generate a summary of blog content.
@@ -120,6 +141,9 @@ class LLMService:
             title: Blog title (optional)
             custom_prompt: Optional custom prompt including role and instructions
                           If None, uses DEFAULT_SUMMARY_PROMPT (fallback)
+            model: Optional model name to override instance model for this operation
+            temperature: Optional temperature to override instance temperature for this operation
+            max_tokens: Optional max_tokens to override instance max_tokens for this operation
             
         Returns:
             LLMGenerationResult with summary in JSON format
@@ -129,8 +153,14 @@ class LLMService:
             Create summaries that highlight implementation details,
             code patterns, and practical takeaways for engineers."
         """
-        # Part 2: Use custom prompt or fallback to default
-        role_and_instructions = custom_prompt if custom_prompt else DEFAULT_SUMMARY_PROMPT
+        # Get provider for this specific operation with custom parameters
+        provider = self._get_provider_for_model(model, temperature, max_tokens)
+        if model and model != self.model:
+            logger.info(f"📝 Using model {model} for summary generation (instance model: {self.model})")
+        if temperature is not None and temperature != self.temperature:
+            logger.info(f"📝 Using temperature {temperature} for summary (instance: {self.temperature})")
+        if max_tokens is not None and max_tokens != self.max_tokens:
+            logger.info(f"📝 Using max_tokens {max_tokens} for summary (instance: {self.max_tokens})")
         
         if custom_prompt:
             logger.info(f"📝 Generating summary with CUSTOM prompt (length: {len(custom_prompt)} chars)")
@@ -138,52 +168,30 @@ class LLMService:
         else:
             logger.info("📝 Generating summary with DEFAULT prompt (fallback)")
         
-        # Build user prompt: Role+Instructions + Content + Format Template
-        user_prompt = f"""{role_and_instructions}
-
-Title: {title}
-
-Content:
-{content[:4000]}
-
-REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
-{SUMMARY_JSON_FORMAT}"""
-
-        try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    # Part 1: Format enforcement only (no role)
-                    {"role": "system", "content": OUTPUT_FORMAT_INSTRUCTION},
-                    # Part 2: Role + Instructions + Content + Format
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.5,  # Lower for more factual summaries
-                max_tokens=500
-            )
-            
-            result_text = response.choices[0].message.content
-            tokens_used = response.usage.total_tokens
-            
-            logger.info(f"✅ Summary generated ({tokens_used} tokens)")
-            
-            return LLMGenerationResult(
-                text=result_text,
-                tokens_used=tokens_used,
-                model=self.model,
-                provider="openai"
-            )
-            
-        except Exception as e:
-            logger.error(f"❌ Summary generation failed: {e}")
-            raise
+        # Log the complete prompts being sent to LLM
+        logger.debug("=" * 80)
+        logger.debug("FINAL PROMPT SENT TO LLM (generate_summary):")
+        logger.debug("=" * 80)
+        logger.debug(f"System Message:\n{OUTPUT_FORMAT_INSTRUCTION}")
+        logger.debug("-" * 80)
+        
+        # Delegate to provider
+        return await provider.generate_summary(
+            content=content,
+            title=title,
+            custom_prompt=custom_prompt,
+            system_prompt=OUTPUT_FORMAT_INSTRUCTION
+        )
     
     async def generate_questions(
         self, 
         content: str, 
         title: str = "",
         num_questions: int = 5,
-        custom_prompt: Optional[str] = None
+        custom_prompt: Optional[str] = None,
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None
     ) -> LLMGenerationResult:
         """
         Generate question-answer pairs from content.
@@ -198,6 +206,9 @@ REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
             num_questions: Number of Q&A pairs to generate
             custom_prompt: Optional custom prompt including role and instructions
                           If None, uses DEFAULT_QUESTIONS_PROMPT (fallback)
+            model: Optional model name to override instance model for this operation
+            temperature: Optional temperature to override instance temperature for this operation
+            max_tokens: Optional max_tokens to override instance max_tokens for this operation
             
         Returns:
             LLMGenerationResult with questions in JSON format
@@ -208,6 +219,15 @@ REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
             code examples, and best practices. Use technical terminology
             appropriate for experienced developers."
         """
+        # Get provider for this specific operation with custom parameters
+        provider = self._get_provider_for_model(model, temperature, max_tokens)
+        if model and model != self.model:
+            logger.info(f"❓ Using model {model} for questions generation (instance model: {self.model})")
+        if temperature is not None and temperature != self.temperature:
+            logger.info(f"❓ Using temperature {temperature} for questions (instance: {self.temperature})")
+        if max_tokens is not None and max_tokens != self.max_tokens:
+            logger.info(f"❓ Using max_tokens {max_tokens} for questions (instance: {self.max_tokens})")
+        
         # Part 2: Use custom prompt or fallback to default
         role_and_instructions = custom_prompt if custom_prompt else DEFAULT_QUESTIONS_PROMPT
         
@@ -232,34 +252,21 @@ REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
 
 Use emojis for icons: 💡🔍📊🎯⚡🚀💭📖🔧🌟"""
 
-        try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    # Part 1: Format enforcement only (no role)
-                    {"role": "system", "content": OUTPUT_FORMAT_INSTRUCTION},
-                    # Part 2: Role + Instructions + Content + Format
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=self.temperature,
-                max_tokens=self.max_tokens
-            )
-            
-            result_text = response.choices[0].message.content
-            tokens_used = response.usage.total_tokens
-            
-            logger.info(f"✅ Questions generated ({tokens_used} tokens)")
-            
-            return LLMGenerationResult(
-                text=result_text,
-                tokens_used=tokens_used,
-                model=self.model,
-                provider="openai"
-            )
-            
-        except Exception as e:
-            logger.error(f"❌ Question generation failed: {e}")
-            raise
+        # Log the complete prompts being sent to LLM
+        logger.debug("=" * 80)
+        logger.debug("FINAL PROMPT SENT TO LLM (generate_questions):")
+        logger.debug("=" * 80)
+        logger.debug(f"System Message:\n{OUTPUT_FORMAT_INSTRUCTION}")
+        logger.debug("-" * 80)
+        
+        # Delegate to provider
+        return await provider.generate_questions(
+            content=content,
+            title=title,
+            num_questions=num_questions,
+            custom_prompt=custom_prompt,
+            system_prompt=OUTPUT_FORMAT_INSTRUCTION
+        )
     
     async def generate_embedding(self, text: str) -> EmbeddingResult:
         """
@@ -271,84 +278,38 @@ Use emojis for icons: 💡🔍📊🎯⚡🚀💭📖🔧🌟"""
         Returns:
             EmbeddingResult with vector
         """
-        logger.info("🔢 Generating embedding...")
-        
-        try:
-            # Truncate if too long
-            max_chars = 8000
-            if len(text) > max_chars:
-                text = text[:max_chars]
-            
-            response = await self.client.embeddings.create(
-                model=self.embedding_model,
-                input=text
-            )
-            
-            embedding = response.data[0].embedding
-            
-            logger.info(f"✅ Embedding generated ({len(embedding)} dimensions)")
-            
-            return EmbeddingResult(
-                embedding=embedding,
-                dimensions=len(embedding),
-                model=self.embedding_model
-            )
-            
-        except Exception as e:
-            logger.error(f"❌ Embedding generation failed: {e}")
-            raise
+        # Delegate to provider
+        return await self.provider.generate_embedding(text)
     
     async def answer_question(
         self, 
         question: str, 
-        context: str = ""
+        context: str = "",
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None
     ) -> LLMGenerationResult:
         """
         Answer a user's question with optional context.
         
         Args:
             question: User's question
-            context: Optional context to help answer
+            context: Optional context to help answer the question
+            model: Optional model name to override instance model for this operation
+            temperature: Optional temperature to override instance temperature for this operation
+            max_tokens: Optional max_tokens to override instance max_tokens for this operation
             
         Returns:
             LLMGenerationResult with answer
         """
-        logger.info(f"💬 Answering question: {question[:50]}...")
+        # Get provider for this specific operation with custom parameters
+        provider = self._get_provider_for_model(model, temperature, max_tokens)
+        if model and model != self.model:
+            logger.info(f"💬 Using model {model} for chat/question answering (instance model: {self.model})")
+        if temperature is not None and temperature != self.temperature:
+            logger.info(f"💬 Using temperature {temperature} for chat (instance: {self.temperature})")
+        if max_tokens is not None and max_tokens != self.max_tokens:
+            logger.info(f"💬 Using max_tokens {max_tokens} for chat (instance: {self.max_tokens})")
         
-        if context:
-            prompt = f"""Context:
-{context[:2000]}
-
-Question: {question}
-
-Provide a clear, concise answer based on the context above."""
-        else:
-            prompt = f"Question: {question}\n\nProvide a helpful, accurate answer."
-        
-        try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=self.temperature,
-                max_tokens=300
-            )
-            
-            result_text = response.choices[0].message.content
-            tokens_used = response.usage.total_tokens
-            
-            logger.info(f"✅ Question answered ({tokens_used} tokens)")
-            
-            return LLMGenerationResult(
-                text=result_text,
-                tokens_used=tokens_used,
-                model=self.model,
-                provider="openai"
-            )
-            
-        except Exception as e:
-            logger.error(f"❌ Question answering failed: {e}")
-            raise
+        return await provider.answer_question(question=question, context=context)
 
