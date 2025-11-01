@@ -160,6 +160,28 @@ class StorageService:
         blog = await collection.find_one({"url": url})
         return blog
     
+    async def get_blogs_by_urls(self, urls: List[str]) -> Dict[str, Dict[str, Any]]:
+        """
+        Get multiple blogs by URLs in a single query.
+        
+        Returns a dictionary mapping URL to blog document for efficient lookup.
+        """
+        if not urls:
+            return {}
+        
+        collection = self.database[self.blogs_collection]
+        blogs = {}
+        
+        # Query all blogs with matching URLs in a single query
+        cursor = collection.find({"url": {"$in": urls}})
+        async for blog in cursor:
+            url = blog.get("url")
+            if url:
+                blogs[url] = blog
+        
+        logger.info(f"✅ Fetched {len(blogs)} blogs out of {len(urls)} requested URLs")
+        return blogs
+    
     async def get_questions_by_url(
         self, 
         blog_url: str, 
@@ -207,40 +229,89 @@ class StorageService:
     async def search_similar_blogs(
         self, 
         embedding: List[float], 
-        limit: int = 3
+        limit: int = 3,
+        publisher_domain: Optional[str] = None
     ) -> List[SimilarBlog]:
         """
         Search for similar blogs using embedding similarity.
         
         Uses MongoDB Atlas Vector Search if available, otherwise falls back to Python.
+        
+        Args:
+            embedding: Vector embedding to search for
+            limit: Maximum number of results to return
+            publisher_domain: Optional domain to filter results (e.g., "example.com")
         """
-        logger.info(f"🔍 Searching for similar blogs (limit={limit})")
+        logger.info(f"🔍 Searching for similar blogs (limit={limit}, domain={publisher_domain or 'all'})")
         
         try:
             # Try MongoDB Atlas Vector Search
-            return await self._vector_search_atlas(embedding, limit)
+            return await self._vector_search_atlas(embedding, limit, publisher_domain)
         except Exception as e:
             logger.warning(f"Atlas search failed, using fallback: {e}")
-            return await self._vector_search_fallback(embedding, limit)
+            return await self._vector_search_fallback(embedding, limit, publisher_domain)
     
     async def _vector_search_atlas(
         self, 
         embedding: List[float], 
-        limit: int
+        limit: int,
+        publisher_domain: Optional[str] = None
     ) -> List[SimilarBlog]:
-        """MongoDB Atlas Vector Search."""
+        """MongoDB Atlas Vector Search with optional domain filtering."""
         collection = self.database[self.summaries_collection]
+        
+        # Pre-filter: Get blog URLs matching the domain if provided
+        matching_blog_urls = None
+        if publisher_domain:
+            import re
+            
+            # Normalize domain (remove www, lowercase)
+            domain = publisher_domain.lower().replace("www.", "")
+            escaped_domain = re.escape(domain)
+            
+            # Query blogs collection using MongoDB regex to get URLs matching the domain
+            # This is much more efficient than fetching all blogs
+            blogs_collection = self.database[self.blogs_collection]
+            
+            # Create regex pattern to match domain and subdomains in MongoDB
+            # Matches: https://example.com/*, https://www.example.com/*, https://blog.example.com/*
+            domain_regex = f"https?://(www\\.)?([a-zA-Z0-9-]+\\.)?{escaped_domain}"
+            
+            matching_urls = []
+            async for blog in blogs_collection.find(
+                {"url": {"$regex": domain_regex, "$options": "i"}}, 
+                {"url": 1}
+            ):
+                url = blog.get("url")
+                if url:
+                    matching_urls.append(url)
+            
+            if not matching_urls:
+                logger.info(f"No blogs found for domain: {publisher_domain}")
+                return []
+            
+            matching_blog_urls = matching_urls
+            logger.info(f"Filtering vector search to {len(matching_blog_urls)} blogs for domain: {publisher_domain}")
+        
+        # Build search stage
+        search_stage = {
+            "index": "vector_index",
+            "knnBeta": {
+                "vector": embedding,
+                "path": "embedding",
+                "k": limit * 3  # Get more to account for filtering
+            }
+        }
+        
+        # Add filter if we have matching URLs
+        if matching_blog_urls:
+            search_stage["filter"] = {
+                "blog_url": {"$in": matching_blog_urls}
+            }
         
         pipeline = [
             {
-                "$search": {
-                    "index": "vector_index",
-                    "knnBeta": {
-                        "vector": embedding,
-                        "path": "embedding",
-                        "k": limit * 2  # Get more to filter
-                    }
-                }
+                "$search": search_stage
             },
             {
                 "$project": {
@@ -271,15 +342,26 @@ class StorageService:
     async def _vector_search_fallback(
         self, 
         embedding: List[float], 
-        limit: int
+        limit: int,
+        publisher_domain: Optional[str] = None
     ) -> List[SimilarBlog]:
-        """Fallback: Python cosine similarity."""
+        """Fallback: Python cosine similarity with optional domain filtering."""
         import numpy as np
+        import re
         
         collection = self.database[self.summaries_collection]
         
-        # Get all summaries with embeddings
-        cursor = collection.find({"embedding": {"$exists": True, "$ne": None}})
+        # Build query with domain filter if provided
+        query = {"embedding": {"$exists": True, "$ne": None}}
+        if publisher_domain:
+            # Normalize domain
+            domain = publisher_domain.lower().replace("www.", "")
+            # Create regex pattern
+            domain_pattern = f"https?://(www\\.)?([a-zA-Z0-9-]+\\.)?{re.escape(domain)}"
+            query["blog_url"] = {"$regex": domain_pattern, "$options": "i"}
+        
+        # Get summaries with embeddings and domain filter
+        cursor = collection.find(query)
         
         similarities = []
         async for doc in cursor:

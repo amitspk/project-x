@@ -18,9 +18,10 @@ from fyi_widget_shared_library.utils import (
     handle_generic_exception,
     generate_request_id
 )
+from fyi_widget_shared_library.utils.url_utils import extract_domain
 
 # Import auth
-from fyi_widget_api.api.auth import get_current_publisher
+from fyi_widget_api.api.auth import get_current_publisher, validate_blog_url_domain
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,21 @@ async def search_similar_blogs(
                 detail=f"Question not found: {request.question_id}"
             )
         
+        # Validate that the question's blog belongs to the publisher
+        question_blog_url = question.get("blog_url")
+        if not question_blog_url:
+            raise HTTPException(
+                status_code=400,
+                detail="Question does not have an associated blog URL"
+            )
+        
+        # Validate domain match
+        await validate_blog_url_domain(question_blog_url, publisher)
+        logger.info(f"[{request_id}] ✅ Question belongs to publisher domain")
+        
+        # Extract domain from question's blog URL to use for filtering
+        question_domain = extract_domain(question_blog_url).lower()
+        
         # Get embedding
         embedding = question.get("embedding")
         if not embedding:
@@ -90,17 +106,26 @@ async def search_similar_blogs(
                 detail="Question does not have an embedding"
             )
         
-        # Search for similar blogs
+        # Search for similar blogs (filtered by domain from question's blog at database level)
         similar_blogs = await storage.search_similar_blogs(
             embedding=embedding,
-            limit=request.limit
+            limit=request.limit,
+            publisher_domain=question_domain  # Use domain from question's blog URL
         )
+        
+        logger.info(f"[{request_id}] 🔍 Found {len(similar_blogs)} similar blogs for domain {question_domain}")
+        
+        if not similar_blogs:
+            logger.warning(f"[{request_id}] ⚠️  No similar blogs found for domain {question_domain}")
+        
+        # Batch fetch all blogs in a single query
+        blog_urls = [blog.url for blog in similar_blogs]
+        blogs_map = await storage.get_blogs_by_urls(blog_urls)
         
         # Enrich similar blogs with blog_id
         enriched_blogs = []
         for blog in similar_blogs:
-            # Get blog document to fetch blog_id
-            blog_doc = await storage.get_blog_by_url(blog.url)
+            blog_doc = blogs_map.get(blog.url)
             if blog_doc:
                 enriched_blogs.append({
                     "blog_id": str(blog_doc.get("_id", "")),
