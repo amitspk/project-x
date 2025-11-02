@@ -19,6 +19,9 @@ from fyi_widget_api.core.config import get_config
 from fyi_widget_shared_library.data.postgres_database import PostgresPublisherRepository
 from fyi_widget_shared_library.models.publisher import Publisher
 
+# Import metrics
+from fyi_widget_api.api.metrics import publisher_auth_attempts_total
+
 logger = logging.getLogger(__name__)
 
 # Global config instance
@@ -149,6 +152,7 @@ async def verify_publisher_key(
     """
     if not x_api_key:
         logger.warning("Publisher endpoint accessed without X-API-Key header")
+        publisher_auth_attempts_total.labels(status="invalid_key").inc()
         raise HTTPException(
             status_code=401,
             detail={
@@ -197,6 +201,7 @@ async def verify_publisher_key(
     
     if not publisher:
         logger.warning(f"Invalid API key attempt: {x_api_key[:10]}...")
+        publisher_auth_attempts_total.labels(status="invalid_key").inc()
         raise HTTPException(
             status_code=401,
             detail={
@@ -213,6 +218,7 @@ async def verify_publisher_key(
     # Check publisher status
     if publisher.status != "active" and publisher.status != "trial":
         logger.warning(f"Inactive publisher attempted access: {publisher.id} (status: {publisher.status})")
+        publisher_auth_attempts_total.labels(status="inactive").inc()
         raise HTTPException(
             status_code=403,
             detail={
@@ -252,6 +258,7 @@ async def verify_publisher_key(
             logger.warning(
                 f"Domain mismatch: request from '{request_domain}' but publisher owns '{publisher_domain}'"
             )
+            publisher_auth_attempts_total.labels(status="domain_mismatch").inc()
             raise HTTPException(
                 status_code=403,
                 detail={
@@ -265,6 +272,8 @@ async def verify_publisher_key(
                 }
             )
     
+    # Record successful authentication
+    publisher_auth_attempts_total.labels(status="success").inc()
     logger.info(f"Publisher authenticated: {publisher.name} ({publisher.domain})")
     return publisher
 

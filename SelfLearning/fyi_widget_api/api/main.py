@@ -17,6 +17,8 @@ from fyi_widget_api.api.routers import questions_router, search_router, qa_route
 
 # Import middleware
 from fyi_widget_api.api.middleware import RequestIDMiddleware
+from fyi_widget_api.api.metrics_middleware import MetricsMiddleware
+from fyi_widget_api.api.metrics import get_metrics
 
 # Import auth
 from fyi_widget_api.api import auth
@@ -152,6 +154,9 @@ app.add_middleware(
 # Add Request ID middleware (runs after CORS)
 app.add_middleware(RequestIDMiddleware)
 
+# Add Metrics middleware (tracks HTTP requests for Prometheus)
+app.add_middleware(MetricsMiddleware)
+
 
 # Custom exception handler for HTTPException
 @app.exception_handler(HTTPException)
@@ -270,6 +275,20 @@ async def health_check():
         }
 
 
+@app.get("/metrics")
+async def metrics():
+    """
+    Prometheus metrics endpoint.
+    
+    Returns metrics in Prometheus text format for scraping.
+    """
+    from fastapi.responses import Response
+    return Response(
+        content=get_metrics(),
+        media_type="text/plain; version=0.0.4; charset=utf-8"
+    )
+
+
 @app.get("/")
 async def root():
     """Root endpoint."""
@@ -287,6 +306,7 @@ async def root():
                 "stats": "/api/v1/jobs/stats"
             },
             "health": "/health",
+            "metrics": "/metrics",
             "docs": "/docs"
         }
     }

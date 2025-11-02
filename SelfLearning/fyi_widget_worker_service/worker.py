@@ -18,6 +18,33 @@ from fyi_widget_shared_library.models.publisher import PublisherConfig
 from fyi_widget_shared_library.services import CrawlerService, LLMService, StorageService
 from fyi_widget_shared_library.utils import normalize_url
 
+# Import metrics
+from metrics import (
+    jobs_polled_total,
+    jobs_processed_total,
+    job_processing_duration_seconds,
+    jobs_processing_active,
+    job_queue_size,
+    crawl_operations_total,
+    crawl_duration_seconds,
+    crawl_content_size_bytes,
+    crawl_word_count,
+    llm_operations_total,
+    llm_operation_duration_seconds,
+    llm_tokens_used_total,
+    questions_generated_total,
+    questions_per_blog,
+    embeddings_generated_total,
+    blogs_processed_total,
+    worker_uptime_seconds,
+    poll_iterations_total,
+    poll_errors_total,
+    processing_errors_total,
+    db_operations_total,
+    db_operation_duration_seconds
+)
+from metrics_server import start_metrics_server
+
 # Configuration from environment
 import os
 MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
@@ -44,6 +71,7 @@ class BlogProcessingWorker:
         self.job_repo: Optional[JobRepository] = None
         self.publisher_repo: Optional[PostgresPublisherRepository] = None
         self.running = False
+        self.start_time = time.time()
         
         # Services (initialized after DB connection)
         self.crawler = None
@@ -82,6 +110,10 @@ class BlogProcessingWorker:
         self.job_repo = JobRepository(self.db_manager.database)
         await self.job_repo.create_indexes()
         logger.info("✅ Job repository initialized")
+        
+        # Start metrics server
+        start_metrics_server()
+        logger.info("✅ Metrics server started")
         
         # Start polling loop
         self.running = True
@@ -131,19 +163,86 @@ class BlogProcessingWorker:
         """Main polling loop."""
         logger.info("🔄 Starting polling loop...")
         
+        # Update uptime gauge
+        async def update_uptime():
+            """Periodically update uptime metric."""
+            while self.running:
+                worker_uptime_seconds.set(time.time() - self.start_time)
+                await asyncio.sleep(10)
+        
+        # Start uptime updater
+        asyncio.create_task(update_uptime())
+        
+        # Update queue size periodically
+        async def update_queue_size():
+            """Periodically update queue size metrics."""
+            while self.running:
+                try:
+                    if self.job_repo:
+                        # Use single aggregation query instead of 4 separate count queries
+                        pipeline = [
+                            {
+                                "$group": {
+                                    "_id": "$status",
+                                    "count": {"$sum": 1}
+                                }
+                            }
+                        ]
+                        results = await self.job_repo.collection.aggregate(pipeline).to_list(length=None)
+                        
+                        # Initialize all statuses to 0
+                        status_counts = {
+                            "pending": 0,
+                            "processing": 0,
+                            "completed": 0,
+                            "failed": 0
+                        }
+                        
+                        # Update with actual counts from aggregation
+                        for result in results:
+                            status = result["_id"]
+                            if status in status_counts:
+                                status_counts[status] = result["count"]
+                        
+                        # Update metrics
+                        job_queue_size.labels(status="pending").set(status_counts["pending"])
+                        job_queue_size.labels(status="processing").set(status_counts["processing"])
+                        job_queue_size.labels(status="completed").set(status_counts["completed"])
+                        job_queue_size.labels(status="failed").set(status_counts["failed"])
+                except Exception as e:
+                    logger.debug(f"Error updating queue size: {e}")
+                await asyncio.sleep(30)
+        
+        # Start queue size updater
+        asyncio.create_task(update_queue_size())
+        
         while self.running:
             try:
+                poll_iterations_total.inc()
+                
                 # Get next job
                 job = await self.job_repo.get_next_queued_job()
                 
                 if job:
                     logger.info(f"📥 Found job: {job.job_id} ({job.blog_url})")
+                    # Extract domain for metrics
+                    from urllib.parse import urlparse
+                    parsed = urlparse(job.blog_url if job.blog_url.startswith('http') else f'https://{job.blog_url}')
+                    domain = parsed.netloc or parsed.path
+                    if domain.startswith('www.'):
+                        domain = domain[4:]
+                    publisher_domain = domain.lower()
+                    
+                    # Record job polled
+                    jobs_polled_total.labels(publisher_domain=publisher_domain).inc()
+                    
                     await self.process_job(job)
                 else:
                     # No jobs, wait before next poll
                     await asyncio.sleep(POLL_INTERVAL)
                 
             except Exception as e:
+                poll_errors_total.inc()
                 logger.error(f"❌ Error in poll loop: {e}", exc_info=True)
                 await asyncio.sleep(POLL_INTERVAL)
     
@@ -156,6 +255,14 @@ class BlogProcessingWorker:
         """
         start_time = time.time()
         
+        # Extract domain for metrics
+        from urllib.parse import urlparse
+        parsed = urlparse(job.blog_url if job.blog_url.startswith('http') else f'https://{job.blog_url}')
+        domain = parsed.netloc or parsed.path
+        if domain.startswith('www.'):
+            domain = domain[4:]
+        publisher_domain = domain.lower()
+        
         try:
             # Mark as processing
             success = await self.job_repo.mark_job_processing(job.job_id)
@@ -164,6 +271,9 @@ class BlogProcessingWorker:
                 return
             
             logger.info(f"🔄 Processing job {job.job_id}...")
+            
+            # Track active job
+            jobs_processing_active.labels(publisher_domain=publisher_domain).inc()
             
             # Normalize URL before processing
             normalized_url = normalize_url(job.blog_url)
@@ -210,6 +320,7 @@ class BlogProcessingWorker:
             
             # Step 1: Crawl blog
             logger.info(f"🕷️  Crawling: {normalized_url}")
+            crawl_start = time.time()
             try:
                 crawl_result = await self.crawler.crawl_url(normalized_url)
                 
@@ -221,24 +332,87 @@ class BlogProcessingWorker:
                 if len(crawl_result.content.strip()) < 50:
                     raise Exception(f"Crawl failed: Content too short ({len(crawl_result.content)} chars)")
                 
+                # Record crawl metrics
+                crawl_duration = time.time() - crawl_start
+                crawl_operations_total.labels(publisher_domain=publisher_domain, status="success").inc()
+                crawl_duration_seconds.labels(publisher_domain=publisher_domain).observe(crawl_duration)
+                crawl_content_size_bytes.labels(publisher_domain=publisher_domain).observe(len(crawl_result.content.encode('utf-8')))
+                crawl_word_count.labels(publisher_domain=publisher_domain).observe(crawl_result.word_count)
+                
                 logger.info(f"✅ Crawl successful: {crawl_result.word_count} words extracted")
                 
             except Exception as crawl_error:
+                # Record crawl failure
+                crawl_duration = time.time() - crawl_start
+                crawl_operations_total.labels(publisher_domain=publisher_domain, status="failed").inc()
+                crawl_duration_seconds.labels(publisher_domain=publisher_domain).observe(crawl_duration)
+                processing_errors_total.labels(publisher_domain=publisher_domain, error_type="crawl_error").inc()
                 logger.error(f"❌ Crawl failed for {normalized_url}: {crawl_error}")
                 raise Exception(f"Crawl failed: {str(crawl_error)}")
             
             # Step 2: Generate summary (with custom prompt if available)
             prompt_type = "CUSTOM" if config.custom_summary_prompt else "DEFAULT"
             summary_model = get_model(config.summary_model)
+            summary_model_label = summary_model or "default"
             logger.info(f"📝 Generating summary with {prompt_type} prompt (model: {summary_model}, temp: {config.summary_temperature}, max_tokens: {config.summary_max_tokens})...")
-            summary_result = await self.llm_service.generate_summary(
-                content=crawl_result.content,
-                title=crawl_result.title,
-                custom_prompt=config.custom_summary_prompt,  # Fallback to default if None
-                model=summary_model,  # Use per-operation model
-                temperature=config.summary_temperature,  # Use per-operation temperature
-                max_tokens=config.summary_max_tokens  # Use per-operation max_tokens
-            )
+            
+            summary_start = time.time()
+            try:
+                summary_result = await self.llm_service.generate_summary(
+                    content=crawl_result.content,
+                    title=crawl_result.title,
+                    custom_prompt=config.custom_summary_prompt,  # Fallback to default if None
+                    model=summary_model,  # Use per-operation model
+                    temperature=config.summary_temperature,  # Use per-operation temperature
+                    max_tokens=config.summary_max_tokens  # Use per-operation max_tokens
+                )
+                
+                # Record LLM metrics
+                summary_duration = time.time() - summary_start
+                llm_operations_total.labels(
+                    publisher_domain=publisher_domain,
+                    operation="summary",
+                    model=summary_model_label,
+                    status="success"
+                ).inc()
+                llm_operation_duration_seconds.labels(
+                    publisher_domain=publisher_domain,
+                    operation="summary",
+                    model=summary_model_label
+                ).observe(summary_duration)
+                
+                # Try to get token usage if available
+                if hasattr(summary_result, 'usage') and summary_result.usage:
+                    if hasattr(summary_result.usage, 'prompt_tokens'):
+                        llm_tokens_used_total.labels(
+                            publisher_domain=publisher_domain,
+                            operation="summary",
+                            model=summary_model_label,
+                            type="prompt"
+                        ).inc(summary_result.usage.prompt_tokens or 0)
+                    if hasattr(summary_result.usage, 'completion_tokens'):
+                        llm_tokens_used_total.labels(
+                            publisher_domain=publisher_domain,
+                            operation="summary",
+                            model=summary_model_label,
+                            type="completion"
+                        ).inc(summary_result.usage.completion_tokens or 0)
+                
+            except Exception as llm_error:
+                summary_duration = time.time() - summary_start
+                llm_operations_total.labels(
+                    publisher_domain=publisher_domain,
+                    operation="summary",
+                    model=summary_model_label,
+                    status="failed"
+                ).inc()
+                llm_operation_duration_seconds.labels(
+                    publisher_domain=publisher_domain,
+                    operation="summary",
+                    model=summary_model_label
+                ).observe(summary_duration)
+                processing_errors_total.labels(publisher_domain=publisher_domain, error_type="llm_error").inc()
+                raise
             
             # Parse summary (expecting JSON with title, summary, and key_points)
             llm_generated_title = None
@@ -266,17 +440,67 @@ class BlogProcessingWorker:
             # Step 3: Generate questions (with custom prompt if available)
             prompt_type = "CUSTOM" if config.custom_question_prompt else "DEFAULT"
             questions_model = get_model(config.questions_model)
+            questions_model_label = questions_model or "default"
             logger.info(f"❓ Generating {config.questions_per_blog} questions with {prompt_type} prompt (model: {questions_model}, temp: {config.questions_temperature}, max_tokens: {config.questions_max_tokens})...")
             
-            questions_result = await self.llm_service.generate_questions(
-                content=crawl_result.content,
-                title=crawl_result.title,
-                num_questions=config.questions_per_blog,
-                custom_prompt=config.custom_question_prompt,  # Fallback to default if None
-                model=questions_model,  # Use per-operation model
-                temperature=config.questions_temperature,  # Use per-operation temperature
-                max_tokens=config.questions_max_tokens  # Use per-operation max_tokens
-            )
+            questions_start = time.time()
+            try:
+                questions_result = await self.llm_service.generate_questions(
+                    content=crawl_result.content,
+                    title=crawl_result.title,
+                    num_questions=config.questions_per_blog,
+                    custom_prompt=config.custom_question_prompt,  # Fallback to default if None
+                    model=questions_model,  # Use per-operation model
+                    temperature=config.questions_temperature,  # Use per-operation temperature
+                    max_tokens=config.questions_max_tokens  # Use per-operation max_tokens
+                )
+                
+                # Record LLM metrics
+                questions_duration = time.time() - questions_start
+                llm_operations_total.labels(
+                    publisher_domain=publisher_domain,
+                    operation="questions",
+                    model=questions_model_label,
+                    status="success"
+                ).inc()
+                llm_operation_duration_seconds.labels(
+                    publisher_domain=publisher_domain,
+                    operation="questions",
+                    model=questions_model_label
+                ).observe(questions_duration)
+                
+                # Try to get token usage if available
+                if hasattr(questions_result, 'usage') and questions_result.usage:
+                    if hasattr(questions_result.usage, 'prompt_tokens'):
+                        llm_tokens_used_total.labels(
+                            publisher_domain=publisher_domain,
+                            operation="questions",
+                            model=questions_model_label,
+                            type="prompt"
+                        ).inc(questions_result.usage.prompt_tokens or 0)
+                    if hasattr(questions_result.usage, 'completion_tokens'):
+                        llm_tokens_used_total.labels(
+                            publisher_domain=publisher_domain,
+                            operation="questions",
+                            model=questions_model_label,
+                            type="completion"
+                        ).inc(questions_result.usage.completion_tokens or 0)
+                        
+            except Exception as llm_error:
+                questions_duration = time.time() - questions_start
+                llm_operations_total.labels(
+                    publisher_domain=publisher_domain,
+                    operation="questions",
+                    model=questions_model_label,
+                    status="failed"
+                ).inc()
+                llm_operation_duration_seconds.labels(
+                    publisher_domain=publisher_domain,
+                    operation="questions",
+                    model=questions_model_label
+                ).observe(questions_duration)
+                processing_errors_total.labels(publisher_domain=publisher_domain, error_type="llm_error").inc()
+                raise
             
             # Parse questions (JSON format)
             questions = []
@@ -376,40 +600,114 @@ class BlogProcessingWorker:
             logger.info("🔢 Generating embeddings...")
             
             # Summary embedding
-            summary_embedding_result = await self.llm_service.generate_embedding(
-                summary_text
-            )
+            embedding_model_label = "text-embedding-3-small"  # Default embedding model
+            embedding_start = time.time()
+            try:
+                summary_embedding_result = await self.llm_service.generate_embedding(summary_text)
+                embedding_duration = time.time() - embedding_start
+                
+                llm_operations_total.labels(
+                    publisher_domain=publisher_domain,
+                    operation="embedding",
+                    model=embedding_model_label,
+                    status="success"
+                ).inc()
+                llm_operation_duration_seconds.labels(
+                    publisher_domain=publisher_domain,
+                    operation="embedding",
+                    model=embedding_model_label
+                ).observe(embedding_duration)
+                embeddings_generated_total.labels(publisher_domain=publisher_domain, type="summary").inc()
+            except Exception as e:
+                embedding_duration = time.time() - embedding_start
+                llm_operations_total.labels(
+                    publisher_domain=publisher_domain,
+                    operation="embedding",
+                    model=embedding_model_label,
+                    status="failed"
+                ).inc()
+                processing_errors_total.labels(publisher_domain=publisher_domain, error_type="llm_error").inc()
+                raise
             
             # Question embeddings
             question_embeddings = []
             for q_text, _ in questions:
-                emb_result = await self.llm_service.generate_embedding(q_text)
-                question_embeddings.append(emb_result.embedding)
+                embedding_start = time.time()
+                try:
+                    emb_result = await self.llm_service.generate_embedding(q_text)
+                    embedding_duration = time.time() - embedding_start
+                    
+                    llm_operations_total.labels(
+                        publisher_domain=publisher_domain,
+                        operation="embedding",
+                        model=embedding_model_label,
+                        status="success"
+                    ).inc()
+                    llm_operation_duration_seconds.labels(
+                        publisher_domain=publisher_domain,
+                        operation="embedding",
+                        model=embedding_model_label
+                    ).observe(embedding_duration)
+                    embeddings_generated_total.labels(publisher_domain=publisher_domain, type="question").inc()
+                    
+                    question_embeddings.append(emb_result.embedding)
+                except Exception as e:
+                    embedding_duration = time.time() - embedding_start
+                    llm_operations_total.labels(
+                        publisher_domain=publisher_domain,
+                        operation="embedding",
+                        model=embedding_model_label,
+                        status="failed"
+                    ).inc()
+                    processing_errors_total.labels(publisher_domain=publisher_domain, error_type="llm_error").inc()
+                    raise
             
             # Step 5: Save to database
             logger.info("💾 Saving to database...")
             
             # Save raw blog content (use normalized URL)
             # Use LLM-generated title if available, otherwise use crawled title
-            blog_id = await self.storage.save_blog_content(
-                url=normalized_url,
-                title=final_title,  # LLM-generated title or crawled title fallback
-                content=crawl_result.content,
-                language=crawl_result.language,
-                word_count=crawl_result.word_count,
-                metadata=crawl_result.metadata
-            )
+            db_start = time.time()
+            try:
+                blog_id = await self.storage.save_blog_content(
+                    url=normalized_url,
+                    title=final_title,  # LLM-generated title or crawled title fallback
+                    content=crawl_result.content,
+                    language=crawl_result.language,
+                    word_count=crawl_result.word_count,
+                    metadata=crawl_result.metadata
+                )
+                db_duration = time.time() - db_start
+                db_operations_total.labels(operation="save_blog", collection="raw_blog_content", status="success").inc()
+                db_operation_duration_seconds.labels(operation="save_blog", collection="raw_blog_content").observe(db_duration)
+            except Exception as e:
+                db_duration = time.time() - db_start
+                db_operations_total.labels(operation="save_blog", collection="raw_blog_content", status="error").inc()
+                db_operation_duration_seconds.labels(operation="save_blog", collection="raw_blog_content").observe(db_duration)
+                processing_errors_total.labels(publisher_domain=publisher_domain, error_type="db_error").inc()
+                raise
             
             # Save summary (use normalized URL)
             # Pass LLM-generated title for storage (optional, stored for reference)
-            summary_id = await self.storage.save_summary(
-                blog_id=blog_id,
-                blog_url=normalized_url,
-                summary_text=summary_text,
-                key_points=key_points,
-                embedding=summary_embedding_result.embedding,
-                title=llm_generated_title if llm_generated_title else None
-            )
+            db_start = time.time()
+            try:
+                summary_id = await self.storage.save_summary(
+                    blog_id=blog_id,
+                    blog_url=normalized_url,
+                    summary_text=summary_text,
+                    key_points=key_points,
+                    embedding=summary_embedding_result.embedding,
+                    title=llm_generated_title if llm_generated_title else None
+                )
+                db_duration = time.time() - db_start
+                db_operations_total.labels(operation="save_summary", collection="blog_summaries", status="success").inc()
+                db_operation_duration_seconds.labels(operation="save_summary", collection="blog_summaries").observe(db_duration)
+            except Exception as e:
+                db_duration = time.time() - db_start
+                db_operations_total.labels(operation="save_summary", collection="blog_summaries", status="error").inc()
+                db_operation_duration_seconds.labels(operation="save_summary", collection="blog_summaries").observe(db_duration)
+                processing_errors_total.labels(publisher_domain=publisher_domain, error_type="db_error").inc()
+                raise
             
             # Prepare questions for batch save
             questions_list = [
@@ -418,12 +716,27 @@ class BlogProcessingWorker:
             ]
             
             # Save questions (use normalized URL)
-            question_ids = await self.storage.save_questions(
-                blog_id=blog_id,
-                blog_url=normalized_url,
-                questions=questions_list,
-                embeddings=question_embeddings
-            )
+            db_start = time.time()
+            try:
+                question_ids = await self.storage.save_questions(
+                    blog_id=blog_id,
+                    blog_url=normalized_url,
+                    questions=questions_list,
+                    embeddings=question_embeddings
+                )
+                db_duration = time.time() - db_start
+                db_operations_total.labels(operation="save_questions", collection="questions", status="success").inc()
+                db_operation_duration_seconds.labels(operation="save_questions", collection="questions").observe(db_duration)
+            except Exception as e:
+                db_duration = time.time() - db_start
+                db_operations_total.labels(operation="save_questions", collection="questions", status="error").inc()
+                db_operation_duration_seconds.labels(operation="save_questions", collection="questions").observe(db_duration)
+                processing_errors_total.labels(publisher_domain=publisher_domain, error_type="db_error").inc()
+                raise
+            
+            # Record questions generated metrics
+            questions_generated_total.labels(publisher_domain=publisher_domain).inc(len(questions))
+            questions_per_blog.labels(publisher_domain=publisher_domain).observe(len(questions))
             
             # Step 6: Mark job as completed
             processing_time = time.time() - start_time
@@ -444,6 +757,11 @@ class BlogProcessingWorker:
                 processing_time_seconds=processing_time,
                 result=result.dict()
             )
+            
+            # Record job completion metrics
+            jobs_processed_total.labels(publisher_domain=publisher_domain, status="success").inc()
+            job_processing_duration_seconds.labels(publisher_domain=publisher_domain, status="success").observe(processing_time)
+            jobs_processing_active.labels(publisher_domain=publisher_domain).dec()
             
             # Track publisher usage (blogs processed + questions generated)
             # Only count if this is the first time processing this blog URL
@@ -471,6 +789,7 @@ class BlogProcessingWorker:
                             blogs_processed=1,
                             questions_generated=len(questions)
                         )
+                        blogs_processed_total.labels(publisher_domain=publisher_domain).inc()
                         logger.info(f"📊 Usage tracked: +1 blog, +{len(questions)} questions for {publisher.name}")
                     else:
                         # Blog was already processed before - don't count again
@@ -484,6 +803,25 @@ class BlogProcessingWorker:
         except Exception as e:
             # Mark job as failed
             error_msg = str(e)
+            processing_time = time.time() - start_time
+            error_type = "unknown"
+            
+            # Categorize error
+            if "crawl" in error_msg.lower():
+                error_type = "crawl_error"
+            elif "llm" in error_msg.lower() or "openai" in error_msg.lower() or "anthropic" in error_msg.lower():
+                error_type = "llm_error"
+            elif "database" in error_msg.lower() or "mongodb" in error_msg.lower():
+                error_type = "db_error"
+            elif "validation" in error_msg.lower() or "parse" in error_msg.lower():
+                error_type = "validation_error"
+            
+            # Record failure metrics
+            jobs_processed_total.labels(publisher_domain=publisher_domain, status="failed").inc()
+            job_processing_duration_seconds.labels(publisher_domain=publisher_domain, status="failed").observe(processing_time)
+            jobs_processing_active.labels(publisher_domain=publisher_domain).dec()
+            processing_errors_total.labels(publisher_domain=publisher_domain, error_type=error_type).inc()
+            
             logger.error(f"❌ Job {job.job_id} failed: {error_msg}", exc_info=True)
             
             await self.job_repo.mark_job_failed(

@@ -2,6 +2,7 @@
 
 import logging
 import sys
+import time
 from pathlib import Path
 from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, Request, Depends
@@ -22,6 +23,13 @@ from fyi_widget_shared_library.utils.url_utils import extract_domain
 
 # Import auth
 from fyi_widget_api.api.auth import get_current_publisher, validate_blog_url_domain
+
+# Import metrics
+from fyi_widget_api.api.metrics import (
+    similarity_searches_total,
+    similarity_search_duration_seconds,
+    similar_blogs_found
+)
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +78,10 @@ async def search_similar_blogs(
     # Get request_id from middleware (fallback to generating one if not available)
     request_id = getattr(http_request.state, 'request_id', None) or generate_request_id()
 
+    # Track metrics
+    publisher_domain = publisher.domain.lower()
+    search_start_time = time.time()
+    
     try:
         logger.info(f"[{request_id}] 🔍 Searching similar blogs for publisher {publisher.name}, question: {request.question_id}")
         
@@ -78,6 +90,10 @@ async def search_similar_blogs(
         question = await storage.get_question_by_id(request.question_id)
         
         if not question:
+            similarity_searches_total.labels(
+                publisher_domain=publisher_domain,
+                status="error"
+            ).inc()
             raise HTTPException(
                 status_code=404,
                 detail=f"Question not found: {request.question_id}"
@@ -86,6 +102,10 @@ async def search_similar_blogs(
         # Validate that the question's blog belongs to the publisher
         question_blog_url = question.get("blog_url")
         if not question_blog_url:
+            similarity_searches_total.labels(
+                publisher_domain=publisher_domain,
+                status="error"
+            ).inc()
             raise HTTPException(
                 status_code=400,
                 detail="Question does not have an associated blog URL"
@@ -101,6 +121,10 @@ async def search_similar_blogs(
         # Get embedding
         embedding = question.get("embedding")
         if not embedding:
+            similarity_searches_total.labels(
+                publisher_domain=publisher_domain,
+                status="error"
+            ).inc()
             raise HTTPException(
                 status_code=400,
                 detail="Question does not have an embedding"
@@ -136,6 +160,22 @@ async def search_similar_blogs(
                     "description": None
                 })
         
+        # Calculate duration and record metrics
+        search_duration = time.time() - search_start_time
+        
+        similarity_searches_total.labels(
+            publisher_domain=publisher_domain,
+            status="success"
+        ).inc()
+        
+        similarity_search_duration_seconds.labels(
+            publisher_domain=publisher_domain
+        ).observe(search_duration)
+        
+        similar_blogs_found.labels(
+            publisher_domain=publisher_domain
+        ).observe(len(enriched_blogs))
+        
         # Build response in the format expected by Swagger schema
         result_data = {
             "similar_blogs": enriched_blogs,
@@ -150,6 +190,12 @@ async def search_similar_blogs(
         )
         
     except HTTPException as exc:
+        # Record error metric
+        similarity_searches_total.labels(
+            publisher_domain=publisher_domain,
+            status="error"
+        ).inc()
+        
         logger.error(f"[{request_id}] ❌ HTTP error: {exc.detail}")
         response_data = handle_http_exception(exc, request_id=request_id)
         raise HTTPException(
@@ -157,6 +203,18 @@ async def search_similar_blogs(
             detail=response_data
         )
     except Exception as e:
+        # Record error metric
+        similarity_searches_total.labels(
+            publisher_domain=publisher_domain,
+            status="error"
+        ).inc()
+        
+        # Still record duration even on error
+        search_duration = time.time() - search_start_time
+        similarity_search_duration_seconds.labels(
+            publisher_domain=publisher_domain
+        ).observe(search_duration)
+        
         logger.error(f"[{request_id}] ❌ Similarity search failed: {e}", exc_info=True)
         response_data = handle_generic_exception(
             e,

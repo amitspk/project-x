@@ -10,6 +10,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    ports:
+      - "127.0.0.1:8006:8006"
     environment:
       - MONGODB_URL=${MONGODB_URL}
       - MONGODB_USERNAME=${MONGODB_USERNAME}
@@ -21,6 +23,7 @@ services:
       - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS:-5}
       - CONCURRENT_JOBS=${CONCURRENT_JOBS:-1}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - METRICS_PORT=8006
     networks:
       - fyi-widget-network
     deploy:

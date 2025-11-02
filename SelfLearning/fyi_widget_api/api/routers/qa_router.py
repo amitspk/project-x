@@ -23,6 +23,13 @@ from fyi_widget_shared_library.utils import (
 # Import auth
 from fyi_widget_api.api.auth import get_current_publisher
 
+# Import metrics
+from fyi_widget_api.api.metrics import (
+    qa_requests_total,
+    qa_processing_duration_seconds,
+    qa_answer_word_count
+)
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -86,13 +93,17 @@ async def ask_question(
     """
     # Get request_id from middleware (fallback to generating one if not available)
     request_id = getattr(http_request.state, 'request_id', None) or generate_request_id()
+    
+    # Track metrics
+    publisher_name = publisher.name.lower()
+    start_time = time.time()
 
     try:
-        start_time = time.time()
-        
         logger.info(f"[{request_id}] ❓ Answering question for publisher {publisher.name}: {request.question[:100]}...")
         
         if not request.question or len(request.question.strip()) == 0:
+            # Record metrics for error
+            qa_requests_total.labels(publisher=publisher_name, status="error").inc()
             raise HTTPException(
                 status_code=400,
                 detail="Question cannot be empty"
@@ -118,8 +129,14 @@ async def ask_question(
         answer = result.text
         
         # Calculate metadata
-        processing_time_ms = (time.time() - start_time) * 1000
+        processing_time = time.time() - start_time
+        processing_time_ms = processing_time * 1000
         word_count = len(answer.split())
+        
+        # Record metrics for success
+        qa_requests_total.labels(publisher=publisher_name, status="success").inc()
+        qa_processing_duration_seconds.labels(publisher=publisher_name).observe(processing_time)
+        qa_answer_word_count.labels(publisher=publisher_name).observe(word_count)
         
         qa_response = QAResponse(
             success=True,
@@ -137,6 +154,10 @@ async def ask_question(
         )
         
     except HTTPException as exc:
+        # Record metrics for error
+        processing_time = time.time() - start_time
+        qa_requests_total.labels(publisher=publisher_name, status="error").inc()
+        qa_processing_duration_seconds.labels(publisher=publisher_name).observe(processing_time)
         logger.error(f"[{request_id}] ❌ HTTP error: {exc.detail}")
         response_data = handle_http_exception(exc, request_id=request_id)
         raise HTTPException(
@@ -144,6 +165,10 @@ async def ask_question(
             detail=response_data
         )
     except Exception as e:
+        # Record metrics for error
+        processing_time = time.time() - start_time
+        qa_requests_total.labels(publisher=publisher_name, status="error").inc()
+        qa_processing_duration_seconds.labels(publisher=publisher_name).observe(processing_time)
         logger.error(f"[{request_id}] ❌ Q&A failed: {e}", exc_info=True)
         response_data = handle_generic_exception(
             e,
