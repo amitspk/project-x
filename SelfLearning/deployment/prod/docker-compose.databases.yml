@@ -67,4 +67,3 @@ volumes:
   mongodb_backup:
   postgres_backup:
 
-

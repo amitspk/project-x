@@ -47,5 +47,3 @@ services:
 networks:
   fyi-widget-network:
     external: true
-
-
