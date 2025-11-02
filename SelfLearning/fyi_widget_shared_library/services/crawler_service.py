@@ -70,6 +70,7 @@ class CrawlerService:
             'User-Agent': self.user_agent,
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',  # Allow compression
         }
         
         async with httpx.AsyncClient(
@@ -84,7 +85,83 @@ class CrawlerService:
             if len(response.content) > self.max_content_size:
                 raise ValueError(f"Content too large: {len(response.content)} bytes")
             
-            return response.text
+            # Check content type
+            content_type = response.headers.get('content-type', '').lower()
+            if not content_type.startswith('text/html'):
+                logger.warning(f"⚠️  Unexpected content type: {content_type} for {url}")
+            
+            # Get text with proper encoding handling
+            try:
+                # httpx automatically handles gzip/deflate decompression
+                # But let's verify the response was properly decompressed
+                content_encoding = response.headers.get('content-encoding', '').lower()
+                
+                # If content is still compressed, httpx should have handled it, but let's check
+                if content_encoding in ['gzip', 'deflate', 'br']:
+                    # httpx should have automatically decompressed, but verify it's text
+                    if not isinstance(response.content, bytes) or len(response.content) == 0:
+                        raise ValueError("Response content is empty")
+                
+                # Get text - httpx handles encoding automatically
+                text = response.text
+                
+                # Validate that we got actual text (not binary)
+                if self._is_invalid_content(text):
+                    logger.warning(f"⚠️  Detected invalid/binary content for {url}")
+                    logger.warning(f"   Content-Type: {response.headers.get('content-type', 'unknown')}")
+                    logger.warning(f"   Content-Length: {len(response.content)} bytes")
+                    logger.warning(f"   Text length: {len(text)} chars")
+                    logger.warning(f"   First 200 chars: {repr(text[:200])}")
+                    raise ValueError("Content appears to be binary or corrupted - cannot extract valid HTML")
+                
+                # Additional check: verify it looks like HTML
+                if not any(tag in text.lower() for tag in ['<html', '<body', '<div', '<article', '<main', '<p']):
+                    # Might be valid plain text, but for a web page it's suspicious
+                    logger.warning(f"⚠️  Content doesn't appear to contain HTML tags")
+                    # But don't fail if it's valid text with enough words
+                    words = text.split()
+                    if len(words) < 50:
+                        raise ValueError("Content doesn't appear to be valid HTML or text")
+                
+                return text
+            except ValueError:
+                # Re-raise validation errors
+                raise
+            except Exception as e:
+                logger.error(f"❌ Failed to decode HTML content: {e}")
+                raise ValueError(f"Failed to extract valid HTML content: {e}")
+    
+    def _is_invalid_content(self, text: str) -> bool:
+        """
+        Check if content appears to be invalid (binary/junk data).
+        
+        Returns True if content is likely invalid.
+        """
+        if not text or len(text) < 100:
+            return True
+        
+        # Count printable vs non-printable characters
+        printable_chars = sum(1 for c in text if c.isprintable() or c.isspace())
+        total_chars = len(text)
+        
+        # If less than 70% of characters are printable, likely binary/junk
+        if total_chars > 0 and (printable_chars / total_chars) < 0.7:
+            logger.warning(f"⚠️  Low printable character ratio: {printable_chars/total_chars:.2%}")
+            return True
+        
+        # Check for high ratio of Unicode replacement characters ()
+        replacement_chars = text.count('\ufffd')
+        if replacement_chars > len(text) * 0.1:  # More than 10% replacement chars
+            logger.warning(f"⚠️  High ratio of replacement characters: {replacement_chars}/{len(text)}")
+            return True
+        
+        # Check if content looks like HTML (should have HTML tags)
+        if '<html' not in text.lower() and '<body' not in text.lower() and '<div' not in text.lower():
+            # Might be plain text, which is okay, but if it's all non-ASCII weirdness, it's suspicious
+            if len(text) > 500 and replacement_chars > len(text) * 0.05:
+                return True
+        
+        return False
     
     async def _extract_content(self, html: str, url: str) -> CrawledContent:
         """Extract meaningful content from HTML."""
@@ -100,11 +177,23 @@ class CrawlerService:
         # Extract main content
         content = self._extract_main_content(soup)
         
+        # Validate extracted content
+        if not content or len(content.strip()) < 50:
+            raise ValueError("Extracted content is too short or empty")
+        
+        # Additional validation: check if content looks valid
+        if self._is_invalid_content(content):
+            raise ValueError("Extracted content appears to be invalid/binary data")
+        
         # Detect language
         language = self._detect_language(soup)
         
         # Calculate word count
         word_count = len(content.split())
+        
+        # Validate minimum word count
+        if word_count < 10:
+            raise ValueError(f"Extracted content has too few words: {word_count} (minimum: 10)")
         
         # Parse domain for metadata
         parsed_url = urlparse(url)

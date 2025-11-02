@@ -10,7 +10,6 @@ from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field, validator, field_serializer
 from enum import Enum
 
-
 class LLMModel(str, Enum):
     """Supported LLM models."""
     GPT4O_MINI = "gpt-4o-mini"
@@ -18,6 +17,47 @@ class LLMModel(str, Enum):
     GPT35_TURBO = "gpt-3.5-turbo"
     CLAUDE_SONNET = "claude-3-5-sonnet-20241022"
     CLAUDE_HAIKU = "claude-3-5-haiku-20241022"
+
+
+# Helper function to get default model enum (defined after LLMModel to avoid NameError)
+def _get_default_model_enum():
+    """Get the LLMModel enum that corresponds to DEFAULT_MODEL from model_config."""
+    from fyi_widget_shared_library.services.llm_providers.model_config import LLMModelConfig
+    
+    # Map DEFAULT_MODEL string to enum value
+    default_model_str = LLMModelConfig.DEFAULT_MODEL
+    for model_enum in LLMModel:
+        if model_enum.value == default_model_str:
+            return model_enum
+    
+    # Fallback if DEFAULT_MODEL doesn't match any enum (shouldn't happen)
+    return LLMModel.GPT4O_MINI
+
+
+# Helper function to get default temperature from model_config
+def _get_default_temperature():
+    """Get the default temperature from model_config."""
+    from fyi_widget_shared_library.services.llm_providers.model_config import LLMModelConfig
+    return LLMModelConfig.DEFAULT_TEMPERATURE
+
+
+# Helper functions to get default max_tokens from model_config
+def _get_default_max_tokens_summary():
+    """Get the default max_tokens for summary from model_config."""
+    from fyi_widget_shared_library.services.llm_providers.model_config import LLMModelConfig
+    return LLMModelConfig.DEFAULT_MAX_TOKENS_SUMMARY
+
+
+def _get_default_max_tokens_questions():
+    """Get the default max_tokens for questions from model_config."""
+    from fyi_widget_shared_library.services.llm_providers.model_config import LLMModelConfig
+    return LLMModelConfig.DEFAULT_MAX_TOKENS_QUESTIONS
+
+
+def _get_default_max_tokens_chat():
+    """Get the default max_tokens for chat from model_config."""
+    from fyi_widget_shared_library.services.llm_providers.model_config import LLMModelConfig
+    return LLMModelConfig.DEFAULT_MAX_TOKENS_CHAT
 
 
 class PublisherStatus(str, Enum):
@@ -39,22 +79,60 @@ class PublisherConfig(BaseModel):
         description="Number of Q&A pairs to generate per blog"
     )
     
-    # LLM settings
-    llm_model: LLMModel = Field(
-        default=LLMModel.GPT4O_MINI,
-        description="LLM model to use for generation"
+    # LLM settings - Per-operation model configuration
+    # Each operation type can use a different model
+    
+    summary_model: LLMModel = Field(
+        default_factory=lambda: _get_default_model_enum(),
+        description="LLM model to use for summary generation (defaults to DEFAULT_MODEL from model_config)"
     )
-    temperature: float = Field(
-        default=0.7,
+    questions_model: LLMModel = Field(
+        default_factory=lambda: _get_default_model_enum(),
+        description="LLM model to use for question-answer generation (defaults to DEFAULT_MODEL from model_config)"
+    )
+    chat_model: LLMModel = Field(
+        default_factory=lambda: _get_default_model_enum(),
+        description="LLM model to use for chat/question answering API (defaults to DEFAULT_MODEL from model_config)"
+    )
+    
+    # Per-operation temperature settings (defaults from model_config)
+    summary_temperature: float = Field(
+        default_factory=_get_default_temperature,
         ge=0.0,
         le=1.0,
-        description="LLM temperature for generation"
+        description="Temperature for summary generation (defaults to DEFAULT_TEMPERATURE from model_config)"
     )
-    max_tokens: int = Field(
-        default=2000,
+    questions_temperature: float = Field(
+        default_factory=_get_default_temperature,
+        ge=0.0,
+        le=1.0,
+        description="Temperature for question-answer generation (defaults to DEFAULT_TEMPERATURE from model_config)"
+    )
+    chat_temperature: float = Field(
+        default_factory=_get_default_temperature,
+        ge=0.0,
+        le=1.0,
+        description="Temperature for chat/question answering API (defaults to DEFAULT_TEMPERATURE from model_config)"
+    )
+    
+    # Per-operation max_tokens settings (defaults from model_config)
+    summary_max_tokens: int = Field(
+        default_factory=_get_default_max_tokens_summary,
         ge=100,
         le=4000,
-        description="Maximum tokens per LLM request"
+        description="Maximum tokens for summary generation (defaults to DEFAULT_MAX_TOKENS_SUMMARY from model_config)"
+    )
+    questions_max_tokens: int = Field(
+        default_factory=_get_default_max_tokens_questions,
+        ge=100,
+        le=4000,
+        description="Maximum tokens for question-answer generation (defaults to DEFAULT_MAX_TOKENS_QUESTIONS from model_config)"
+    )
+    chat_max_tokens: int = Field(
+        default_factory=_get_default_max_tokens_chat,
+        ge=100,
+        le=4000,
+        description="Maximum tokens for chat/question answering API (defaults to DEFAULT_MAX_TOKENS_CHAT from model_config)"
     )
     
     # Content processing settings
