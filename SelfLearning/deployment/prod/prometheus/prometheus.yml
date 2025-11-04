@@ -2,8 +2,8 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    cluster: 'fyi-widget-production'
-    environment: 'production'
+    cluster: 'fyi-widget-production'  # Update cluster name in .env: PROMETHEUS_CLUSTER_NAME
+    environment: 'production'  # Update environment in .env: PROMETHEUS_ENVIRONMENT
 
 # Alertmanager configuration
 alerting:
