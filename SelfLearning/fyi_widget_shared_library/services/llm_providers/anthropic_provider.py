@@ -104,9 +104,7 @@ Content:
 Generate exactly {num_questions} question-answer pairs.
 
 REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
-{QUESTIONS_JSON_FORMAT}
-
-Use emojis for icons: 💡🔍📊🎯⚡🚀💭📖🔧🌟"""
+{QUESTIONS_JSON_FORMAT}"""
 
         logger.debug(f"❓ Anthropic generating {num_questions} questions (system: {len(system_msg)} chars, user: {len(user_prompt)} chars)")
 

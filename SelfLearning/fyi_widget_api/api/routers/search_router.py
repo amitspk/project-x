@@ -177,7 +177,6 @@ async def search_similar_blogs(
                     "url": blog.url,
                     "title": blog.title,
                     "similarity_score": blog.similarity_score,
-                    "icon": "❓",
                     "description": None
                 })
         

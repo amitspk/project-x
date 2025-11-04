@@ -122,17 +122,15 @@ async def check_and_load_questions(
             # Convert questions to response format
             questions_response = []
             for q in questions_copy:
+                # Get all fields and explicitly build response dict (exclude unwanted fields completely)
                 q_dict = q.model_dump() if hasattr(q, 'model_dump') else q.dict()
-                q_dict.pop('embedding', None)
-                q_dict.pop('blog_url', None)
-                q_dict.pop('blog_id', None)
-                
-                # Convert datetime
-                if 'created_at' in q_dict and q_dict['created_at']:
-                    if hasattr(q_dict['created_at'], 'isoformat'):
-                        q_dict['created_at'] = q_dict['created_at'].isoformat()
-                
-                questions_response.append(q_dict)
+                # Build new dict with only the fields we want
+                response_dict = {
+                    'id': q_dict.get('id'),
+                    'question': q_dict.get('question'),
+                    'answer': q_dict.get('answer')
+                }
+                questions_response.append(response_dict)
             
             result_data = {
                 "processing_status": "ready",
@@ -346,18 +344,14 @@ async def get_questions_by_url(
         # Convert questions to dict and exclude embedding, blog_url, blog_id fields for response
         questions_response = []
         for q in questions:
+            # Build new dict with only the fields we want (completely exclude unwanted fields)
             q_dict = q.model_dump() if hasattr(q, 'model_dump') else q.dict()
-            # Remove redundant fields to reduce response size
-            q_dict.pop('embedding', None)
-            q_dict.pop('blog_url', None)
-            q_dict.pop('blog_id', None)
-            
-            # Convert datetime to ISO format string
-            if 'created_at' in q_dict and q_dict['created_at']:
-                if hasattr(q_dict['created_at'], 'isoformat'):
-                    q_dict['created_at'] = q_dict['created_at'].isoformat()
-            
-            questions_response.append(q_dict)
+            response_dict = {
+                'id': q_dict.get('id'),
+                'question': q_dict.get('question'),
+                'answer': q_dict.get('answer')
+            }
+            questions_response.append(response_dict)
         
         # Record metrics
         retrieval_duration = time.time() - retrieval_start_time
@@ -562,7 +556,11 @@ async def get_question_by_id(
         question.pop('click_count', None)
         question.pop('last_clicked_at', None)
         
-        # Convert datetime to ISO format string
+        # Remove icon if present (should not be in schema, but remove for safety)
+        question.pop('icon', None)
+        
+        # Keep keyword_anchor and probability for this endpoint (single question details)
+        # Convert datetime to ISO format string (keep created_at for this endpoint)
         if 'created_at' in question and question['created_at']:
             if hasattr(question['created_at'], 'isoformat'):
                 question['created_at'] = question['created_at'].isoformat()

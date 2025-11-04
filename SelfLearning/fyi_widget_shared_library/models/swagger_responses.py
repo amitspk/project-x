@@ -55,13 +55,19 @@ class StandardErrorResponse(BaseModel):
 # Questions Router Response Models
 # ============================================================================
 
-class QuestionSchema(BaseModel):
-    """Question schema."""
+class QuestionListSchema(BaseModel):
+    """Question schema for list endpoints (without created_at)."""
     id: str = Field(..., example="68f216e74c1c51f257077318")
     question: str = Field(..., example="What is the main topic of this article?")
     answer: str = Field(..., example="The article discusses...")
-    icon: str = Field(..., example="💡")
-    created_at: str = Field(..., example="2025-10-18T14:30:00")
+
+
+class QuestionSchema(BaseModel):
+    """Question schema for single question endpoint (includes created_at)."""
+    id: str = Field(..., example="68f216e74c1c51f257077318")
+    question: str = Field(..., example="What is the main topic of this article?")
+    answer: str = Field(..., example="The article discusses...")
+    created_at: Optional[str] = Field(None, example="2025-10-18T14:30:00", description="Created timestamp")
 
 
 class BlogInfoSchema(BaseModel):
@@ -76,7 +82,7 @@ class BlogInfoSchema(BaseModel):
 
 class QuestionsByUrlResult(BaseModel):
     """Result for questions by URL endpoint."""
-    questions: List[QuestionSchema]
+    questions: List[QuestionListSchema]
     blog_info: BlogInfoSchema
 
 
@@ -94,7 +100,7 @@ class CheckAndLoadResult(BaseModel):
     """Result for check-and-load endpoint."""
     processing_status: str = Field(..., example="ready", description="Status: ready, processing, not_started, or failed")
     blog_url: str = Field(..., example="https://example.com/article")
-    questions: Optional[List[QuestionSchema]] = Field(None, description="Questions if ready, None otherwise")
+    questions: Optional[List[QuestionListSchema]] = Field(None, description="Questions if ready, None otherwise")
     blog_info: Optional[BlogInfoSchema] = Field(None, description="Blog info if ready, None otherwise")
     job_id: Optional[str] = Field(None, example="72815d48-7283-4a89-9004-3465d1b4c293", description="Job ID if processing or not_started")
     message: str = Field(..., example="Questions ready - loaded from cache")

@@ -541,6 +541,8 @@ class BlogProcessingWorker:
                 for idx, q in enumerate(questions_list):
                     question_text = q.get("question", "")
                     answer_text = q.get("answer", "")
+                    keyword_anchor = q.get("keyword_anchor", "")
+                    probability = q.get("probability")
                     
                     # Check if question/answer are missing or empty
                     if not question_text or not answer_text:
@@ -561,8 +563,8 @@ class BlogProcessingWorker:
                         )
                         continue
                     
-                    questions.append((question_text.strip(), answer_text.strip()))
-                    logger.debug(f"✅ Question {idx + 1} parsed successfully: {question_text[:50]}...")
+                    questions.append((question_text.strip(), answer_text.strip(), keyword_anchor.strip() if keyword_anchor else "", probability))
+                    logger.debug(f"✅ Question {idx + 1} parsed successfully: {question_text[:50]}... (anchor: {keyword_anchor}, prob: {probability})")
                 
                 valid_count = len(questions)
                 logger.info(f"✅ Parsed {valid_count} valid questions from {len(questions_list)} total (filtered: {filtered_count})")
@@ -631,7 +633,7 @@ class BlogProcessingWorker:
             
             # Question embeddings
             question_embeddings = []
-            for q_text, _ in questions:
+            for q_text, _, _, _ in questions:
                 embedding_start = time.time()
                 try:
                     emb_result = await self.llm_service.generate_embedding(q_text)
@@ -711,8 +713,13 @@ class BlogProcessingWorker:
             
             # Prepare questions for batch save
             questions_list = [
-                {"question": q_text, "answer": a_text, "icon": "💡"}
-                for q_text, a_text in questions
+                {
+                    "question": q_text,
+                    "answer": a_text,
+                    "keyword_anchor": keyword_anchor,
+                    "probability": probability
+                }
+                for q_text, a_text, keyword_anchor, probability in questions
             ]
             
             # Save questions (use normalized URL)

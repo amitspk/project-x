@@ -140,7 +140,8 @@ class StorageService:
                 "blog_url": blog_url,
                 "question": qa.get("question", ""),
                 "answer": qa.get("answer", ""),
-                "icon": qa.get("icon", "💡"),
+                "keyword_anchor": qa.get("keyword_anchor", ""),
+                "probability": qa.get("probability"),
                 "embedding": embeddings[idx] if embeddings and idx < len(embeddings) else None,
                 "click_count": 0,  # Initialize click count to 0
                 "created_at": datetime.utcnow()
@@ -209,7 +210,6 @@ class StorageService:
                 answer=doc["answer"],
                 blog_url=doc["blog_url"],
                 blog_id=doc.get("blog_id"),
-                icon=doc.get("icon", "💡"),
                 embedding=doc.get("embedding"),
                 created_at=doc["created_at"]
             ))
