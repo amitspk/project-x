@@ -31,7 +31,7 @@ FRAMEWORK STEPS & PRINCIPLES:
 
 1. Identify Core Keyword Anchors: First, analyze the article to identify the primary, high-value commercial concepts. Prioritize specific, high-intent keywords that advertisers would bid on, such as **product names, brand names, specific professional services, or product categories** (e.g., 'child car seat', 'GSTR-3B', 'Triumph Speed 400'). These are your 'Keyword Anchors.'
 
-2. Generate Questions: Generate questions, distributing them across the Keyword Anchors. Each question must follow these four principles:
+2. Generate Questions: Generate questions, distributing them across the Keyword Anchors. Each question must follow these five principles:
 
     - Knowledge Expansion: The question must promise a genuine, deep-dive answer that goes beyond the surface-level facts of the article.
 
@@ -40,6 +40,8 @@ FRAMEWORK STEPS & PRINCIPLES:
     - Psychological Framing: The question must be framed using a powerful psychological hook (e.g., promising a secret, highlighting a hidden danger, challenging a common assumption).
 
     - Defined Tone of Voice: The tone must be curious, insightful, and intelligent—never sensationalist or clickbait.
+
+    - Keyword Highlighting: For each question generated, identify the 2-4 most critical keywords or phrases that define the core subject of the query. Enclose these keywords in <b> HTML tags (e.g., <b>keyword</b>). This is essential to help the reader grasp the question's main topic at a glance.
 
 3. Apply Diversity Requirement (Verbalized Sampling):
 
@@ -68,13 +70,13 @@ EXAMPLE 1 OUTPUT:
 {
     "questions": [
         {
-            "question": "When can misusing the KTM Duke 250's quickshifter cause costly gearbox damage?",
+            "question": "When can misusing the <b>KTM Duke 250</b>'s <b>quickshifter</b> cause costly <b>gearbox damage</b>?",
             "answer": "A quickshifter is designed for clutchless upshifts under acceleration. The biggest mistake is using it at low RPMs, during deceleration, or trying to force shifts when the gearbox isn't under load. This can cause the gear dogs to clash instead of meshing smoothly. Repeated misuse leads to rounded gear dogs, jerky shifting, false neutrals, and can eventually require a very expensive gearbox rebuild, negating the feature's convenience.",
             "keyword_anchor": "KTM Duke 250",
             "probability": 0.94
         },
         {
-            "question": "What's the secret danger of sintered brake pads on the Bajaj Pulsar NS400Z in rain?",
+            "question": "What's the secret danger of <b>sintered brake pads</b> on the <b>Bajaj Pulsar NS400Z</b> in <b>rain</b>?",
             "answer": "Sintered brake pads, made from metallic particles, offer incredible stopping power in dry conditions because they handle high heat well. However, their 'secret danger' is their poor initial cold bite, especially in the rain. Unlike organic pads, they require a moment of friction to build up heat before they grip effectively. In a sudden wet-weather stop, this can result in a terrifying, split-second delay in braking response.",
             "keyword_anchor": "Bajaj Pulsar NS400Z",
             "probability": 0.91
@@ -91,13 +93,13 @@ EXAMPLE 2 OUTPUT:
 {
     "questions": [
         {
-            "question": "How can a 'healthy' low-fat diet secretly starve your hair of nutrients?",
+            "question": "How can a '<b>healthy</b>' <b>low-fat diet</b> secretly starve your <b>hair</b> of <b>nutrients</b>?",
             "answer": "Hair health relies heavily on fat-soluble vitamins (A, D, E, K) and essential fatty acids, which require dietary fat for absorption. A diet that is too low in healthy fats (like those from avocados, nuts, and olive oil) can prevent your body from absorbing these critical nutrients, leading to dry, brittle hair and even hair loss, despite the diet being 'healthy' in other ways.",
             "keyword_anchor": "healthy diet",
             "probability": 0.93
         },
         {
-            "question": "What's the hidden sign your anti-dandruff shampoo is making your scalp worse?",
+            "question": "What's the hidden sign your <b>anti-dandruff shampoo</b> is making your <b>scalp</b> worse?",
             "answer": "The hidden sign is a 'rebound effect.' Strong anti-dandruff shampoos with harsh sulfates can over-strip your scalp. This damages the moisture barrier, causing your scalp to panic and overproduce oil to compensate, leading to greasier hair and a return of flakiness (which is now from dryness, not fungus) shortly after washing.",
             "keyword_anchor": "anti-dandruff shampoo",
             "probability": 0.95
@@ -137,7 +139,7 @@ The summary will be vectorized and used to find related articles when users clic
 QUESTIONS_JSON_FORMAT = """{
     "questions": [
         {
-            "question": "Question text here?",
+            "question": "Question text with <b>bold keywords</b> here?",
             "answer": "Detailed answer here.",
             "keyword_anchor": "Product or service name",
             "probability": 0.95
