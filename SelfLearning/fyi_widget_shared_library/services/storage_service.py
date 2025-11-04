@@ -142,6 +142,7 @@ class StorageService:
                 "answer": qa.get("answer", ""),
                 "icon": qa.get("icon", "💡"),
                 "embedding": embeddings[idx] if embeddings and idx < len(embeddings) else None,
+                "click_count": 0,  # Initialize click count to 0
                 "created_at": datetime.utcnow()
             }
             docs.append(doc)
@@ -224,6 +225,38 @@ class StorageService:
             return question
         except Exception as e:
             logger.error(f"Error getting question {question_id}: {e}")
+            return None
+    
+    async def increment_question_click_count(self, question_id: str) -> Optional[int]:
+        """
+        Increment the click count for a question.
+        
+        Args:
+            question_id: The question ID to increment clicks for
+            
+        Returns:
+            The new click count, or None if question not found
+        """
+        try:
+            collection = self.database[self.questions_collection]
+            result = await collection.find_one_and_update(
+                {"_id": ObjectId(question_id)},
+                {
+                    "$inc": {"click_count": 1},
+                    "$set": {"last_clicked_at": datetime.utcnow()}
+                },
+                return_document=True  # Return updated document
+            )
+            
+            if result:
+                click_count = result.get("click_count", 0)
+                logger.debug(f"✅ Incremented click count for question {question_id}: {click_count}")
+                return click_count
+            else:
+                logger.warning(f"⚠️  Question not found for click tracking: {question_id}")
+                return None
+        except Exception as e:
+            logger.error(f"Error incrementing click count for question {question_id}: {e}")
             return None
     
     async def search_similar_blogs(

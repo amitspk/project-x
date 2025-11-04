@@ -28,7 +28,9 @@ from fyi_widget_api.api.auth import get_current_publisher, validate_blog_url_dom
 from fyi_widget_api.api.metrics import (
     similarity_searches_total,
     similarity_search_duration_seconds,
-    similar_blogs_found
+    similar_blogs_found,
+    question_clicks_total,
+    question_click_count
 )
 
 logger = logging.getLogger(__name__)
@@ -117,6 +119,25 @@ async def search_similar_blogs(
         
         # Extract domain from question's blog URL to use for filtering
         question_domain = extract_domain(question_blog_url).lower()
+        
+        # Track question click (when question is clicked to find similar blogs)
+        click_count = await storage.increment_question_click_count(request.question_id)
+        if click_count is not None:
+            # Record click metrics
+            question_clicks_total.labels(
+                publisher_domain=publisher_domain,
+                blog_url_domain=question_domain
+            ).inc()
+            
+            # Update gauge with current click count
+            question_click_count.labels(
+                question_id=request.question_id,
+                blog_url_domain=question_domain
+            ).set(click_count)
+            
+            logger.info(f"[{request_id}] 👆 Question clicked (count: {click_count})")
+        else:
+            logger.warning(f"[{request_id}] ⚠️  Could not track click for question {request.question_id}")
         
         # Get embedding
         embedding = question.get("embedding")

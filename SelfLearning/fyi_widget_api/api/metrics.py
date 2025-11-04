@@ -75,6 +75,20 @@ questions_retrieval_duration_seconds = Histogram(
     buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0]
 )
 
+# Question clicks (when question is clicked to find similar blogs)
+question_clicks_total = Counter(
+    'question_clicks_total',
+    'Total number of question clicks',
+    ['publisher_domain', 'blog_url_domain']
+)
+
+# Question click count (current click count per question)
+question_click_count = Gauge(
+    'question_click_count',
+    'Current click count for a question',
+    ['question_id', 'blog_url_domain']
+)
+
 # ============================================================================
 # Business Metrics - Similarity Search
 # ============================================================================

@@ -558,6 +558,10 @@ async def get_question_by_id(
         # Remove embedding field to reduce response size
         question.pop('embedding', None)
         
+        # Remove click_count from response (internal tracking only)
+        question.pop('click_count', None)
+        question.pop('last_clicked_at', None)
+        
         # Convert datetime to ISO format string
         if 'created_at' in question and question['created_at']:
             if hasattr(question['created_at'], 'isoformat'):
