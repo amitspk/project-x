@@ -377,7 +377,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(worker_jobs_processed_total[5m])) by (publisher_domain)",
+          "expr": "sum(increase(worker_jobs_processed_total[$__range])) by (publisher_domain)",
           "legendFormat": "{{publisher_domain}}",
           "refId": "A",
           "datasource": {

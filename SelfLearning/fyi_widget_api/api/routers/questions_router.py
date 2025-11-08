@@ -26,13 +26,6 @@ from fyi_widget_shared_library.utils import (
 # Import auth
 from fyi_widget_api.api.auth import get_current_publisher, validate_blog_url_domain, verify_admin_key
 
-# Import metrics
-from fyi_widget_api.api.metrics import (
-    questions_retrieved_total,
-    questions_check_and_load_total,
-    questions_retrieval_duration_seconds
-)
-
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -106,10 +99,7 @@ async def check_and_load_questions(
         if questions and len(questions) > 0:
             # Questions exist! Return them immediately
             logger.info(f"[{request_id}] ⚡ Fast path: {len(questions)} questions found, returning immediately")
-            
-            # Record metrics
-            questions_check_and_load_total.labels(status="ready").inc()
-            
+
             # Randomize questions
             import random
             questions_copy = list(questions)
@@ -170,8 +160,6 @@ async def check_and_load_questions(
             
             if job_status == "processing":
                 logger.info(f"[{request_id}] ⏳ Job already processing: {job_id}")
-                # Record metrics
-                questions_check_and_load_total.labels(status="processing").inc()
                 result_data = {
                     "processing_status": "processing",
                     "blog_url": normalized_url,
@@ -182,8 +170,6 @@ async def check_and_load_questions(
                 }
             elif job_status == "pending":
                 logger.info(f"[{request_id}] ⏳ Job pending: {job_id}")
-                # Record metrics
-                questions_check_and_load_total.labels(status="processing").inc()
                 result_data = {
                     "processing_status": "processing",
                     "blog_url": normalized_url,
@@ -194,8 +180,6 @@ async def check_and_load_questions(
                 }
             else:  # failed
                 logger.info(f"[{request_id}] ⚠️ Previous job failed: {job_id}, will create new job")
-                # Record metrics for failed job
-                questions_check_and_load_total.labels(status="failed").inc()
                 # Previous job failed, create a new one
                 existing_job = None  # Will create new job below
         
@@ -216,9 +200,6 @@ async def check_and_load_questions(
                 publisher_id=publisher.id,
                 config=publisher_config
             )
-            
-            # Record metrics
-            questions_check_and_load_total.labels(status="not_started").inc()
             
             # Note: Usage tracking (blogs_processed) will be handled by worker when job completes
             # This prevents double counting since worker also increments on completion
@@ -296,8 +277,6 @@ async def get_questions_by_url(
     # Get request_id from middleware (fallback to generating one if not available)
     request_id = getattr(request.state, 'request_id', None) or generate_request_id()
     
-    # Track metrics
-    retrieval_start_time = time.time()
     publisher_name = publisher.name.lower()
     blog_domain = None
     
@@ -319,10 +298,6 @@ async def get_questions_by_url(
         
         if not questions:
             # Record metrics for not found
-            questions_retrieved_total.labels(
-                blog_url_domain=blog_domain,
-                publisher=publisher_name
-            ).inc()
             raise HTTPException(
                 status_code=404,
                 detail=f"No questions found for URL: {blog_url}"
@@ -352,16 +327,6 @@ async def get_questions_by_url(
                 'answer': q_dict.get('answer')
             }
             questions_response.append(response_dict)
-        
-        # Record metrics
-        retrieval_duration = time.time() - retrieval_start_time
-        questions_retrieved_total.labels(
-            blog_url_domain=blog_domain,
-            publisher=publisher_name
-        ).inc()
-        questions_retrieval_duration_seconds.labels(
-            blog_url_domain=blog_domain
-        ).observe(retrieval_duration)
         
         # Format result data
         result_data = {

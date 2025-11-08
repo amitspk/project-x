@@ -26,6 +26,7 @@ from fyi_widget_api.api.auth import get_current_publisher
 # Import metrics
 from fyi_widget_api.api.metrics import (
     qa_requests_total,
+    qa_tokens_used_total,
     qa_processing_duration_seconds,
     qa_answer_word_count
 )
@@ -137,6 +138,11 @@ async def ask_question(
         qa_requests_total.labels(publisher=publisher_name, status="success").inc()
         qa_processing_duration_seconds.labels(publisher=publisher_name).observe(processing_time)
         qa_answer_word_count.labels(publisher=publisher_name).observe(word_count)
+        qa_tokens_used_total.labels(
+            publisher=publisher_name,
+            model=result.model,
+            status="success"
+        ).inc(result.tokens_used or 0)
         
         qa_response = QAResponse(
             success=True,
@@ -158,6 +164,11 @@ async def ask_question(
         processing_time = time.time() - start_time
         qa_requests_total.labels(publisher=publisher_name, status="error").inc()
         qa_processing_duration_seconds.labels(publisher=publisher_name).observe(processing_time)
+        qa_tokens_used_total.labels(
+            publisher=publisher_name,
+            model=getattr(publisher.config.chat_model, "value", str(publisher.config.chat_model)),
+            status="error"
+        ).inc(0)
         logger.error(f"[{request_id}] ❌ HTTP error: {exc.detail}")
         response_data = handle_http_exception(exc, request_id=request_id)
         raise HTTPException(
@@ -169,6 +180,11 @@ async def ask_question(
         processing_time = time.time() - start_time
         qa_requests_total.labels(publisher=publisher_name, status="error").inc()
         qa_processing_duration_seconds.labels(publisher=publisher_name).observe(processing_time)
+        qa_tokens_used_total.labels(
+            publisher=publisher_name,
+            model=getattr(publisher.config.chat_model, "value", str(publisher.config.chat_model)),
+            status="error"
+        ).inc(0)
         logger.error(f"[{request_id}] ❌ Q&A failed: {e}", exc_info=True)
         response_data = handle_generic_exception(
             e,
