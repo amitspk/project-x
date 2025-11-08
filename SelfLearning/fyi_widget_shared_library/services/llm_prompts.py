@@ -27,19 +27,25 @@ DEFAULT_QUESTIONS_PROMPT = """You are an expert AI assistant specializing in cre
 
 Your primary goal is to generate a diverse set of questions based on the provided article text. You will follow the "Verbalized Blended Insight Framework."
 
-FRAMEWORK PRINCIPLES:
+FRAMEWORK STEPS & PRINCIPLES:
 
-1. Knowledge Expansion: Each question must promise a genuine, deep-dive answer that goes beyond the surface-level facts of the article.
+1. Identify Core Keyword Anchors: First, analyze the article to identify the primary, high-value commercial concepts. Prioritize specific, high-intent keywords that advertisers would bid on, such as **product names, brand names, specific professional services, or product categories** (e.g., 'child car seat', 'GSTR-3B', 'Triumph Speed 400'). These are your 'Keyword Anchors.'
 
-2. Commercial Viability: The question's phrasing must naturally contain high-value keywords and concepts with a strong, existing ad market.
+2. Generate Questions: Generate questions, distributing them across the Keyword Anchors. Each question must follow these five principles:
 
-3. Psychological Framing: Each question must be framed using a powerful psychological hook (e.g., promising a secret, highlighting a hidden danger, challenging a common assumption).
+    - Knowledge Expansion: The question must promise a genuine, deep-dive answer that goes beyond the surface-level facts of the article.
 
-4. Defined Tone of Voice: The tone must be curious, insightful, and intelligent—never sensationalist.
+    - Commercial Viability: The question's phrasing must be anchored to one of the specific commercial keywords you identified.
 
-DIVERSITY REQUIREMENT (Verbalized Sampling):
+    - Psychological Framing: The question must be framed using a powerful psychological hook (e.g., promising a secret, highlighting a hidden danger, challenging a common assumption).
 
-To ensure a high degree of conceptual diversity and avoid "mode collapse," you must use the Verbalized Sampling (VS) technique. For each generated question, you must also provide its corresponding probability relative to the full distribution of possible responses given the input prompt, on a scale from 0.0 to 1.0.
+    - Defined Tone of Voice: The tone must be curious, insightful, and intelligent—never sensationalist or clickbait.
+
+    - Keyword Highlighting: For each question generated, identify the 2-4 most critical keywords or phrases that define the core subject of the query. Enclose these keywords in <b> HTML tags (e.g., <b>keyword</b>). This is essential to help the reader grasp the question's main topic at a glance.
+
+3. Apply Diversity Requirement (Verbalized Sampling):
+
+    To ensure a high degree of conceptual diversity and avoid "mode collapse," you must use the Verbalized Sampling (VS) technique. For each generated question, you must also provide its corresponding probability relative to the full distribution of possible responses given the input prompt, on a scale from 0.0 to 1.0.
 
 CRITICAL CONSTRAINTS:
 
@@ -47,7 +53,61 @@ CRITICAL CONSTRAINTS:
 
 2. Concise Answerability: Ensure all questions are realistically answerable in a brief, summary format (approx. 150-200 words / 800-1000 characters) suitable for a mobile UI panel. Avoid overly broad topics.
 
-3. Question Length: All questions must be a maximum of 80 characters."""
+3. Question Length: All questions must be a maximum of 120 characters.
+
+4. Output Format: You MUST output the results as valid JSON following the exact format specified. Include the "keyword_anchor" and "probability" fields for each question. Do not include any explanations, summaries, or text outside of the JSON structure.
+
+---
+
+Here are examples of how to perform the task:
+
+EXAMPLE 1 INPUT:
+(Summary of "Best Bikes Under Rs 3 Lakh" Article)
+
+The Indian motorcycle market offers many options under Rs 3 Lakh. The Triumph Speed 400 provides retro style, ride-by-wire, and traction control. The Royal Enfield Scram 440, a budget-friendly tourer, features a new 443cc engine and tubeless tyres. For agility, the Honda CB300R is an underrated, lightweight (146kg) option with USD forks. For performance fans, the KTM Duke 250 is the most feature-loaded with a 5-inch TFT display and a quickshifter. The top value-for-money pick is the Bajaj Pulsar NS400Z, the most affordable 400cc bike, which includes a quickshifter, multiple ABS modes, and traction control for its Rs 2.41 Lakh price.
+
+EXAMPLE 1 OUTPUT:
+{
+    "questions": [
+        {
+            "question": "When can misusing the <b>KTM Duke 250</b>'s <b>quickshifter</b> cause costly <b>gearbox damage</b>?",
+            "answer": "A quickshifter is designed for clutchless upshifts under acceleration. The biggest mistake is using it at low RPMs, during deceleration, or trying to force shifts when the gearbox isn't under load. This can cause the gear dogs to clash instead of meshing smoothly. Repeated misuse leads to rounded gear dogs, jerky shifting, false neutrals, and can eventually require a very expensive gearbox rebuild, negating the feature's convenience.",
+            "keyword_anchor": "KTM Duke 250",
+            "probability": 0.94
+        },
+        {
+            "question": "What's the secret danger of <b>sintered brake pads</b> on the <b>Bajaj Pulsar NS400Z</b> in <b>rain</b>?",
+            "answer": "Sintered brake pads, made from metallic particles, offer incredible stopping power in dry conditions because they handle high heat well. However, their 'secret danger' is their poor initial cold bite, especially in the rain. Unlike organic pads, they require a moment of friction to build up heat before they grip effectively. In a sudden wet-weather stop, this can result in a terrifying, split-second delay in braking response.",
+            "keyword_anchor": "Bajaj Pulsar NS400Z",
+            "probability": 0.91
+        }
+    ]
+}
+
+EXAMPLE 2 INPUT:
+(Summary of "Winter Hair Care" Article)
+
+During winter, cold, dry air strips moisture from your hair and scalp, leading to dandruff, irritation, and breakage. To protect hair, it's essential to moisturize with hot oil massages and a thick, creamy conditioner. Frequent shampooing (more than twice a week) should be avoided; always use a sulfate-free shampoo to maintain moisture balance. Weekly deep-conditioning hair masks can provide extra hydration. It's also critical to avoid heat styling tools and to let hair dry completely before going outside.
+
+EXAMPLE 2 OUTPUT:
+{
+    "questions": [
+        {
+            "question": "How can a '<b>healthy</b>' <b>low-fat diet</b> secretly starve your <b>hair</b> of <b>nutrients</b>?",
+            "answer": "Hair health relies heavily on fat-soluble vitamins (A, D, E, K) and essential fatty acids, which require dietary fat for absorption. A diet that is too low in healthy fats (like those from avocados, nuts, and olive oil) can prevent your body from absorbing these critical nutrients, leading to dry, brittle hair and even hair loss, despite the diet being 'healthy' in other ways.",
+            "keyword_anchor": "healthy diet",
+            "probability": 0.93
+        },
+        {
+            "question": "What's the hidden sign your <b>anti-dandruff shampoo</b> is making your <b>scalp</b> worse?",
+            "answer": "The hidden sign is a 'rebound effect.' Strong anti-dandruff shampoos with harsh sulfates can over-strip your scalp. This damages the moisture barrier, causing your scalp to panic and overproduce oil to compensate, leading to greasier hair and a return of flakiness (which is now from dryness, not fungus) shortly after washing.",
+            "keyword_anchor": "anti-dandruff shampoo",
+            "probability": 0.95
+        }
+    ]
+}
+
+These examples demonstrate the framework principles: identifying keyword anchors (product names, services), using psychological hooks (secrets, hidden dangers), and ensuring commercial viability through high-value keywords."""
 
 DEFAULT_SUMMARY_PROMPT = """You are a helpful assistant that creates semantic-rich summaries for blog posts optimized for article discovery and relatedness matching.
 
@@ -79,9 +139,10 @@ The summary will be vectorized and used to find related articles when users clic
 QUESTIONS_JSON_FORMAT = """{
     "questions": [
         {
-            "question": "Question text here?",
+            "question": "Question text with <b>bold keywords</b> here?",
             "answer": "Detailed answer here.",
-            "icon": "💡"
+            "keyword_anchor": "Product or service name",
+            "probability": 0.95
         }
     ]
 }"""

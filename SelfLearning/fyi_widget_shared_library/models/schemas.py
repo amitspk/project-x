@@ -53,7 +53,6 @@ class QuestionAnswerPair(BaseModel):
     answer: str
     blog_url: str
     blog_id: Optional[str] = None
-    icon: Optional[str] = "💡"
     embedding: Optional[List[float]] = None
     created_at: datetime
 

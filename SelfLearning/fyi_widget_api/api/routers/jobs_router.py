@@ -28,6 +28,12 @@ from fyi_widget_shared_library.utils import (
 from fyi_widget_api.api.auth import get_current_publisher, validate_blog_url_domain, verify_admin_key
 from fyi_widget_api.api import auth as auth_module
 
+# Import metrics
+from fyi_widget_api.api.metrics import (
+    jobs_enqueued_total,
+    jobs_status_checks_total
+)
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -126,6 +132,11 @@ async def enqueue_blog_processing(
             
             if jobs_today >= publisher.config.daily_blog_limit:
                 logger.warning(f"❌ Daily limit exceeded: {jobs_today}/{publisher.config.daily_blog_limit}")
+                # Record metrics for limit exceeded
+                jobs_enqueued_total.labels(
+                    publisher=publisher.name.lower(),
+                    status="limit_exceeded"
+                ).inc()
                 raise HTTPException(
                     status_code=429,
                     detail=f"Daily blog processing limit reached ({publisher.config.daily_blog_limit}). "
@@ -150,6 +161,12 @@ async def enqueue_blog_processing(
             
             if existing_job:
                 logger.info(f"[{request_id}] ✅ Returning existing completed job: {existing_job['job_id']}")
+                
+                # Record metrics for duplicate job
+                jobs_enqueued_total.labels(
+                    publisher=publisher.name.lower(),
+                    status="duplicate"
+                ).inc()
                 
                 # Return existing completed job
                 from fyi_widget_shared_library.models import ProcessingJob
@@ -179,6 +196,12 @@ async def enqueue_blog_processing(
         
         # Blog doesn't exist or wasn't successfully processed - enqueue new job (with normalized URL)
         job = await job_repo.enqueue_job(normalized_url)
+        
+        # Record metrics for successful enqueue
+        jobs_enqueued_total.labels(
+            publisher=publisher.name.lower(),
+            status="success"
+        ).inc()
         
         logger.info(f"[{request_id}] ✅ Job enqueued: {job.job_id}")
         
@@ -213,6 +236,12 @@ async def enqueue_blog_processing(
         )
         
     except HTTPException as exc:
+        # Record metrics for error (if not already recorded)
+        if exc.status_code != 429:  # Already recorded for limit_exceeded
+            jobs_enqueued_total.labels(
+                publisher=publisher.name.lower() if publisher else "unknown",
+                status="error"
+            ).inc()
         logger.error(f"[{request_id}] ❌ HTTP error: {exc.detail}")
         response_data = handle_http_exception(exc, request_id=request_id)
         raise HTTPException(
@@ -220,6 +249,11 @@ async def enqueue_blog_processing(
             detail=response_data
         )
     except Exception as e:
+        # Record metrics for error
+        jobs_enqueued_total.labels(
+            publisher=publisher.name.lower() if publisher else "unknown",
+            status="error"
+        ).inc()
         logger.error(f"[{request_id}] ❌ Failed to enqueue job: {e}", exc_info=True)
         response_data = handle_generic_exception(
             e,
@@ -265,10 +299,16 @@ async def get_job_status(
         job = await job_repo.get_job_by_id(job_id)
         
         if not job:
+            # Record metrics for not found
+            jobs_status_checks_total.labels(status="not_found").inc()
             raise HTTPException(
                 status_code=404,
                 detail=f"Job not found: {job_id}"
             )
+        
+        # Record metrics based on job status
+        status_label = job.status.value if hasattr(job.status, 'value') else str(job.status)
+        jobs_status_checks_total.labels(status=status_label).inc()
         
         job_response = JobStatusResponse(
             job_id=job.job_id,

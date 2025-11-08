@@ -60,4 +60,3 @@ networks:
 volumes:
   pgadmin_data:
 
-

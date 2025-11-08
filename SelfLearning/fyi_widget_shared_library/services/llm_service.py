@@ -248,9 +248,7 @@ Content:
 Generate exactly {num_questions} question-answer pairs.
 
 REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
-{QUESTIONS_JSON_FORMAT}
-
-Use emojis for icons: 💡🔍📊🎯⚡🚀💭📖🔧🌟"""
+{QUESTIONS_JSON_FORMAT}"""
 
         # Log the complete prompts being sent to LLM
         logger.debug("=" * 80)

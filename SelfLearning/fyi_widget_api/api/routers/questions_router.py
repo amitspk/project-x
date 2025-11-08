@@ -2,6 +2,7 @@
 
 import logging
 import sys
+import time
 from pathlib import Path
 from typing import List, Dict, Any
 from fastapi import APIRouter, HTTPException, Query, Request, Depends
@@ -24,6 +25,13 @@ from fyi_widget_shared_library.utils import (
 
 # Import auth
 from fyi_widget_api.api.auth import get_current_publisher, validate_blog_url_domain, verify_admin_key
+
+# Import metrics
+from fyi_widget_api.api.metrics import (
+    questions_retrieved_total,
+    questions_check_and_load_total,
+    questions_retrieval_duration_seconds
+)
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +107,9 @@ async def check_and_load_questions(
             # Questions exist! Return them immediately
             logger.info(f"[{request_id}] ⚡ Fast path: {len(questions)} questions found, returning immediately")
             
+            # Record metrics
+            questions_check_and_load_total.labels(status="ready").inc()
+            
             # Randomize questions
             import random
             questions_copy = list(questions)
@@ -111,17 +122,15 @@ async def check_and_load_questions(
             # Convert questions to response format
             questions_response = []
             for q in questions_copy:
+                # Get all fields and explicitly build response dict (exclude unwanted fields completely)
                 q_dict = q.model_dump() if hasattr(q, 'model_dump') else q.dict()
-                q_dict.pop('embedding', None)
-                q_dict.pop('blog_url', None)
-                q_dict.pop('blog_id', None)
-                
-                # Convert datetime
-                if 'created_at' in q_dict and q_dict['created_at']:
-                    if hasattr(q_dict['created_at'], 'isoformat'):
-                        q_dict['created_at'] = q_dict['created_at'].isoformat()
-                
-                questions_response.append(q_dict)
+                # Build new dict with only the fields we want
+                response_dict = {
+                    'id': q_dict.get('id'),
+                    'question': q_dict.get('question'),
+                    'answer': q_dict.get('answer')
+                }
+                questions_response.append(response_dict)
             
             result_data = {
                 "processing_status": "ready",
@@ -161,6 +170,8 @@ async def check_and_load_questions(
             
             if job_status == "processing":
                 logger.info(f"[{request_id}] ⏳ Job already processing: {job_id}")
+                # Record metrics
+                questions_check_and_load_total.labels(status="processing").inc()
                 result_data = {
                     "processing_status": "processing",
                     "blog_url": normalized_url,
@@ -171,6 +182,8 @@ async def check_and_load_questions(
                 }
             elif job_status == "pending":
                 logger.info(f"[{request_id}] ⏳ Job pending: {job_id}")
+                # Record metrics
+                questions_check_and_load_total.labels(status="processing").inc()
                 result_data = {
                     "processing_status": "processing",
                     "blog_url": normalized_url,
@@ -181,6 +194,8 @@ async def check_and_load_questions(
                 }
             else:  # failed
                 logger.info(f"[{request_id}] ⚠️ Previous job failed: {job_id}, will create new job")
+                # Record metrics for failed job
+                questions_check_and_load_total.labels(status="failed").inc()
                 # Previous job failed, create a new one
                 existing_job = None  # Will create new job below
         
@@ -201,6 +216,9 @@ async def check_and_load_questions(
                 publisher_id=publisher.id,
                 config=publisher_config
             )
+            
+            # Record metrics
+            questions_check_and_load_total.labels(status="not_started").inc()
             
             # Note: Usage tracking (blogs_processed) will be handled by worker when job completes
             # This prevents double counting since worker also increments on completion
@@ -278,9 +296,17 @@ async def get_questions_by_url(
     # Get request_id from middleware (fallback to generating one if not available)
     request_id = getattr(request.state, 'request_id', None) or generate_request_id()
     
+    # Track metrics
+    retrieval_start_time = time.time()
+    publisher_name = publisher.name.lower()
+    blog_domain = None
+    
     try:
         # Normalize the URL for consistent lookups
         normalized_url = normalize_url(blog_url)
+        from fyi_widget_shared_library.utils.url_utils import extract_domain
+        blog_domain = extract_domain(normalized_url).lower()
+        
         logger.info(f"[{request_id}] 📖 Getting questions for URL: {normalized_url}")
         
         # Validate blog URL domain matches publisher's domain
@@ -292,6 +318,11 @@ async def get_questions_by_url(
         questions = await storage.get_questions_by_url(normalized_url, limit=None)
         
         if not questions:
+            # Record metrics for not found
+            questions_retrieved_total.labels(
+                blog_url_domain=blog_domain,
+                publisher=publisher_name
+            ).inc()
             raise HTTPException(
                 status_code=404,
                 detail=f"No questions found for URL: {blog_url}"
@@ -313,18 +344,24 @@ async def get_questions_by_url(
         # Convert questions to dict and exclude embedding, blog_url, blog_id fields for response
         questions_response = []
         for q in questions:
+            # Build new dict with only the fields we want (completely exclude unwanted fields)
             q_dict = q.model_dump() if hasattr(q, 'model_dump') else q.dict()
-            # Remove redundant fields to reduce response size
-            q_dict.pop('embedding', None)
-            q_dict.pop('blog_url', None)
-            q_dict.pop('blog_id', None)
-            
-            # Convert datetime to ISO format string
-            if 'created_at' in q_dict and q_dict['created_at']:
-                if hasattr(q_dict['created_at'], 'isoformat'):
-                    q_dict['created_at'] = q_dict['created_at'].isoformat()
-            
-            questions_response.append(q_dict)
+            response_dict = {
+                'id': q_dict.get('id'),
+                'question': q_dict.get('question'),
+                'answer': q_dict.get('answer')
+            }
+            questions_response.append(response_dict)
+        
+        # Record metrics
+        retrieval_duration = time.time() - retrieval_start_time
+        questions_retrieved_total.labels(
+            blog_url_domain=blog_domain,
+            publisher=publisher_name
+        ).inc()
+        questions_retrieval_duration_seconds.labels(
+            blog_url_domain=blog_domain
+        ).observe(retrieval_duration)
         
         # Format result data
         result_data = {
@@ -515,7 +552,15 @@ async def get_question_by_id(
         # Remove embedding field to reduce response size
         question.pop('embedding', None)
         
-        # Convert datetime to ISO format string
+        # Remove click_count from response (internal tracking only)
+        question.pop('click_count', None)
+        question.pop('last_clicked_at', None)
+        
+        # Remove icon if present (should not be in schema, but remove for safety)
+        question.pop('icon', None)
+        
+        # Keep keyword_anchor and probability for this endpoint (single question details)
+        # Convert datetime to ISO format string (keep created_at for this endpoint)
         if 'created_at' in question and question['created_at']:
             if hasattr(question['created_at'], 'isoformat'):
                 question['created_at'] = question['created_at'].isoformat()

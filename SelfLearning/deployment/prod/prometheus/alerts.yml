@@ -1,0 +1,325 @@
+groups:
+  # ============================================================================
+  # API Service Alerts
+  # ============================================================================
+  - name: api_service
+    interval: 30s
+    rules:
+      - alert: APIDown
+        expr: up{job="api-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "API service is down"
+          description: "API service has been down for more than 1 minute. Target: {{ $labels.instance }}"
+
+      - alert: APIHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status_code=~"5.."}[5m])) 
+          / 
+          sum(rate(http_requests_total[5m])) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High error rate in API service"
+          description: "API error rate is {{ $value }}% (threshold: 5%) over the last 5 minutes"
+
+      - alert: APIHighLatency
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High API response time"
+          description: "95th percentile response time is {{ $value }}s (threshold: 2s)"
+
+      - alert: APIHighLatencyCritical
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 5
+        for: 10m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "Critical API response time"
+          description: "95th percentile response time is {{ $value }}s (threshold: 5s) - severe performance degradation"
+
+      - alert: APILowRequestRate
+        expr: |
+          sum(rate(http_requests_total[5m])) < 0.01
+        for: 15m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "Very low API request rate"
+          description: "API request rate is {{ $value }} requests/sec - possible service degradation"
+
+  # ============================================================================
+  # Worker Service Alerts
+  # ============================================================================
+  - name: worker_service
+    interval: 30s
+    rules:
+      - alert: WorkerDown
+        expr: up{job="worker-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: worker
+        annotations:
+          summary: "Worker service is down"
+          description: "Worker service has been down for more than 2 minutes. Target: {{ $labels.instance }}"
+
+      - alert: WorkerHighFailureRate
+        expr: |
+          sum(rate(worker_jobs_processed_total{status="failed"}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: worker
+        annotations:
+          summary: "High worker job failure rate"
+          description: "Worker is failing jobs at {{ $value }} failures/sec (threshold: 0.1)"
+
+      - alert: WorkerJobFailureRateCritical
+        expr: |
+          sum(rate(worker_jobs_processed_total{status="failed"}[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: critical
+          service: worker
+        annotations:
+          summary: "Critical worker job failure rate"
+          description: "Worker failure rate is {{ $value }} failures/sec (threshold: 0.5) - urgent attention needed"
+
+      - alert: WorkerQueueBacklog
+        expr: |
+          worker_job_queue_size{status="pending"} > 100
+        for: 10m
+        labels:
+          severity: warning
+          service: worker
+        annotations:
+          summary: "Worker queue backlog is high"
+          description: "Worker queue has {{ $value }} pending jobs (threshold: 100) - processing may be delayed"
+
+      - alert: WorkerQueueBacklogCritical
+        expr: |
+          worker_job_queue_size{status="pending"} > 500
+        for: 5m
+        labels:
+          severity: critical
+          service: worker
+        annotations:
+          summary: "Critical worker queue backlog"
+          description: "Worker queue has {{ $value }} pending jobs (threshold: 500) - immediate scaling required"
+
+      - alert: WorkerSlowJobProcessing
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(worker_job_processing_duration_seconds_bucket[5m])) by (le)
+          ) > 600
+        for: 10m
+        labels:
+          severity: warning
+          service: worker
+        annotations:
+          summary: "Slow job processing"
+          description: "95th percentile job processing time is {{ $value }}s (threshold: 600s/10min)"
+
+      - alert: WorkerHighLLMFailureRate
+        expr: |
+          sum(rate(worker_llm_operations_total{status="failed"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: worker
+        annotations:
+          summary: "High LLM failure rate in worker"
+          description: "LLM operations failing at {{ $value }} failures/sec (threshold: 0.05)"
+
+      - alert: WorkerHighCrawlFailureRate
+        expr: |
+          sum(rate(worker_crawl_operations_total{status="failed"}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: worker
+        annotations:
+          summary: "High crawl failure rate in worker"
+          description: "Crawl operations failing at {{ $value }} failures/sec (threshold: 0.1)"
+
+      - alert: WorkerNoPollIterations
+        expr: |
+          rate(worker_poll_iterations_total[5m]) == 0
+        for: 10m
+        labels:
+          severity: critical
+          service: worker
+        annotations:
+          summary: "Worker not polling for jobs"
+          description: "Worker poll loop appears to be stuck - no iterations in the last 10 minutes"
+
+  # ============================================================================
+  # Database Alerts
+  # ============================================================================
+  - name: databases
+    interval: 30s
+    rules:
+      - alert: MongoDBDown
+        expr: up{job="mongodb"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: mongodb
+        annotations:
+          summary: "MongoDB exporter is down"
+          description: "MongoDB exporter is not responding. Target: {{ $labels.instance }}"
+
+      - alert: MongoDBHighConnections
+        expr: |
+          mongodb_connections{state="current"} / mongodb_connections{state="available"} * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: mongodb
+        annotations:
+          summary: "MongoDB high connection usage"
+          description: "MongoDB connection usage is {{ $value }}% (threshold: 80%)"
+
+      - alert: PostgreSQLDown
+        expr: up{job="postgresql"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: postgresql
+        annotations:
+          summary: "PostgreSQL exporter is down"
+          description: "PostgreSQL exporter is not responding. Target: {{ $labels.instance }}"
+
+      - alert: PostgreSQLHighConnections
+        expr: |
+          pg_stat_database_numbackends / pg_settings_max_connections * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: postgresql
+        annotations:
+          summary: "PostgreSQL high connection usage"
+          description: "PostgreSQL connection usage is {{ $value }}% (threshold: 80%)"
+
+  # ============================================================================
+  # System Resource Alerts
+  # ============================================================================
+  - name: system_resources
+    interval: 30s
+    rules:
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% (threshold: 80%)"
+
+      - alert: HighCPUUsageCritical
+        expr: |
+          100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical CPU usage"
+          description: "CPU usage is {{ $value }}% (threshold: 95%)"
+
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}% (threshold: 85%)"
+
+      - alert: HighMemoryUsageCritical
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory usage is {{ $value }}% (threshold: 95%)"
+
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is {{ $value }}% free (threshold: 15%)"
+
+      - alert: DiskSpaceCritical
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical disk space"
+          description: "Disk space is {{ $value }}% free (threshold: 10%)"
+
+  # ============================================================================
+  # Business Logic Alerts
+  # ============================================================================
+  - name: business_logic
+    interval: 30s
+    rules:
+      - alert: HighSimilaritySearchErrors
+        expr: |
+          sum(rate(similarity_searches_total{status="error"}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High similarity search error rate"
+          description: "Similarity search errors at {{ $value }} errors/sec (threshold: 0.1)"
+
+      - alert: HighQAFailureRate
+        expr: |
+          sum(rate(qa_requests_total{status="error"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High Q&A failure rate"
+          description: "Q&A requests failing at {{ $value }} failures/sec (threshold: 0.05)"
+
+      - alert: HighAuthFailureRate
+        expr: |
+          sum(rate(publisher_auth_attempts_total{status=~"failed|invalid_key"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Auth failures at {{ $value }} failures/sec (threshold: 1) - possible attack or config issue"
