@@ -47,8 +47,8 @@ openai>=1.0.0,<2.0.0
 # Anthropic Claude API client
 anthropic>=0.25.0,<1.0.0
 
-# Google Generative AI (optional)
-# google-generativeai>=0.3.0,<1.0.0
+# Google Generative AI
+google-generativeai>=0.7.0,<1.0.0
 
 # Ollama local LLM client (optional)
 # ollama>=0.1.0,<1.0.0
