@@ -8,6 +8,7 @@ with proper response schemas for UI developers.
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
+from fyi_widget_shared_library.services.llm_providers.model_config import LLMModelConfig
 
 
 # ============================================================================
@@ -222,9 +223,9 @@ class PublisherConfigSchema(BaseModel):
     summary_temperature: float = Field(..., example=0.7)
     questions_temperature: float = Field(..., example=0.7)
     chat_temperature: float = Field(..., example=0.7)
-    summary_max_tokens: int = Field(..., example=2000)
-    questions_max_tokens: int = Field(..., example=4000)
-    chat_max_tokens: int = Field(..., example=2000)
+    summary_max_tokens: int = Field(..., example=LLMModelConfig.DEFAULT_MAX_TOKENS_SUMMARY)
+    questions_max_tokens: int = Field(..., example=LLMModelConfig.DEFAULT_MAX_TOKENS_QUESTIONS)
+    chat_max_tokens: int = Field(..., example=LLMModelConfig.DEFAULT_MAX_TOKENS_CHAT)
     generate_summary: bool = Field(..., example=True)
     generate_embeddings: bool = Field(..., example=True)
     daily_blog_limit: int = Field(..., example=100)

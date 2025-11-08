@@ -5,6 +5,7 @@ from typing import Optional
 from anthropic import AsyncAnthropic
 from fyi_widget_shared_library.models.schemas import LLMGenerationResult, EmbeddingResult
 from .base import LLMProvider
+from .model_config import LLMModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +17,8 @@ class AnthropicProvider(LLMProvider):
         self,
         model: str,
         api_key: str,
-        temperature: float = 0.7,
-        max_tokens: int = 4000
+        temperature: float = LLMModelConfig.DEFAULT_TEMPERATURE,
+        max_tokens: int = LLMModelConfig.DEFAULT_MAX_TOKENS_QUESTIONS
     ):
         super().__init__(model, api_key, temperature, max_tokens)
         self.client = AsyncAnthropic(api_key=api_key)

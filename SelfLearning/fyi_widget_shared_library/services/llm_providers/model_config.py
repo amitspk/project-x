@@ -21,7 +21,7 @@ class LLMModelConfig:
     # ========================================================================
     # Default model used when no model is explicitly specified
     
-    DEFAULT_MODEL = "gpt-4o-mini"
+    DEFAULT_MODEL = "gemini-2.5-pro"
     
     # ========================================================================
     # DEFAULT EMBEDDING MODEL
@@ -29,6 +29,9 @@ class LLMModelConfig:
     # Default embedding model used for vector embeddings (OpenAI only)
     
     DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+    
+    # Default embedding model for Gemini (Google Generative AI)
+    DEFAULT_GEMINI_EMBEDDING_MODEL = "gemini-embedding-001"
     
     # ========================================================================
     # DEFAULT TEMPERATURE
@@ -44,7 +47,7 @@ class LLMModelConfig:
     # Operation-specific defaults for different use cases
     
     DEFAULT_MAX_TOKENS_SUMMARY = 2000
-    DEFAULT_MAX_TOKENS_QUESTIONS = 4000  # Higher for detailed Q&A generation
+    DEFAULT_MAX_TOKENS_QUESTIONS = 10000  # Higher for detailed Q&A generation
     DEFAULT_MAX_TOKENS_CHAT = 300
     
     # ========================================================================
@@ -65,6 +68,10 @@ class LLMModelConfig:
         "text-embedding-3-large": "openai",
         "text-embedding-ada-002": "openai",
         
+        # Gemini Embedding models
+        "text-embedding-004": "gemini",
+        "gemini-embedding-001": "gemini",
+        
         # Anthropic models
         "claude-3-5-sonnet-20241022": "anthropic",
         "claude-3-5-haiku-20241022": "anthropic",
@@ -73,6 +80,16 @@ class LLMModelConfig:
         "claude-3-sonnet": "anthropic",
         "claude-3-haiku": "anthropic",
         "claude-3-opus": "anthropic",
+        
+        # Gemini models
+        "gemini-1.5-pro": "gemini",
+        "gemini-1.5-flash": "gemini",
+        "gemini-1.5-pro-001": "gemini",
+        "gemini-1.5-flash-001": "gemini",
+        "gemini-1.0-pro": "gemini",
+        "gemini-1.0-pro-vision": "gemini",
+        "gemini-2.5-pro": "gemini",
+        
     }
     
     # ========================================================================
@@ -87,5 +104,6 @@ class LLMModelConfig:
         "gpt-": "openai",
         "text-embedding-": "openai",
         "claude-": "anthropic",
+        "gemini-": "gemini",
     }
 

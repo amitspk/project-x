@@ -3,12 +3,19 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 from fyi_widget_shared_library.models.schemas import LLMGenerationResult, EmbeddingResult
+from fyi_widget_shared_library.services.llm_providers.model_config import LLMModelConfig
 
 
 class LLMProvider(ABC):
     """Abstract base class for LLM provider implementations."""
     
-    def __init__(self, model: str, api_key: str, temperature: float = 0.7, max_tokens: int = 4000):
+    def __init__(
+        self,
+        model: str,
+        api_key: str,
+        temperature: float = LLMModelConfig.DEFAULT_TEMPERATURE,
+        max_tokens: int = LLMModelConfig.DEFAULT_MAX_TOKENS_QUESTIONS,
+    ):
         """
         Initialize provider.
         

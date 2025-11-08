@@ -16,6 +16,11 @@ from fyi_widget_shared_library.data.postgres_database import PostgresPublisherRe
 from fyi_widget_shared_library.models import ProcessingJob, JobStatus, JobResult
 from fyi_widget_shared_library.models.publisher import PublisherConfig
 from fyi_widget_shared_library.services import CrawlerService, LLMService, StorageService
+from fyi_widget_shared_library.services.llm_prompts import (
+    DEFAULT_QUESTIONS_PROMPT,
+    QUESTIONS_JSON_FORMAT,
+    OUTPUT_FORMAT_INSTRUCTION,
+)
 from fyi_widget_shared_library.utils import normalize_url
 
 # Import metrics
