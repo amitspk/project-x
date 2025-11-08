@@ -16,6 +16,11 @@ from fyi_widget_shared_library.data.postgres_database import PostgresPublisherRe
 from fyi_widget_shared_library.models import ProcessingJob, JobStatus, JobResult
 from fyi_widget_shared_library.models.publisher import PublisherConfig
 from fyi_widget_shared_library.services import CrawlerService, LLMService, StorageService
+from fyi_widget_shared_library.services.llm_prompts import (
+    DEFAULT_QUESTIONS_PROMPT,
+    QUESTIONS_JSON_FORMAT,
+    OUTPUT_FORMAT_INSTRUCTION,
+)
 from fyi_widget_shared_library.utils import normalize_url
 
 # Import metrics
@@ -381,22 +386,14 @@ class BlogProcessingWorker:
                     model=summary_model_label
                 ).observe(summary_duration)
                 
-                # Try to get token usage if available
-                if hasattr(summary_result, 'usage') and summary_result.usage:
-                    if hasattr(summary_result.usage, 'prompt_tokens'):
-                        llm_tokens_used_total.labels(
-                            publisher_domain=publisher_domain,
-                            operation="summary",
-                            model=summary_model_label,
-                            type="prompt"
-                        ).inc(summary_result.usage.prompt_tokens or 0)
-                    if hasattr(summary_result.usage, 'completion_tokens'):
-                        llm_tokens_used_total.labels(
-                            publisher_domain=publisher_domain,
-                            operation="summary",
-                            model=summary_model_label,
-                            type="completion"
-                        ).inc(summary_result.usage.completion_tokens or 0)
+                # Record token usage if available
+                summary_tokens = getattr(summary_result, "tokens_used", 0) or 0
+                if summary_tokens:
+                    llm_tokens_used_total.labels(
+                        publisher_domain=publisher_domain,
+                        operation="summary",
+                        model=summary_model_label
+                    ).inc(summary_tokens)
                 
             except Exception as llm_error:
                 summary_duration = time.time() - summary_start
@@ -469,22 +466,14 @@ class BlogProcessingWorker:
                     model=questions_model_label
                 ).observe(questions_duration)
                 
-                # Try to get token usage if available
-                if hasattr(questions_result, 'usage') and questions_result.usage:
-                    if hasattr(questions_result.usage, 'prompt_tokens'):
-                        llm_tokens_used_total.labels(
-                            publisher_domain=publisher_domain,
-                            operation="questions",
-                            model=questions_model_label,
-                            type="prompt"
-                        ).inc(questions_result.usage.prompt_tokens or 0)
-                    if hasattr(questions_result.usage, 'completion_tokens'):
-                        llm_tokens_used_total.labels(
-                            publisher_domain=publisher_domain,
-                            operation="questions",
-                            model=questions_model_label,
-                            type="completion"
-                        ).inc(questions_result.usage.completion_tokens or 0)
+                # Record token usage if available
+                question_tokens = getattr(questions_result, "tokens_used", 0) or 0
+                if question_tokens:
+                    llm_tokens_used_total.labels(
+                        publisher_domain=publisher_domain,
+                        operation="questions",
+                        model=questions_model_label
+                    ).inc(question_tokens)
                         
             except Exception as llm_error:
                 questions_duration = time.time() - questions_start

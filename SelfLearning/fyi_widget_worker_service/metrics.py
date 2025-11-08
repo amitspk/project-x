@@ -104,7 +104,7 @@ llm_operation_duration_seconds = Histogram(
 llm_tokens_used_total = Counter(
     'worker_llm_tokens_used_total',
     'Total LLM tokens used',
-    ['publisher_domain', 'operation', 'model', 'type']  # type: prompt, completion
+    ['publisher_domain', 'operation', 'model']
 )
 
 # LLM cost (estimated)

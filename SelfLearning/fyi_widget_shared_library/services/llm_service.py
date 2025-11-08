@@ -43,8 +43,8 @@ class LLMService:
         self,
         api_key: str = None,
         model: str = None,
-        temperature: float = 0.7,
-        max_tokens: int = 4000,  # Increased for detailed Q&A generation
+        temperature: float = LLMModelConfig.DEFAULT_TEMPERATURE,
+        max_tokens: int = LLMModelConfig.DEFAULT_MAX_TOKENS_QUESTIONS,
         embedding_model: str = None
     ):
         """

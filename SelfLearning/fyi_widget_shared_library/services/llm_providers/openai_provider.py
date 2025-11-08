@@ -5,6 +5,7 @@ from typing import Optional
 from openai import AsyncOpenAI
 from fyi_widget_shared_library.models.schemas import LLMGenerationResult, EmbeddingResult
 from .base import LLMProvider
+from .model_config import LLMModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -16,14 +17,12 @@ class OpenAIProvider(LLMProvider):
         self,
         model: str,
         api_key: str,
-        temperature: float = 0.7,
-        max_tokens: int = 4000,
+        temperature: float = LLMModelConfig.DEFAULT_TEMPERATURE,
+        max_tokens: int = LLMModelConfig.DEFAULT_MAX_TOKENS_QUESTIONS,
         embedding_model: Optional[str] = None
     ):
         super().__init__(model, api_key, temperature, max_tokens)
         self.client = AsyncOpenAI(api_key=api_key)
-        # Import here to avoid circular imports
-        from .model_config import LLMModelConfig
         self.embedding_model = embedding_model if embedding_model is not None else LLMModelConfig.DEFAULT_EMBEDDING_MODEL
         logger.info(f"✅ OpenAI Provider initialized (model: {self.model}, embedding: {self.embedding_model})")
     

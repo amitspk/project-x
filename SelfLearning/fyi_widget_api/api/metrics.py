@@ -53,28 +53,6 @@ http_requests_active = Gauge(
 # Business Metrics - Questions
 # ============================================================================
 
-# Questions retrieved
-questions_retrieved_total = Counter(
-    'questions_retrieved_total',
-    'Total number of questions retrieved',
-    ['blog_url_domain', 'publisher']
-)
-
-# Questions check-and-load operations
-questions_check_and_load_total = Counter(
-    'questions_check_and_load_total',
-    'Total check-and-load operations',
-    ['status']  # ready, processing, not_started, failed
-)
-
-# Questions retrieval duration
-questions_retrieval_duration_seconds = Histogram(
-    'questions_retrieval_duration_seconds',
-    'Time taken to retrieve questions',
-    ['blog_url_domain'],
-    buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0]
-)
-
 # Question clicks (when question is clicked to find similar blogs)
 question_clicks_total = Counter(
     'question_clicks_total',
@@ -127,6 +105,13 @@ qa_requests_total = Counter(
     ['publisher', 'status']  # success, error
 )
 
+# Q&A tokens used
+qa_tokens_used_total = Counter(
+    'qa_tokens_used_total',
+    'Total LLM tokens consumed by Q&A responses',
+    ['publisher', 'model', 'status']
+)
+
 # Q&A processing duration
 qa_processing_duration_seconds = Histogram(
     'qa_processing_duration_seconds',
@@ -146,20 +131,6 @@ qa_answer_word_count = Histogram(
 # ============================================================================
 # Business Metrics - Jobs
 # ============================================================================
-
-# Jobs enqueued
-jobs_enqueued_total = Counter(
-    'jobs_enqueued_total',
-    'Total number of jobs enqueued',
-    ['publisher', 'status']  # success, error, duplicate
-)
-
-# Jobs status checks
-jobs_status_checks_total = Counter(
-    'jobs_status_checks_total',
-    'Total number of job status checks',
-    ['status']  # queued, processing, completed, failed, cancelled
-)
 
 # Current job queue size (from database)
 job_queue_size = Gauge(

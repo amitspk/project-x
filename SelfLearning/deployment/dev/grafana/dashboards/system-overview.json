@@ -413,16 +413,17 @@
     {
       "id": 9,
       "title": "Worker Queue Size",
-      "type": "stat",
+      "type": "bargauge",
       "gridPos": {
-        "h": 4,
-        "w": 6,
+        "h": 6,
+        "w": 12,
         "x": 12,
         "y": 12
       },
       "targets": [
         {
-          "expr": "worker_job_queue_size{status=\"pending\"}",
+          "expr": "worker_job_queue_size",
+          "legendFormat": "{{status}}",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -430,26 +431,9 @@
           }
         }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "value": 0,
-                "color": "green"
-              },
-              {
-                "value": 50,
-                "color": "yellow"
-              },
-              {
-                "value": 100,
-                "color": "red"
-              }
-            ]
-          }
-        }
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient"
       },
       "datasource": {
         "type": "prometheus",
@@ -601,7 +585,8 @@
       },
       "targets": [
         {
-          "expr": "sum(up{job=~\"mongodb|postgresql\"})",
+          "expr": "sum by (job)(up{job=~\"mongodb|postgresql\"})",
+          "legendFormat": "{{job}}",
           "refId": "A",
           "datasource": {
             "type": "prometheus",

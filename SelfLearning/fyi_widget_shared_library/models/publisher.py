@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field, validator, field_serializer
 from enum import Enum
+from fyi_widget_shared_library.services.llm_providers.model_config import LLMModelConfig
 
 class LLMModel(str, Enum):
     """Supported LLM models."""
@@ -17,6 +18,13 @@ class LLMModel(str, Enum):
     GPT35_TURBO = "gpt-3.5-turbo"
     CLAUDE_SONNET = "claude-3-5-sonnet-20241022"
     CLAUDE_HAIKU = "claude-3-5-haiku-20241022"
+    GEMINI_15_PRO = "gemini-1.5-pro"
+    GEMINI_15_FLASH = "gemini-1.5-flash"
+    GEMINI_15_PRO_001 = "gemini-1.5-pro-001"
+    GEMINI_15_FLASH_001 = "gemini-1.5-flash-001"
+    GEMINI_10_PRO = "gemini-1.0-pro"
+    GEMINI_10_PRO_VISION = "gemini-1.0-pro-vision"
+    GEMINI_25_PRO = "gemini-2.5-pro"
 
 
 # Helper function to get default model enum (defined after LLMModel to avoid NameError)
@@ -31,7 +39,7 @@ def _get_default_model_enum():
             return model_enum
     
     # Fallback if DEFAULT_MODEL doesn't match any enum (shouldn't happen)
-    return LLMModel.GPT4O_MINI
+    return LLMModel.GEMINI_25_PRO
 
 
 # Helper function to get default temperature from model_config
@@ -119,19 +127,19 @@ class PublisherConfig(BaseModel):
     summary_max_tokens: int = Field(
         default_factory=_get_default_max_tokens_summary,
         ge=100,
-        le=4000,
+        le=LLMModelConfig.DEFAULT_MAX_TOKENS_SUMMARY,
         description="Maximum tokens for summary generation (defaults to DEFAULT_MAX_TOKENS_SUMMARY from model_config)"
     )
     questions_max_tokens: int = Field(
         default_factory=_get_default_max_tokens_questions,
         ge=100,
-        le=4000,
+        le=LLMModelConfig.DEFAULT_MAX_TOKENS_QUESTIONS,
         description="Maximum tokens for question-answer generation (defaults to DEFAULT_MAX_TOKENS_QUESTIONS from model_config)"
     )
     chat_max_tokens: int = Field(
         default_factory=_get_default_max_tokens_chat,
         ge=100,
-        le=4000,
+        le=LLMModelConfig.DEFAULT_MAX_TOKENS_CHAT,
         description="Maximum tokens for chat/question answering API (defaults to DEFAULT_MAX_TOKENS_CHAT from model_config)"
     )
     

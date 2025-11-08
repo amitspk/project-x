@@ -6,6 +6,7 @@ from typing import Optional
 from .base import LLMProvider
 from .openai_provider import OpenAIProvider
 from .anthropic_provider import AnthropicProvider
+from .gemini_provider import GeminiProvider
 from .model_config import LLMModelConfig
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ class LLMProviderConfigManager:
             model: Model identifier (e.g., "gpt-4o-mini", "claude-3-5-sonnet-20241022")
             
         Returns:
-            Provider name: "openai" or "anthropic"
+            Provider name: "openai", "anthropic", "gemini", etc.
             
         Raises:
             ValueError: If model is not recognized
@@ -70,7 +71,7 @@ class LLMProviderConfigManager:
         
         Args:
             model: Model identifier (will be lowercased)
-            provider: Provider name ("openai", "anthropic", etc.)
+            provider: Provider name ("openai", "anthropic", "gemini", etc.)
         """
         self._model_to_provider[model.lower()] = provider.lower()
         logger.info(f"✅ Added model mapping: {model} -> {provider}")
@@ -80,7 +81,7 @@ class LLMProviderConfigManager:
         Add a new prefix-to-provider mapping.
         
         Args:
-            prefix: Model prefix (e.g., "gpt-", "claude-")
+            prefix: Model prefix (e.g., "gpt-", "claude-", "gemini-")
             provider: Provider name ("openai", "anthropic", etc.)
         """
         self._prefix_to_provider[prefix.lower()] = provider.lower()
@@ -108,7 +109,7 @@ def get_provider_config() -> LLMProviderConfigManager:
     Example:
         config = get_provider_config()
         config.add_model("gpt-5", "openai")
-        config.add_prefix("gemini-", "google")
+        config.add_prefix("gemini-", "gemini")
     
     Returns:
         LLMProviderConfigManager instance
@@ -126,7 +127,7 @@ def get_provider_for_model(model: str) -> str:
         model: Model identifier (e.g., "gpt-4o-mini", "claude-3-5-sonnet-20241022")
         
     Returns:
-        Provider name: "openai" or "anthropic"
+        Provider name: "openai", "anthropic", "gemini", etc.
         
     Raises:
         ValueError: If model is not recognized
@@ -139,7 +140,7 @@ def get_api_key_for_provider(provider: str, model: Optional[str] = None) -> str:
     Get API key for the specified provider.
     
     Args:
-        provider: Provider name ("openai" or "anthropic")
+        provider: Provider name ("openai", "anthropic", "gemini", etc.)
         model: Optional model name for fallback logic
         
     Returns:
@@ -164,6 +165,14 @@ def get_api_key_for_provider(provider: str, model: Optional[str] = None) -> str:
             )
         return api_key
     
+    elif provider == "gemini":
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "GEMINI_API_KEY (or GOOGLE_API_KEY) environment variable is required for Gemini models"
+            )
+        return api_key
+    
     else:
         raise ValueError(f"Unknown provider: {provider}")
 
@@ -176,7 +185,7 @@ class LLMProviderFactory:
         model: str,
         api_key: Optional[str] = None,
         temperature: float = 0.7,
-        max_tokens: int = 4000,
+        max_tokens: int = LLMModelConfig.DEFAULT_MAX_TOKENS_QUESTIONS,
         embedding_model: Optional[str] = None
     ) -> LLMProvider:
         """
@@ -187,7 +196,7 @@ class LLMProviderFactory:
             api_key: Optional API key (if not provided, fetched from env vars)
             temperature: Sampling temperature
             max_tokens: Maximum tokens to generate
-            embedding_model: Embedding model (only used for OpenAI). If None, uses DEFAULT_EMBEDDING_MODEL from LLMModelConfig
+            embedding_model: Optional embedding model override. If None, a provider-specific default is used.
             
         Returns:
             LLMProvider instance
@@ -195,12 +204,15 @@ class LLMProviderFactory:
         Raises:
             ValueError: If model is not recognized or API key is missing
         """
-        # Use default embedding model if not specified
-        if embedding_model is None:
-            embedding_model = LLMModelConfig.DEFAULT_EMBEDDING_MODEL
-        # Identify provider
         provider = get_provider_for_model(model)
         logger.info(f"🔍 Model '{model}' routed to provider: {provider}")
+        
+        # Apply provider-specific defaults
+        if embedding_model is None:
+            if provider == "openai":
+                embedding_model = LLMModelConfig.DEFAULT_EMBEDDING_MODEL
+            elif provider == "gemini":
+                embedding_model = LLMModelConfig.DEFAULT_GEMINI_EMBEDDING_MODEL
         
         # Get API key
         if not api_key:
@@ -223,6 +235,15 @@ class LLMProviderFactory:
                 api_key=api_key,
                 temperature=temperature,
                 max_tokens=max_tokens
+            )
+        
+        elif provider == "gemini":
+            return GeminiProvider(
+                model=model,
+                api_key=api_key,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                embedding_model=embedding_model
             )
         
         else:

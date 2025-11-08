@@ -46,6 +46,41 @@
       }
     },
     {
+      "id": 6,
+      "title": "Q&A Tokens Used",
+      "type": "graph",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(qa_tokens_used_total[5m])) by (publisher, model)",
+          "legendFormat": "{{publisher}} - {{model}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "short",
+          "label": "Tokens/sec"
+        },
+        {
+          "format": "short"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
       "id": 2,
       "title": "Q&A Success Rate",
       "type": "stat",
@@ -224,76 +259,6 @@
       }
     },
     {
-      "id": 6,
-      "title": "Questions Check-and-Load Operations",
-      "type": "graph",
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 16
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(questions_check_and_load_total[5m])) by (status)",
-          "legendFormat": "{{status}}",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ],
-      "yaxes": [
-        {
-          "format": "ops",
-          "label": "Operations/sec"
-        },
-        {
-          "format": "short"
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      }
-    },
-    {
-      "id": 7,
-      "title": "Questions Retrieved",
-      "type": "graph",
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 16
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(questions_retrieved_total[5m])) by (publisher)",
-          "legendFormat": "{{publisher}}",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ],
-      "yaxes": [
-        {
-          "format": "reqps",
-          "label": "Requests/sec"
-        },
-        {
-          "format": "short"
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      }
-    },
-    {
       "id": 8,
       "title": "Similarity Searches",
       "type": "graph",
@@ -321,128 +286,6 @@
         },
         {
           "format": "short"
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      }
-    },
-    {
-      "id": 9,
-      "title": "Jobs Enqueued",
-      "type": "graph",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 24
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(jobs_enqueued_total[5m])) by (status)",
-          "legendFormat": "{{status}}",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ],
-      "yaxes": [
-        {
-          "format": "ops",
-          "label": "Jobs/sec"
-        },
-        {
-          "format": "short"
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      }
-    },
-    {
-      "id": 10,
-      "title": "Job Status Checks",
-      "type": "graph",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 24
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(jobs_status_checks_total[5m])) by (status)",
-          "legendFormat": "{{status}}",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ],
-      "yaxes": [
-        {
-          "format": "ops",
-          "label": "Checks/sec"
-        },
-        {
-          "format": "short"
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      }
-    },
-    {
-      "id": 11,
-      "title": "Questions Check-and-Load Status Breakdown",
-      "type": "piechart",
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 0,
-        "y": 32
-      },
-      "targets": [
-        {
-          "expr": "sum(questions_check_and_load_total) by (status)",
-          "legendFormat": "{{status}}",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      }
-    },
-    {
-      "id": 12,
-      "title": "Jobs Enqueued by Status",
-      "type": "piechart",
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 6,
-        "y": 32
-      },
-      "targets": [
-        {
-          "expr": "sum(jobs_enqueued_total) by (status)",
-          "legendFormat": "{{status}}",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
         }
       ],
       "datasource": {
