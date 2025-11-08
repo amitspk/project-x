@@ -25,7 +25,9 @@ services:
     networks:
       - fyi-widget-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      test:
+        - "CMD-SHELL"
+        - "python - <<'PY'\nimport sys, urllib.request\ntry:\n    resp = urllib.request.urlopen('http://localhost:8005/health', timeout=5)\n    sys.exit(0 if resp.getcode() == 200 else 1)\nexcept Exception:\n    sys.exit(1)\nPY"
       interval: 30s
       timeout: 10s
       retries: 3

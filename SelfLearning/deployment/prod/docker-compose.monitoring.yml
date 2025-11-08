@@ -228,15 +228,18 @@ services:
 
 volumes:
   loki-data:
-    driver: local
+    external: true
+    name: fyi-widget-loki-data
   prometheus-data:
-    driver: local
+    external: true
+    name: fyi-widget-prometheus-data
   alertmanager-data:
-    driver: local
+    external: true
+    name: fyi-widget-alertmanager-data
   grafana-data:
-    driver: local
+    external: true
+    name: fyi-widget-grafana-data
 
 networks:
   fyi-widget-network:
     external: true
-

@@ -63,7 +63,15 @@ networks:
 
 volumes:
   mongodb_data:
+    external: true
+    name: fyi-widget-mongodb-data
   postgres_data:
+    external: true
+    name: fyi-widget-postgres-data
   mongodb_backup:
+    external: true
+    name: fyi-widget-mongodb-backup
   postgres_backup:
+    external: true
+    name: fyi-widget-postgres-backup
 
