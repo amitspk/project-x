@@ -243,18 +243,18 @@
     },
     {
       "id": 5,
-      "title": "API Request Rate",
+      "title": "API Requests",
       "type": "graph",
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 4
+        "y": 0
       },
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total[5m]))",
-          "legendFormat": "Total Requests/sec",
+          "expr": "sum(increase(http_requests_total[$__range]))",
+          "legendFormat": "Total",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -262,7 +262,7 @@
           }
         },
         {
-          "expr": "sum(rate(http_requests_total{status_code=~\"2..\"}[5m]))",
+          "expr": "sum(increase(http_requests_total{status_code=~\"2..\"}[$__range]))",
           "legendFormat": "2xx Success",
           "refId": "B",
           "datasource": {
@@ -271,7 +271,7 @@
           }
         },
         {
-          "expr": "sum(rate(http_requests_total{status_code=~\"5..\"}[5m]))",
+          "expr": "sum(increase(http_requests_total{status_code=~\"5..\"}[$__range]))",
           "legendFormat": "5xx Errors",
           "refId": "C",
           "datasource": {
@@ -282,8 +282,8 @@
       ],
       "yaxes": [
         {
-          "format": "ops",
-          "label": "Requests/sec"
+          "format": "none",
+          "label": "Requests"
         },
         {
           "format": "short"
@@ -306,7 +306,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total{status_code=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+          "expr": "sum(increase(http_requests_total{status_code=~\"5..\"}[$__range])) / sum(increase(http_requests_total[$__range])) * 100",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -368,7 +368,7 @@
     },
     {
       "id": 8,
-      "title": "Worker Jobs Processed Rate",
+      "title": "Worker Jobs Processed",
       "type": "graph",
       "gridPos": {
         "h": 8,
@@ -378,7 +378,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(worker_jobs_processed_total{status=\"success\"}[5m]))",
+          "expr": "sum(increase(worker_jobs_processed_total{status=\"success\"}[$__range]))",
           "legendFormat": "Successful",
           "refId": "A",
           "datasource": {
@@ -387,7 +387,7 @@
           }
         },
         {
-          "expr": "sum(rate(worker_jobs_processed_total{status=\"failed\"}[5m]))",
+          "expr": "sum(increase(worker_jobs_processed_total{status=\"failed\"}[$__range]))",
           "legendFormat": "Failed",
           "refId": "B",
           "datasource": {
@@ -398,8 +398,8 @@
       ],
       "yaxes": [
         {
-          "format": "ops",
-          "label": "Jobs/sec"
+          "format": "none",
+          "label": "Jobs"
         },
         {
           "format": "short"
@@ -477,7 +477,7 @@
       },
       "targets": [
         {
-          "expr": "100 - (avg(irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+          "expr": "100 - (avg(increase(node_cpu_seconds_total{mode=\"idle\"}[$__range])) / $__range_s * 100)",
           "legendFormat": "CPU Usage %",
           "refId": "A",
           "datasource": {
@@ -623,17 +623,17 @@
     },
     {
       "id": 15,
-      "title": "API Response Time (P95)",
+      "title": "Questions Generated",
       "type": "stat",
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 18,
-        "y": 24
+        "w": 4,
+        "x": 12,
+        "y": 20
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+          "expr": "sum(increase(worker_questions_generated_total[$__range]))",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -643,24 +643,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "value": 0,
-                "color": "green"
-              },
-              {
-                "value": 1,
-                "color": "yellow"
-              },
-              {
-                "value": 2,
-                "color": "red"
-              }
-            ]
-          }
+          "unit": "none"
         }
       },
       "datasource": {
@@ -680,7 +663,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(worker_jobs_processed_total{status=\"success\"}[5m])) / sum(rate(worker_jobs_processed_total[5m])) * 100",
+          "expr": "sum(increase(worker_jobs_processed_total{status=\"success\"}[$__range])) / sum(increase(worker_jobs_processed_total[$__range])) * 100",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -767,42 +750,21 @@
     },
     {
       "id": 18,
-      "title": "Service Uptime",
-      "type": "table",
+      "title": "QA Requests",
+      "type": "stat",
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 28
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 24
       },
       "targets": [
         {
-          "expr": "up{job=~\"api-service|worker-service|mongodb|postgresql\"}",
-          "format": "table",
+          "expr": "sum(increase(qa_requests_total[$__range]))",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
-        }
-      ],
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "__name__": true
-            },
-            "indexByName": {
-              "Time": 0,
-              "job": 1,
-              "Value": 2
-            },
-            "renameByName": {
-              "Time": "Time",
-              "job": "Service",
-              "Value": "Status"
-            }
           }
         }
       ],
@@ -813,17 +775,17 @@
     },
     {
       "id": 19,
-      "title": "Business Metrics Overview",
+      "title": "Questions Generated",
       "type": "stat",
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 0,
-        "y": 36
+        "w": 4,
+        "x": 4,
+        "y": 24
       },
       "targets": [
         {
-          "expr": "sum(rate(qa_requests_total[5m]))",
+          "expr": "sum(increase(worker_questions_generated_total[$__range]))",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -831,18 +793,6 @@
           }
         }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "label": "Q&A Requests/sec"
-        }
-      },
-      "options": {
-        "text": {
-          "titleSize": 16,
-          "valueSize": 24
-        }
-      },
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -850,17 +800,17 @@
     },
     {
       "id": 20,
-      "title": "Questions Generated Rate",
+      "title": "Blogs Processed",
       "type": "stat",
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 6,
-        "y": 36
+        "w": 4,
+        "x": 8,
+        "y": 24
       },
       "targets": [
         {
-          "expr": "sum(rate(worker_questions_generated_total[5m]))",
+          "expr": "sum(increase(worker_blogs_processed_total[$__range]))",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -868,12 +818,6 @@
           }
         }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "label": "Questions/sec"
-        }
-      },
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -881,17 +825,17 @@
     },
     {
       "id": 21,
-      "title": "Blogs Processed Rate",
+      "title": "Similarity Searches",
       "type": "stat",
       "gridPos": {
         "h": 4,
-        "w": 6,
+        "w": 4,
         "x": 12,
-        "y": 36
+        "y": 24
       },
       "targets": [
         {
-          "expr": "sum(rate(worker_blogs_processed_total[5m]))",
+          "expr": "sum(increase(similarity_searches_total[$__range]))",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -899,43 +843,6 @@
           }
         }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "label": "Blogs/sec"
-        }
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      }
-    },
-    {
-      "id": 22,
-      "title": "Similarity Searches Rate",
-      "type": "stat",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 18,
-        "y": 36
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(similarity_searches_total[5m]))",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "label": "Searches/sec"
-        }
-      },
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

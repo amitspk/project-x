@@ -12,7 +12,7 @@
   "panels": [
     {
       "id": 1,
-      "title": "Auth Attempts Rate",
+      "title": "Auth Attempts by Status",
       "type": "graph",
       "gridPos": {
         "h": 8,
@@ -22,7 +22,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(publisher_auth_attempts_total[5m])) by (status)",
+          "expr": "sum(increase(publisher_auth_attempts_total[$__range])) by (status)",
           "legendFormat": "{{status}}",
           "refId": "A",
           "datasource": {
@@ -33,8 +33,8 @@
       ],
       "yaxes": [
         {
-          "format": "ops",
-          "label": "Attempts/sec"
+          "format": "none",
+          "label": "Attempts"
         },
         {
           "format": "short"
@@ -57,7 +57,7 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(publisher_auth_attempts_total[1h]))",
+          "expr": "sum(increase(publisher_auth_attempts_total[$__range]))",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -82,7 +82,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(publisher_auth_attempts_total{status=\"success\"}[5m])) / sum(rate(publisher_auth_attempts_total[5m])) * 100",
+          "expr": "sum(increase(publisher_auth_attempts_total{status=\"success\"}[$__range])) / sum(increase(publisher_auth_attempts_total[$__range])) * 100",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -119,7 +119,7 @@
     },
     {
       "id": 4,
-      "title": "Failed Auth Rate",
+      "title": "Failed Auth Attempts",
       "type": "stat",
       "gridPos": {
         "h": 4,
@@ -129,7 +129,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(publisher_auth_attempts_total{status!=\"success\"}[5m]))",
+          "expr": "sum(increase(publisher_auth_attempts_total{status!=\"success\"}[$__range]))",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -139,7 +139,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "ops",
+          "unit": "short",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -148,11 +148,11 @@
                 "color": "green"
               },
               {
-                "value": 1,
+                "value": 50,
                 "color": "yellow"
               },
               {
-                "value": 5,
+                "value": 200,
                 "color": "red"
               }
             ]
@@ -166,7 +166,7 @@
     },
     {
       "id": 5,
-      "title": "Auth Attempts by Status (Last Hour)",
+      "title": "Auth Attempts by Status",
       "type": "piechart",
       "gridPos": {
         "h": 8,
@@ -176,7 +176,7 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(publisher_auth_attempts_total[1h])) by (status)",
+          "expr": "sum(increase(publisher_auth_attempts_total[$__range])) by (status)",
           "legendFormat": "{{status}}",
           "refId": "A",
           "datasource": {
@@ -202,7 +202,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(publisher_auth_attempts_total{status!=\"success\"}[5m])) by (status)",
+          "expr": "sum(increase(publisher_auth_attempts_total{status!=\"success\"}[$__range])) by (status)",
           "legendFormat": "{{status}}",
           "refId": "A",
           "datasource": {
@@ -232,7 +232,7 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(publisher_auth_attempts_total[1m])) by (status)",
+          "expr": "sum(increase(publisher_auth_attempts_total[$__interval])) by (status)",
           "legendFormat": "{{status}}",
           "refId": "A",
           "datasource": {
@@ -243,7 +243,7 @@
       ],
       "yaxes": [
         {
-          "format": "short",
+          "format": "none",
           "label": "Attempts"
         },
         {
@@ -267,7 +267,7 @@
       },
       "targets": [
         {
-          "expr": "sum(publisher_auth_attempts_total{status!=\"success\"}) by (status)",
+          "expr": "sum(increase(publisher_auth_attempts_total{status!\"success\"}[$__range])) by (status)",
           "format": "table",
           "refId": "A",
           "datasource": {

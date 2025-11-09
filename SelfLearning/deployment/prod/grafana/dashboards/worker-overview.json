@@ -12,7 +12,7 @@
   "panels": [
     {
       "id": 1,
-      "title": "Jobs Processed Rate",
+      "title": "Jobs Processed by Status",
       "type": "graph",
       "gridPos": {
         "h": 8,
@@ -22,7 +22,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(worker_jobs_processed_total[5m])) by (status)",
+          "expr": "sum(increase(worker_jobs_processed_total[$__range])) by (status)",
           "legendFormat": "{{status}}",
           "refId": "A",
           "datasource": {
@@ -33,8 +33,8 @@
       ],
       "yaxes": [
         {
-          "format": "ops",
-          "label": "Jobs/sec"
+          "format": "none",
+          "label": "Jobs"
         },
         {
           "format": "short"
@@ -57,7 +57,7 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(worker_jobs_processed_total[1h]))",
+          "expr": "sum(increase(worker_jobs_processed_total[$__range]))",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -107,7 +107,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(worker_jobs_processed_total{status=\"success\"}[5m])) / sum(rate(worker_jobs_processed_total[5m])) * 100",
+          "expr": "sum(increase(worker_jobs_processed_total{status=\"success\"}[$__range])) / sum(increase(worker_jobs_processed_total[$__range])) * 100",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -154,7 +154,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum(rate(worker_job_processing_duration_seconds_bucket[5m])) by (le, publisher_domain))",
+          "expr": "histogram_quantile(0.50, sum(increase(worker_job_processing_duration_seconds_bucket[$__range])) by (le, publisher_domain)) / $__range_s",
           "legendFormat": "P50 {{publisher_domain}}",
           "refId": "A",
           "datasource": {
@@ -163,7 +163,7 @@
           }
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(worker_job_processing_duration_seconds_bucket[5m])) by (le, publisher_domain))",
+          "expr": "histogram_quantile(0.95, sum(increase(worker_job_processing_duration_seconds_bucket[$__range])) by (le, publisher_domain)) / $__range_s",
           "legendFormat": "P95 {{publisher_domain}}",
           "refId": "B",
           "datasource": {
@@ -172,7 +172,7 @@
           }
         },
         {
-          "expr": "histogram_quantile(0.99, sum(rate(worker_job_processing_duration_seconds_bucket[5m])) by (le, publisher_domain))",
+          "expr": "histogram_quantile(0.99, sum(increase(worker_job_processing_duration_seconds_bucket[$__range])) by (le, publisher_domain)) / $__range_s",
           "legendFormat": "P99 {{publisher_domain}}",
           "refId": "C",
           "datasource": {
@@ -237,7 +237,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(worker_jobs_processed_total[5m])) by (status)",
+          "expr": "sum(increase(worker_jobs_processed_total[$__range])) by (status)",
           "legendFormat": "{{status}}",
           "refId": "A",
           "datasource": {
@@ -306,7 +306,7 @@
       },
       "targets": [
         {
-          "expr": "sum(worker_poll_iterations_total)",
+          "expr": "sum(increase(worker_poll_iterations_total[$__range]))",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -331,7 +331,7 @@
       },
       "targets": [
         {
-          "expr": "sum(worker_poll_errors_total)",
+          "expr": "sum(increase(worker_poll_errors_total[$__range]))",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -407,7 +407,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(worker_processing_errors_total[5m])) by (error_type)",
+          "expr": "sum(increase(worker_processing_errors_total[$__range])) by (error_type)",
           "legendFormat": "{{error_type}}",
           "refId": "A",
           "datasource": {
@@ -418,8 +418,8 @@
       ],
       "yaxes": [
         {
-          "format": "ops",
-          "label": "Errors/sec"
+          "format": "none",
+          "label": "Errors"
         },
         {
           "format": "short"
