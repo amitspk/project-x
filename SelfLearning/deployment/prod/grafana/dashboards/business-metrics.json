@@ -12,7 +12,7 @@
   "panels": [
     {
       "id": 1,
-      "title": "Q&A Requests Rate",
+      "title": "Q&A Requests by Status",
       "type": "graph",
       "gridPos": {
         "h": 8,
@@ -22,7 +22,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(qa_requests_total[5m])) by (status)",
+          "expr": "sum(increase(qa_requests_total[$__range])) by (status)",
           "legendFormat": "{{status}}",
           "refId": "A",
           "datasource": {
@@ -33,8 +33,8 @@
       ],
       "yaxes": [
         {
-          "format": "reqps",
-          "label": "Requests/sec"
+          "format": "none",
+          "label": "Requests"
         },
         {
           "format": "short"
@@ -57,7 +57,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(qa_tokens_used_total[5m])) by (publisher, model)",
+          "expr": "sum(increase(qa_tokens_used_total[$__range])) by (publisher, model)",
           "legendFormat": "{{publisher}} - {{model}}",
           "refId": "A",
           "datasource": {
@@ -68,8 +68,8 @@
       ],
       "yaxes": [
         {
-          "format": "short",
-          "label": "Tokens/sec"
+          "format": "none",
+          "label": "Tokens"
         },
         {
           "format": "short"
@@ -92,7 +92,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(qa_requests_total{status=\"success\"}[5m])) / sum(rate(qa_requests_total[5m])) * 100",
+          "expr": "sum(increase(qa_requests_total{status=\"success\"}[$__range])) / sum(increase(qa_requests_total[$__range])) * 100",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -139,7 +139,7 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(qa_requests_total[1h]))",
+          "expr": "sum(increase(qa_requests_total[$__range]))",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -164,7 +164,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum(rate(qa_processing_duration_seconds_bucket[5m])) by (le, publisher))",
+          "expr": "histogram_quantile(0.50, sum(increase(qa_processing_duration_seconds_bucket[$__range])) by (le, publisher)) / $__range_s",
           "legendFormat": "P50 {{publisher}}",
           "refId": "A",
           "datasource": {
@@ -173,7 +173,7 @@
           }
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(qa_processing_duration_seconds_bucket[5m])) by (le, publisher))",
+          "expr": "histogram_quantile(0.95, sum(increase(qa_processing_duration_seconds_bucket[$__range])) by (le, publisher)) / $__range_s",
           "legendFormat": "P95 {{publisher}}",
           "refId": "B",
           "datasource": {
@@ -182,7 +182,7 @@
           }
         },
         {
-          "expr": "histogram_quantile(0.99, sum(rate(qa_processing_duration_seconds_bucket[5m])) by (le, publisher))",
+          "expr": "histogram_quantile(0.99, sum(increase(qa_processing_duration_seconds_bucket[$__range])) by (le, publisher)) / $__range_s",
           "legendFormat": "P99 {{publisher}}",
           "refId": "C",
           "datasource": {
@@ -217,7 +217,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum(rate(qa_answer_word_count_bucket[5m])) by (le, publisher))",
+          "expr": "histogram_quantile(0.50, sum(increase(qa_answer_word_count_bucket[$__range])) by (le, publisher))",
           "legendFormat": "P50 {{publisher}}",
           "refId": "A",
           "datasource": {
@@ -226,7 +226,7 @@
           }
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(qa_answer_word_count_bucket[5m])) by (le, publisher))",
+          "expr": "histogram_quantile(0.95, sum(increase(qa_answer_word_count_bucket[$__range])) by (le, publisher))",
           "legendFormat": "P95 {{publisher}}",
           "refId": "B",
           "datasource": {
@@ -235,7 +235,7 @@
           }
         },
         {
-          "expr": "avg(qa_answer_word_count_sum / qa_answer_word_count_count) by (publisher)",
+          "expr": "increase(qa_answer_word_count_sum[$__range]) / increase(qa_answer_word_count_count[$__range])",
           "legendFormat": "Avg {{publisher}}",
           "refId": "C",
           "datasource": {
@@ -270,7 +270,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(similarity_searches_total[5m])) by (status)",
+          "expr": "sum(increase(similarity_searches_total[$__range])) by (status)",
           "legendFormat": "{{status}}",
           "refId": "A",
           "datasource": {
@@ -281,8 +281,8 @@
       ],
       "yaxes": [
         {
-          "format": "ops",
-          "label": "Searches/sec"
+          "format": "none",
+          "label": "Searches"
         },
         {
           "format": "short"
@@ -305,7 +305,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(qa_requests_total[5m])) by (publisher)",
+          "expr": "sum(increase(qa_requests_total[$__range])) by (publisher)",
           "legendFormat": "{{publisher}}",
           "refId": "A",
           "datasource": {
@@ -325,7 +325,7 @@
     },
     {
       "id": 14,
-      "title": "Question Clicks Rate",
+      "title": "Question Clicks",
       "type": "graph",
       "gridPos": {
         "h": 8,
@@ -335,7 +335,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(question_clicks_total[5m])) by (publisher_domain, blog_url_domain)",
+          "expr": "sum(increase(question_clicks_total[$__range])) by (publisher_domain, blog_url_domain)",
           "legendFormat": "{{publisher_domain}} - {{blog_url_domain}}",
           "refId": "A",
           "datasource": {
@@ -346,8 +346,8 @@
       ],
       "yaxes": [
         {
-          "format": "ops",
-          "label": "Clicks/sec"
+          "format": "none",
+          "label": "Clicks"
         },
         {
           "format": "short"
@@ -370,7 +370,7 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(question_clicks_total[1h]))",
+          "expr": "sum(increase(question_clicks_total[$__range]))",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -400,7 +400,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(question_clicks_total[5m])) by (publisher_domain)",
+          "expr": "sum(increase(question_clicks_total[$__range])) by (publisher_domain)",
           "legendFormat": "{{publisher_domain}}",
           "refId": "A",
           "datasource": {

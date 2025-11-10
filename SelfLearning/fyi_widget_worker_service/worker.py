@@ -237,6 +237,7 @@ class BlogProcessingWorker:
                     if domain.startswith('www.'):
                         domain = domain[4:]
                     publisher_domain = domain.lower()
+                    publisher = None
                     
                     # Record job polled
                     jobs_polled_total.labels(publisher_domain=publisher_domain).inc()
@@ -779,17 +780,29 @@ class BlogProcessingWorker:
                     })
                     
                     if existing_completed_jobs == 0:
-                        # First time processing this blog - increment counter
-                        await self.publisher_repo.increment_usage(
-                            publisher.id,
-                            blogs_processed=1,
-                            questions_generated=len(questions)
-                        )
-                        blogs_processed_total.labels(publisher_domain=publisher_domain).inc()
-                        logger.info(f"📊 Usage tracked: +1 blog, +{len(questions)} questions for {publisher.name}")
+                        processed_first_time = True
                     else:
-                        # Blog was already processed before - don't count again
-                        logger.info(f"📊 Blog already processed previously ({existing_completed_jobs} previous jobs), skipping usage increment for {publisher.name}")
+                        processed_first_time = False
+                        logger.info(
+                            f"📊 Blog already processed previously ({existing_completed_jobs} previous jobs), skipping usage increment for {publisher.name}"
+                        )
+
+                    try:
+                        publisher_id = job.publisher_id or (publisher.id if publisher else None)
+                        if publisher_id:
+                            await self.publisher_repo.release_blog_slot(
+                                publisher_id,
+                                processed=processed_first_time,
+                                questions_generated=len(questions) if processed_first_time else 0,
+                            )
+                        if processed_first_time:
+                            blogs_processed_total.labels(publisher_domain=publisher_domain).inc()
+                            if publisher:
+                                logger.info(
+                                    f"📊 Usage tracked: +1 blog, +{len(questions)} questions for {publisher.name}"
+                                )
+                    except Exception as usage_error:
+                        logger.warning(f"⚠️  Failed to record usage: {usage_error}")
             except Exception as usage_error:
                 # Don't fail the job if usage tracking fails
                 logger.warning(f"⚠️  Failed to track usage: {usage_error}")
@@ -825,6 +838,23 @@ class BlogProcessingWorker:
                 error_message=error_msg,
                 should_retry=True
             )
+
+            try:
+                if self.publisher_repo:
+                    publisher_id = job.publisher_id
+                    if not publisher_id and publisher:
+                        publisher_id = publisher.id
+                    if not publisher_id:
+                        db_publisher = await self.publisher_repo.get_publisher_by_domain(publisher_domain)
+                        if db_publisher:
+                            publisher_id = db_publisher.id
+                    if publisher_id:
+                        await self.publisher_repo.release_blog_slot(
+                            publisher_id,
+                            processed=False,
+                        )
+            except Exception as release_error:
+                logger.warning(f"⚠️  Failed to release reserved blog slot after failure: {release_error}")
 
 
 # Global worker instance

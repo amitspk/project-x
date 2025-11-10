@@ -48,6 +48,52 @@ services:
         max-size: "50m"
         max-file: "5"
 
+  api-service-2:
+    build:
+      context: ../..
+      dockerfile: fyi_widget_api/Dockerfile
+    container_name: fyi-widget-api-2
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8007:8005"
+    environment:
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGODB_USERNAME=${MONGODB_USERNAME}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+      - DATABASE_NAME=${DATABASE_NAME}
+      - POSTGRES_URL=${POSTGRES_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-pro}
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
+      - API_SERVICE_PORT=8005
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+    networks:
+      - fyi-widget-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
 networks:
   fyi-widget-network:
     external: true

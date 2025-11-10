@@ -22,7 +22,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(increase(http_request_duration_seconds_bucket[$__range])) by (le)) / $__range_s",
           "legendFormat": "P50",
           "refId": "A",
           "datasource": {
@@ -31,7 +31,7 @@
           }
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(increase(http_request_duration_seconds_bucket[$__range])) by (le)) / $__range_s",
           "legendFormat": "P95",
           "refId": "B",
           "datasource": {
@@ -40,7 +40,7 @@
           }
         },
         {
-          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(increase(http_request_duration_seconds_bucket[$__range])) by (le)) / $__range_s",
           "legendFormat": "P99",
           "refId": "C",
           "datasource": {
@@ -75,7 +75,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum(rate(qa_processing_duration_seconds_bucket[5m])) by (le, publisher))",
+          "expr": "histogram_quantile(0.50, sum(increase(qa_processing_duration_seconds_bucket[$__range])) by (le, publisher)) / $__range_s",
           "legendFormat": "P50 {{publisher}}",
           "refId": "A",
           "datasource": {
@@ -84,7 +84,7 @@
           }
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(qa_processing_duration_seconds_bucket[5m])) by (le, publisher))",
+          "expr": "histogram_quantile(0.95, sum(increase(qa_processing_duration_seconds_bucket[$__range])) by (le, publisher)) / $__range_s",
           "legendFormat": "P95 {{publisher}}",
           "refId": "B",
           "datasource": {
@@ -108,18 +108,18 @@
       }
     },
     {
-      "id": 4,
-      "title": "Similarity Search Duration",
+      "id": 3,
+      "title": "HTTP Latency Percentiles",
       "type": "graph",
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
+        "x": 0,
         "y": 8
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum(rate(similarity_search_duration_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(increase(http_request_duration_seconds_bucket[$__range])) by (le)) / $__range_s",
           "legendFormat": "P50",
           "refId": "A",
           "datasource": {
@@ -128,7 +128,7 @@
           }
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(similarity_search_duration_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(increase(http_request_duration_seconds_bucket[$__range])) by (le)) / $__range_s",
           "legendFormat": "P95",
           "refId": "B",
           "datasource": {
@@ -140,7 +140,51 @@
       "yaxes": [
         {
           "format": "s",
-          "label": "Duration"
+          "label": "Latency"
+        },
+        {
+          "format": "short"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Similarity Search Latency",
+      "type": "graph",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(increase(similarity_search_duration_seconds_bucket[$__range])) by (le)) / $__range_s",
+          "legendFormat": "P50",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(increase(similarity_search_duration_seconds_bucket[$__range])) by (le)) / $__range_s",
+          "legendFormat": "P95",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "s",
+          "label": "Latency"
         },
         {
           "format": "short"
@@ -153,46 +197,52 @@
     },
     {
       "id": 5,
-      "title": "Current P95 Latency",
-      "type": "stat",
+      "title": "Request Duration (P50, P95, P99)",
+      "type": "graph",
       "gridPos": {
-        "h": 4,
-        "w": 4,
+        "h": 8,
+        "w": 12,
         "x": 0,
-        "y": 16
+        "y": 8
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(increase(http_request_duration_seconds_bucket[$__range])) by (le, endpoint)) / $__range_s",
+          "legendFormat": "P50 {{endpoint}}",
           "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(increase(http_request_duration_seconds_bucket[$__range])) by (le, endpoint)) / $__range_s",
+          "legendFormat": "P95 {{endpoint}}",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(increase(http_request_duration_seconds_bucket[$__range])) by (le, endpoint)) / $__range_s",
+          "legendFormat": "P99 {{endpoint}}",
+          "refId": "C",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           }
         }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "value": 0,
-                "color": "green"
-              },
-              {
-                "value": 0.5,
-                "color": "yellow"
-              },
-              {
-                "value": 1,
-                "color": "red"
-              }
-            ]
-          }
+      "yaxes": [
+        {
+          "format": "s",
+          "label": "Latency"
+        },
+        {
+          "format": "short"
         }
-      },
+      ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -200,7 +250,7 @@
     },
     {
       "id": 6,
-      "title": "Avg Q&A Duration",
+      "title": "Avg QA Duration",
       "type": "stat",
       "gridPos": {
         "h": 4,
@@ -210,7 +260,7 @@
       },
       "targets": [
         {
-          "expr": "rate(qa_processing_duration_seconds_sum[5m]) / rate(qa_processing_duration_seconds_count[5m])",
+          "expr": "increase(qa_processing_duration_seconds_sum[$__range]) / increase(qa_processing_duration_seconds_count[$__range])",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -230,7 +280,7 @@
     },
     {
       "id": 7,
-      "title": "Throughput (Requests/sec)",
+      "title": "Avg Requests per Second",
       "type": "stat",
       "gridPos": {
         "h": 4,
@@ -240,7 +290,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total[5m]))",
+          "expr": "sum(increase(http_requests_total[$__range])) / $__range_s",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -270,7 +320,7 @@
       },
       "targets": [
         {
-          "expr": "rate(qa_answer_word_count_sum[5m]) / rate(qa_answer_word_count_count[5m])",
+          "expr": "increase(qa_answer_word_count_sum[$__range]) / increase(qa_answer_word_count_count[$__range])",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -300,7 +350,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(http_request_duration_seconds_bucket[5m])) by (le)",
+          "expr": "sum(increase(http_request_duration_seconds_bucket[$__range])) by (le)",
           "format": "heatmap",
           "refId": "A",
           "datasource": {
@@ -326,7 +376,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
+          "expr": "histogram_quantile(0.95, sum(increase(http_request_duration_seconds_bucket[$__range])) by (le, endpoint)) / $__range_s",
           "format": "table",
           "refId": "A",
           "datasource": {

@@ -47,9 +47,15 @@ class PublisherTable(Base):
     # Usage tracking
     total_blogs_processed = Column(Integer, default=0, nullable=False)
     total_questions_generated = Column(Integer, default=0, nullable=False)
+    blog_slots_reserved = Column(Integer, default=0, nullable=False)
     
     # Billing
     subscription_tier = Column(String(50), default="free", nullable=False)
+
+
+class UsageLimitExceededError(Exception):
+    """Raised when a publisher exceeds the configured usage limit."""
+    pass
 
 
 class PostgresPublisherRepository:
@@ -87,7 +93,7 @@ class PostgresPublisherRepository:
                 expire_on_commit=False
             )
             
-            # Create tables
+            # Create tables if they do not exist (no schema migrations here)
             async with self.engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
             
@@ -122,6 +128,7 @@ class PostgresPublisherRepository:
             last_active_at=table_obj.last_active_at,
             total_blogs_processed=table_obj.total_blogs_processed,
             total_questions_generated=table_obj.total_questions_generated,
+            blog_slots_reserved=getattr(table_obj, "blog_slots_reserved", 0) or 0,
             subscription_tier=table_obj.subscription_tier
         )
     
@@ -342,31 +349,76 @@ class PostgresPublisherRepository:
             
             return publishers, total
     
-    async def increment_usage(
-        self,
-        publisher_id: str,
-        blogs_processed: int = 0,
-        questions_generated: int = 0
-    ):
-        """Increment usage counters for a publisher."""
+    async def reserve_blog_slot(self, publisher_id: str) -> None:
+        """Reserve a blog processing slot for a publisher (atomic)."""
         async with self.async_session_factory() as session:
             try:
                 result = await session.execute(
-                    select(PublisherTable).where(PublisherTable.id == publisher_id)
+                    select(PublisherTable)
+                    .where(PublisherTable.id == publisher_id)
+                    .with_for_update()
                 )
                 db_publisher = result.scalar_one_or_none()
-                
-                if db_publisher:
-                    db_publisher.total_blogs_processed += blogs_processed
-                    db_publisher.total_questions_generated += questions_generated
-                    db_publisher.last_active_at = datetime.utcnow()
-                    
-                    await session.commit()
-                    logger.info(f"✅ Updated usage for publisher: {publisher_id}")
-                
+                if not db_publisher:
+                    raise UsageLimitExceededError("Publisher not found")
+
+                config = db_publisher.config or {}
+                limit = config.get("max_total_blogs")
+
+                if not limit:
+                    return
+
+                processed = db_publisher.total_blogs_processed or 0
+                reserved = db_publisher.blog_slots_reserved or 0
+
+                if processed + reserved >= limit:
+                    raise UsageLimitExceededError(
+                        f"Publisher reached the maximum number of blogs ({limit})."
+                    )
+
+                db_publisher.blog_slots_reserved = reserved + 1
+                db_publisher.last_active_at = datetime.utcnow()
+
+                await session.commit()
+            except UsageLimitExceededError:
+                await session.rollback()
+                raise
             except Exception as e:
                 await session.rollback()
-                logger.error(f"❌ Failed to update usage: {e}")
+                logger.error(f"❌ Failed to reserve blog slot: {e}")
+                raise
+
+    async def release_blog_slot(
+        self,
+        publisher_id: str,
+        processed: bool,
+        questions_generated: int = 0,
+    ) -> None:
+        """Release a reserved slot and optionally record successful processing."""
+        async with self.async_session_factory() as session:
+            try:
+                result = await session.execute(
+                    select(PublisherTable)
+                    .where(PublisherTable.id == publisher_id)
+                    .with_for_update()
+                )
+                db_publisher = result.scalar_one_or_none()
+                if not db_publisher:
+                    return
+
+                if db_publisher.blog_slots_reserved and db_publisher.blog_slots_reserved > 0:
+                    db_publisher.blog_slots_reserved -= 1
+
+                if processed:
+                    db_publisher.total_blogs_processed += 1
+                    db_publisher.total_questions_generated += questions_generated
+
+                db_publisher.last_active_at = datetime.utcnow()
+
+                await session.commit()
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"❌ Failed to release blog slot: {e}")
                 raise
     
     async def health_check(self) -> dict:

@@ -25,6 +25,8 @@ from fyi_widget_shared_library.utils import (
 
 # Import auth
 from fyi_widget_api.api.auth import get_current_publisher, validate_blog_url_domain, verify_admin_key
+from fyi_widget_api.api.publisher_rules import ensure_url_whitelisted
+from fyi_widget_shared_library.data.postgres_database import UsageLimitExceededError
 
 logger = logging.getLogger(__name__)
 
@@ -194,12 +196,36 @@ async def check_and_load_questions(
             from fyi_widget_api.api import auth as auth_module
             publisher_config = publisher.config.dict() if publisher.config else {}
             
+            ensure_url_whitelisted(normalized_url, publisher)
+
             # Create job
-            job_id = await job_repo.create_job(
-                blog_url=normalized_url,
-                publisher_id=publisher.id,
-                config=publisher_config
-            )
+            slot_reserved = False
+            try:
+                if auth_module.publisher_repo:
+                    await auth_module.publisher_repo.reserve_blog_slot(publisher.id)
+                    slot_reserved = True
+
+                job_id = await job_repo.create_job(
+                    blog_url=normalized_url,
+                    publisher_id=publisher.id,
+                    config=publisher_config
+                )
+            except UsageLimitExceededError as exc:
+                logger.warning(f"[{request_id}] ❌ Blog limit reached for publisher {publisher.id}: {exc}")
+                raise HTTPException(
+                    status_code=403,
+                    detail=str(exc),
+                )
+            except Exception:
+                if slot_reserved and auth_module.publisher_repo:
+                    try:
+                        await auth_module.publisher_repo.release_blog_slot(
+                            publisher.id,
+                            processed=False,
+                        )
+                    except Exception as release_error:  # pragma: no cover - logging only
+                        logger.warning(f"[{request_id}] ⚠️ Failed to release reserved blog slot: {release_error}")
+                raise
             
             # Note: Usage tracking (blogs_processed) will be handled by worker when job completes
             # This prevents double counting since worker also increments on completion
