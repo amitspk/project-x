@@ -6,6 +6,20 @@ Quick reference for common Docker Compose commands used in this project.
 
 ## 🔄 Restart Commands
 
+### Zero-Downtime API Rolling Update
+
+Use the helper script to pull the latest image and restart each API instance one at a time so that traffic always has at least one healthy target.
+
+```bash
+/home/amit/deployment/v7/scripts/rolling-update-api.sh
+```
+
+The script verifies the peer container is healthy before restarting the next one and waits for the health check to pass after each redeploy.
+
+> **Note:** Run the script directly (e.g., `./scripts/rolling-update-api.sh`) so it executes with Bash; invoking it with `sh` will fail.
+
+If one of the API containers is stopped or missing, the script will issue a warning and continue (zero-downtime cannot be guaranteed in that case).
+
 ### Restart All Services in a Compose File
 
 ```bash

@@ -9,7 +9,7 @@ import uuid
 import secrets
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import create_engine, Column, String, Integer, Float, Boolean, DateTime, JSON, Enum as SQLEnum, text
+from sqlalchemy import create_engine, Column, String, Integer, Float, Boolean, DateTime, JSON, Enum as SQLEnum
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker, AsyncEngine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -93,14 +93,9 @@ class PostgresPublisherRepository:
                 expire_on_commit=False
             )
             
-            # Create tables
+            # Create tables if they do not exist (no schema migrations here)
             async with self.engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-                await conn.execute(
-                    text(
-                        "ALTER TABLE publishers ADD COLUMN IF NOT EXISTS blog_slots_reserved INTEGER NOT NULL DEFAULT 0"
-                    )
-                )
             
             logger.info("✅ PostgreSQL connected and tables created")
             
@@ -133,6 +128,7 @@ class PostgresPublisherRepository:
             last_active_at=table_obj.last_active_at,
             total_blogs_processed=table_obj.total_blogs_processed,
             total_questions_generated=table_obj.total_questions_generated,
+            blog_slots_reserved=getattr(table_obj, "blog_slots_reserved", 0) or 0,
             subscription_tier=table_obj.subscription_tier
         )
     
