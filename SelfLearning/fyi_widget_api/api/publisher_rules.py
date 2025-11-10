@@ -9,23 +9,6 @@ from fyi_widget_shared_library.models.publisher import Publisher
 from fyi_widget_shared_library.utils import normalize_url
 
 
-def ensure_within_article_limit(publisher: Publisher) -> None:
-    """Raise HTTPException if the publisher has reached the total blog processing limit."""
-    limit = getattr(publisher.config, "max_total_blogs", None)
-    if limit is None:
-        return
-
-    processed = publisher.total_blogs_processed or 0
-    if processed >= limit:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                f"Publisher has reached the maximum number of processed blogs ({limit}). "
-                "Please contact support to increase the limit."
-            ),
-        )
-
-
 def is_url_whitelisted(url: str, whitelist: Optional[Sequence[str]]) -> bool:
     """Return True if the URL is allowed by the whitelist definition."""
     if not whitelist:

@@ -292,6 +292,7 @@ class Publisher(BaseModel):
     # Usage tracking
     total_blogs_processed: int = Field(default=0, ge=0)
     total_questions_generated: int = Field(default=0, ge=0)
+    blog_slots_reserved: int = Field(default=0, ge=0)
     
     # Billing (optional)
     subscription_tier: Optional[str] = Field(

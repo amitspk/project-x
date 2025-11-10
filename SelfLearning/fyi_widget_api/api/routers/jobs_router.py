@@ -24,14 +24,11 @@ from fyi_widget_shared_library.utils import (
     generate_request_id
 )
 
-# Enforcement helpers
-from fyi_widget_api.api.publisher_rules import (
-    ensure_within_article_limit,
-    ensure_url_whitelisted,
-)
-
 # Import auth
 from fyi_widget_api.api.auth import get_current_publisher, validate_blog_url_domain, verify_admin_key
+# Enforcement helpers
+from fyi_widget_api.api.publisher_rules import ensure_url_whitelisted
+from fyi_widget_shared_library.data.postgres_database import UsageLimitExceededError
 from fyi_widget_api.api import auth as auth_module
 
 logger = logging.getLogger(__name__)
@@ -184,22 +181,30 @@ async def enqueue_blog_processing(
             logger.info(f"⚠️  Blog exists but no completed job found, will reprocess")
         
         # Blog doesn't exist or wasn't successfully processed - enforce limits and enqueue new job
-        ensure_within_article_limit(publisher)
         ensure_url_whitelisted(normalized_url, publisher)
 
-        job = await job_repo.enqueue_job(normalized_url)
-        
-        logger.info(f"[{request_id}] ✅ Job enqueued: {job.job_id}")
-        
-        # Track usage (increment enqueued count)
-        # Note: The actual blogs_processed will be incremented by worker on completion
-        if auth_module.publisher_repo:
-            await auth_module.publisher_repo.increment_usage(
-                publisher.id,
-                blogs_processed=0,  # Don't count until completed
-                questions_generated=0
+        slot_reserved = False
+        try:
+            if auth_module.publisher_repo:
+                await auth_module.publisher_repo.reserve_blog_slot(publisher.id)
+                slot_reserved = True
+            job = await job_repo.enqueue_job(normalized_url)
+        except UsageLimitExceededError as exc:
+            logger.warning(f"[{request_id}] ❌ Blog limit reached for publisher {publisher.id}: {exc}")
+            raise HTTPException(
+                status_code=403,
+                detail=str(exc),
             )
-        logger.info(f"[{request_id}] 📊 Usage tracked for publisher: {publisher.name}")
+        except Exception as enqueue_error:
+            if slot_reserved and auth_module.publisher_repo:
+                try:
+                    await auth_module.publisher_repo.release_blog_slot(
+                        publisher.id,
+                        processed=False,
+                    )
+                except Exception as release_error:  # pragma: no cover - logging only
+                    logger.warning(f"[{request_id}] ⚠️ Failed to release reserved blog slot: {release_error}")
+            raise
         
         job_response = JobStatusResponse(
             job_id=job.job_id,
