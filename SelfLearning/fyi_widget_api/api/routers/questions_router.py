@@ -25,6 +25,10 @@ from fyi_widget_shared_library.utils import (
 
 # Import auth
 from fyi_widget_api.api.auth import get_current_publisher, validate_blog_url_domain, verify_admin_key
+from fyi_widget_api.api.publisher_rules import (
+    ensure_within_article_limit,
+    ensure_url_whitelisted,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +199,8 @@ async def check_and_load_questions(
             publisher_config = publisher.config.dict() if publisher.config else {}
             
             # Create job
+            ensure_within_article_limit(publisher)
+            ensure_url_whitelisted(normalized_url, publisher)
             job_id = await job_repo.create_job(
                 blog_url=normalized_url,
                 publisher_id=publisher.id,

@@ -229,6 +229,8 @@ class PublisherConfigSchema(BaseModel):
     generate_summary: bool = Field(..., example=True)
     generate_embeddings: bool = Field(..., example=True)
     daily_blog_limit: int = Field(..., example=100)
+    max_total_blogs: int | None = Field(None, example=500, description="Maximum total blogs allowed (null for unlimited)")
+    whitelisted_blog_urls: List[str] | None = Field(None, example=["https://example.com/blog/","/news/"], description="Allowed blog URL prefixes. Use '*' or null to allow all.")
 
 
 class PublisherSchema(BaseModel):

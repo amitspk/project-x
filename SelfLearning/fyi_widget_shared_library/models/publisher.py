@@ -5,8 +5,9 @@ This module defines the Publisher entity and its configuration schema
 for multi-tenant blog processing.
 """
 
+import json
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field, validator, field_serializer
 from enum import Enum
 from fyi_widget_shared_library.services.llm_providers.model_config import LLMModelConfig
@@ -159,6 +160,19 @@ class PublisherConfig(BaseModel):
         ge=1,
         description="Maximum blogs to process per day (None for unlimited)"
     )
+
+    # Global usage limits
+    max_total_blogs: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Maximum total number of blogs that can be processed for this publisher (None for unlimited)"
+    )
+
+    # URL restrictions
+    whitelisted_blog_urls: Optional[List[str]] = Field(
+        default=None,
+        description="List of allowed blog URLs or prefixes. Use '*' or leave empty to allow all."
+    )
     
     # Custom prompts (optional) - Three-Layer Architecture
     # Layer 1 (System): Role + format enforcement (non-negotiable, handled by LLMService)
@@ -219,6 +233,41 @@ class PublisherConfig(BaseModel):
     class Config:
         """Pydantic config."""
         use_enum_values = True
+
+    @validator('whitelisted_blog_urls', pre=True)
+    def _normalize_whitelisted_urls(cls, value):
+        """Normalize whitelist entries to a clean list or None."""
+        if value in (None, "", [], ()):  # allow empty
+            return None
+
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return None
+            # Attempt to parse JSON array; fall back to comma separated
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, list):
+                    value = parsed
+                else:
+                    value = [value]
+            except (json.JSONDecodeError, TypeError):
+                value = [part.strip() for part in value.split(',') if part.strip()]
+
+        if isinstance(value, (set, tuple)):
+            value = list(value)
+
+        if isinstance(value, list):
+            cleaned: List[str] = []
+            for item in value:
+                if item is None:
+                    continue
+                entry = str(item).strip()
+                if entry:
+                    cleaned.append(entry)
+            return cleaned or None
+
+        raise ValueError("whitelisted_blog_urls must be a list of strings")
 
 
 class Publisher(BaseModel):

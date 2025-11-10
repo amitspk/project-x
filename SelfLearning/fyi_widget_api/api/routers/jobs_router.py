@@ -24,6 +24,12 @@ from fyi_widget_shared_library.utils import (
     generate_request_id
 )
 
+# Enforcement helpers
+from fyi_widget_api.api.publisher_rules import (
+    ensure_within_article_limit,
+    ensure_url_whitelisted,
+)
+
 # Import auth
 from fyi_widget_api.api.auth import get_current_publisher, validate_blog_url_domain, verify_admin_key
 from fyi_widget_api.api import auth as auth_module
@@ -177,7 +183,10 @@ async def enqueue_blog_processing(
             
             logger.info(f"⚠️  Blog exists but no completed job found, will reprocess")
         
-        # Blog doesn't exist or wasn't successfully processed - enqueue new job (with normalized URL)
+        # Blog doesn't exist or wasn't successfully processed - enforce limits and enqueue new job
+        ensure_within_article_limit(publisher)
+        ensure_url_whitelisted(normalized_url, publisher)
+
         job = await job_repo.enqueue_job(normalized_url)
         
         logger.info(f"[{request_id}] ✅ Job enqueued: {job.job_id}")
