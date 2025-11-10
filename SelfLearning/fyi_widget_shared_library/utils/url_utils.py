@@ -11,6 +11,9 @@ Ensures consistent URL handling across the application by:
 from urllib.parse import urlparse, urlunparse
 import re
 
+# Maximum number of sanitized query entries to preserve (currently zero because we drop all)
+ALLOWED_QUERY_PARAMS: tuple[str, ...] = ()
+
 
 def normalize_url(url: str) -> str:
     """
@@ -70,14 +73,28 @@ def normalize_url(url: str) -> str:
     if not path:
         path = '/'
     
-    # Reconstruct URL
+    # Strip all query parameters/fragments for canonical comparison
+    query = parsed.query
+    if ALLOWED_QUERY_PARAMS:
+        # Optional future behavior: keep selected query params in canonical form
+        from urllib.parse import parse_qsl, urlencode
+
+        kept_pairs = [
+            (k, v)
+            for k, v in parse_qsl(parsed.query, keep_blank_values=True)
+            if k in ALLOWED_QUERY_PARAMS
+        ]
+        query = urlencode(kept_pairs, doseq=True)
+    else:
+        query = ""
+
     normalized = urlunparse((
         parsed.scheme,      # scheme (http/https)
         domain,             # netloc (normalized domain)
         path,               # path (normalized)
         parsed.params,      # params
-        parsed.query,       # query
-        parsed.fragment     # fragment
+        query,              # query (filtered/removed)
+        ""                 # fragment removed for canonical comparison
     ))
     
     return normalized
