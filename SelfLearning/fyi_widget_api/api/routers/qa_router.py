@@ -119,12 +119,14 @@ async def ask_question(
         logger.info(f"[{request_id}] 💬 Using chat model: {chat_model}, temp: {publisher.config.chat_temperature}, max_tokens: {publisher.config.chat_max_tokens} for publisher {publisher.name}")
         
         # Generate answer using LLM with publisher's chat model and parameters
+        # Note: Grounding is disabled for Q&A endpoint to control costs (only used in worker question generation)
         result = await llm_service.answer_question(
             question=request.question,
             context="",  # No context, general Q&A
             model=chat_model,  # Use per-operation model
             temperature=publisher.config.chat_temperature,  # Use per-operation temperature
-            max_tokens=publisher.config.chat_max_tokens  # Use per-operation max_tokens
+            max_tokens=publisher.config.chat_max_tokens,  # Use per-operation max_tokens
+            use_grounding=False  # Always disabled for Q&A endpoint (cost control)
         )
         
         answer = result.text

@@ -154,6 +154,14 @@ class PublisherConfig(BaseModel):
         description="Whether to generate embeddings for search"
     )
     
+    # Grounding settings (Gemini only)
+    use_grounding: bool = Field(
+        default=False,
+        description="Enable Google Search grounding for question generation during blog processing (Gemini models only). "
+                    "When enabled, provides real-time information and citations. "
+                    "Note: Grounding is NOT used in the Q&A /ask endpoint to control costs."
+    )
+    
     # Rate limiting
     daily_blog_limit: Optional[int] = Field(
         default=100,

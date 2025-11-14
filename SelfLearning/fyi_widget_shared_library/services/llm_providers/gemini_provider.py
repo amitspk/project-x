@@ -41,6 +41,18 @@ class GeminiProvider(LLMProvider):
         self.embedding_model = embedding_model or self.DEFAULT_EMBEDDING_MODEL
         # Store a default client without system instructions; we'll build others per call if needed
         self._model_client = genai.GenerativeModel(model_name=self.model)
+        
+        # Initialize new SDK client for grounding support (required for Google Search grounding)
+        self._new_sdk_client = None
+        try:
+            from google import genai as new_genai
+            from google.genai.types import HttpOptions
+            self._new_sdk_client = new_genai.Client(api_key=api_key, http_options=HttpOptions(api_version="v1beta"))
+            logger.debug("✅ New SDK (google-genai) client initialized with v1beta for grounding support")
+        except (ImportError, AttributeError):
+            logger.debug("⚠️ New SDK (google-genai) not available - grounding will be unavailable")
+            self._new_sdk_client = None
+        
         logger.info(
             "✅ Gemini Provider initialized (model: %s, embedding: %s)",
             self.model,
@@ -99,6 +111,7 @@ REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
         num_questions: int = 5,
         custom_prompt: Optional[str] = None,
         system_prompt: Optional[str] = None,
+        use_grounding: bool = False,
     ) -> LLMGenerationResult:
         from ..llm_prompts import DEFAULT_QUESTIONS_PROMPT, QUESTIONS_JSON_FORMAT
 
@@ -118,10 +131,11 @@ REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
 {QUESTIONS_JSON_FORMAT}"""
 
         logger.debug(
-            "❓ Gemini generating %d questions (system: %d chars, user: %d chars)",
+            "❓ Gemini generating %d questions (system: %d chars, user: %d chars, grounding: %s)",
             num_questions,
             len(system_msg),
             len(user_prompt),
+            use_grounding,
         )
 
         text, tokens_used = await self._generate_content(
@@ -129,6 +143,7 @@ REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
             system_instruction=system_msg or "You are a helpful assistant that returns JSON.",
             temperature=self.temperature,
             max_output_tokens=self.max_tokens,
+            use_grounding=use_grounding,
         )
 
         return LLMGenerationResult(
@@ -165,8 +180,9 @@ REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
         self,
         question: str,
         context: str = "",
+        use_grounding: bool = False,
     ) -> LLMGenerationResult:
-        logger.info("💬 Answering question with Gemini: %s...", question[:50])
+        logger.info("💬 Answering question with Gemini: %s... (grounding: %s)", question[:50], use_grounding)
 
         if context:
             prompt = f"""Context:
@@ -183,6 +199,7 @@ Provide a clear, concise answer based on the context above."""
             system_instruction="You are a helpful assistant.",
             temperature=self.temperature,
             max_output_tokens=min(600, self.max_tokens),
+            use_grounding=use_grounding,
         )
 
         return LLMGenerationResult(
@@ -198,7 +215,73 @@ Provide a clear, concise answer based on the context above."""
         system_instruction: Optional[str],
         temperature: Optional[float],
         max_output_tokens: Optional[int],
+        use_grounding: bool = False,
     ) -> tuple[str, int]:
+        """
+        Generate content using Gemini API.
+        
+        Args:
+            prompt: User prompt
+            system_instruction: System instruction/role
+            temperature: Sampling temperature
+            max_output_tokens: Maximum output tokens
+            use_grounding: If True, enables Google Search grounding for real-time information
+            
+        Returns:
+            Tuple of (generated_text, tokens_used)
+        """
+        # If grounding is enabled, use new SDK API
+        if use_grounding:
+            if not self._new_sdk_client:
+                raise ImportError(
+                    "Google Search grounding requires the 'google-genai' SDK. "
+                    "Install it with: pip install google-genai"
+                )
+            
+            from google.genai.types import GenerateContentConfig, GoogleSearch, Tool
+            
+            # Build config with tools for grounding
+            config_dict = {
+                "temperature": temperature or self.temperature,
+                "max_output_tokens": max_output_tokens or self.max_tokens,
+                "tools": [Tool(google_search=GoogleSearch())]
+            }
+            if system_instruction:
+                config_dict["system_instruction"] = system_instruction
+            
+            config = GenerateContentConfig(**config_dict)
+            
+            logger.debug("🔍 Using Google Search grounding for Gemini generation")
+            
+            # Use new SDK client API
+            response = await asyncio.to_thread(
+                self._new_sdk_client.models.generate_content,
+                model=self.model,
+                contents=prompt,
+                config=config,
+            )
+            
+            # Extract response text
+            result_text = getattr(response, "text", None) or str(response)
+            
+            # Extract token usage (new SDK returns usage_metadata as an object)
+            tokens_used = 0
+            if hasattr(response, "usage_metadata") and response.usage_metadata:
+                usage_metadata = response.usage_metadata
+                tokens_used = (
+                    getattr(usage_metadata, "total_token_count", None) or
+                    getattr(usage_metadata, "prompt_token_count", 0) +
+                    getattr(usage_metadata, "candidates_token_count", 0)
+                )
+            
+            logger.info(
+                "✅ Gemini generation succeeded with grounding (%s tokens)",
+                tokens_used if tokens_used else "unknown",
+            )
+            
+            return result_text, int(tokens_used) if tokens_used else 0
+        
+        # Use old SDK (original implementation)
         generation_config = self._base_generation_config.copy()
         if temperature is not None:
             generation_config["temperature"] = temperature
@@ -214,10 +297,19 @@ Provide a clear, concise answer based on the context above."""
             model_client = self._model_client
 
         try:
+            # Build the call arguments
+            # First positional argument: contents
+            contents = [{"role": "user", "parts": [prompt]}]
+            
+            # Keyword arguments
+            call_kwargs = {
+                "generation_config": generation_config,
+            }
+            
             response = await asyncio.to_thread(
                 model_client.generate_content,
-                [{"role": "user", "parts": [prompt]}],
-                generation_config=generation_config,
+                contents,
+                **call_kwargs,
             )
         except Exception as exc:
             logger.error("❌ Gemini content generation failed: %s", exc)
@@ -228,6 +320,7 @@ Provide a clear, concise answer based on the context above."""
             logger.error("❌ Gemini returned empty response for prompt preview: %s", prompt[:120])
             raise ValueError("Gemini returned an empty response.")
 
+        # Extract token usage
         tokens_used = 0
         usage = getattr(response, "usage_metadata", None)
         if usage:
@@ -245,5 +338,3 @@ Provide a clear, concise answer based on the context above."""
         )
 
         return result_text, int(tokens_used) if tokens_used else 0
-
-
