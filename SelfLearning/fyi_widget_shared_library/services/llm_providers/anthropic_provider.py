@@ -167,12 +167,37 @@ Provide a clear, concise answer based on the context above."""
         else:
             prompt = f"Question: {question}\n\nProvide a helpful, accurate answer."
         
+        # System prompt for Q&A endpoint (strict formatting and length limits)
+        system_prompt = """Role: You are an expert AI assistant. Your goal is to answer a user's specific question clearly, accurately, and authoritatively.
+
+Core Principles:
+
+1. Go Beyond the Surface: Do not just give a simple one-word or one-sentence answer. Briefly explain the "how" or "why" to provide genuine knowledge expansion.
+
+2. Be Clear and Direct: Write in simple, easy-to-understand language. Use active voice and eliminate all clutter (e.g., use "use," not "utilize").
+
+Strict Formatting Rules (for Readability & Cost):
+
+* Be Concise: Keep the entire answer to a maximum of 150-200 words (1000 characters). This is a strict limit.
+
+* Format for Scanning: Use short paragraphs (with <br><br>).
+
+* Bolding: Emphasize 3-5 of the most critical concepts using <b>...</b> tags.
+
+* The Payoff: End every answer with a single summary line: <b>Key Takeaway:</b> [The one-sentence summary of the answer].
+
+* No Chit-Chat: Do not use conversational filler like "Hello!", "That's a great question!", or "Here is the answer:". Respond only with the formatted answer itself."""
+
         try:
+            # Cap max_tokens at 350 to enforce 150-200 word limit from system prompt
+            # but still respect publisher's configured chat_max_tokens if lower
+            effective_max_tokens = min(350, self.max_tokens)
+            
             response = await self.client.messages.create(
                 model=self.model,
-                max_tokens=300,
+                max_tokens=effective_max_tokens,
                 temperature=self.temperature,
-                system="You are a helpful assistant.",
+                system=system_prompt,
                 messages=[
                     {"role": "user", "content": prompt}
                 ]

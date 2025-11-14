@@ -69,6 +69,12 @@ class GeminiProvider(LLMProvider):
         custom_prompt: Optional[str] = None,
         system_prompt: Optional[str] = None,
     ) -> LLMGenerationResult:
+        """
+        Generate summary from content.
+        
+        Note: Grounding is NOT used for summary generation (only for question generation).
+        This method does not accept use_grounding parameter to prevent accidental usage.
+        """
         from ..llm_prompts import DEFAULT_SUMMARY_PROMPT, SUMMARY_JSON_FORMAT
 
         role_and_instructions = custom_prompt if custom_prompt else DEFAULT_SUMMARY_PROMPT
@@ -90,11 +96,13 @@ REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
             len(user_prompt),
         )
 
+        # Note: use_grounding is NOT passed here - grounding is only for question generation
         text, tokens_used = await self._generate_content(
             prompt=user_prompt,
             system_instruction=system_msg or "You are a helpful assistant that returns JSON.",
             temperature=0.5,
             max_output_tokens=min(700, self.max_tokens),
+            use_grounding=False,  # Explicitly disabled - grounding only for question generation
         )
 
         return LLMGenerationResult(
@@ -154,10 +162,17 @@ REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
         )
 
     async def generate_embedding(self, text: str) -> EmbeddingResult:
+        """
+        Generate embedding from text.
+        
+        Note: Grounding is NOT used for embedding generation (only for question generation).
+        Embeddings use a separate API that doesn't support grounding.
+        """
         logger.info("🔢 Generating embedding with Gemini (model: %s)...", self.embedding_model)
 
         truncated_text = text[:8000]
         try:
+            # Note: Embeddings use a separate API that doesn't support grounding
             response = await asyncio.to_thread(
                 genai.embed_content,
                 model=self.embedding_model,
@@ -182,6 +197,14 @@ REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
         context: str = "",
         use_grounding: bool = False,
     ) -> LLMGenerationResult:
+        """
+        Answer a user question.
+        
+        Note: Grounding is disabled for Q&A endpoint (cost control).
+        Grounding should only be used for question generation during blog processing.
+        This method accepts use_grounding parameter for backward compatibility but
+        it should always be set to False when called from the Q&A API endpoint.
+        """
         logger.info("💬 Answering question with Gemini: %s... (grounding: %s)", question[:50], use_grounding)
 
         if context:
@@ -194,11 +217,35 @@ Provide a clear, concise answer based on the context above."""
         else:
             prompt = f"Question: {question}\n\nProvide a helpful, accurate answer."
 
+        # System prompt for Q&A endpoint (strict formatting and length limits)
+        system_instruction = """Role: You are an expert AI assistant. Your goal is to answer a user's specific question clearly, accurately, and authoritatively.
+
+Core Principles:
+
+1. Go Beyond the Surface: Do not just give a simple one-word or one-sentence answer. Briefly explain the "how" or "why" to provide genuine knowledge expansion.
+
+2. Be Clear and Direct: Write in simple, easy-to-understand language. Use active voice and eliminate all clutter (e.g., use "use," not "utilize").
+
+Strict Formatting Rules (for Readability & Cost):
+
+* Be Concise: Keep the entire answer to a maximum of 150-200 words (1000 characters). This is a strict limit.
+
+* Format for Scanning: Use short paragraphs (with <br><br>).
+
+* Bolding: Emphasize 3-5 of the most critical concepts using <b>...</b> tags.
+
+* The Payoff: End every answer with a single summary line: <b>Key Takeaway:</b> [The one-sentence summary of the answer].
+
+* No Chit-Chat: Do not use conversational filler like "Hello!", "That's a great question!", or "Here is the answer:". Respond only with the formatted answer itself."""
+
+        # Note: use_grounding should be False for Q&A endpoint (cost control)
+        # Grounding is only used for question generation during blog processing
+        # Max tokens set to ~350 to enforce 150-200 word limit (approximately 1 token per 4 characters)
         text, tokens_used = await self._generate_content(
             prompt=prompt,
-            system_instruction="You are a helpful assistant.",
+            system_instruction=system_instruction,
             temperature=self.temperature,
-            max_output_tokens=min(600, self.max_tokens),
+            max_output_tokens=min(350, self.max_tokens),
             use_grounding=use_grounding,
         )
 

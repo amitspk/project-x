@@ -50,7 +50,7 @@ These prioritized anchors are your final 'Keyword Anchors' to be used in the nex
     1. Keyword Bolding (Question): In the question string, identify and enclose the 2-4 most critical keywords or phrases (including the Keyword Anchor) in HTML bold tags (e.g., <b>keyword</b>) to help the reader grasp the topic at a glance.
     2. Keyword Bolding (for Answers): In the answer string, identify and enclose the 3-5 most critical concepts or key takeaways in HTML bold tags (e.g., <b>this is a key takeaway</b>) to improve skimmability and highlight the core knowledge.
     3. Answer Length. Concise Answerability: Ensure all questions are realistically answerable in a brief, summary format (approx. maximum of 1000 characters). Avoid overly broad topics.
-    4. Question Length: All questions must be a maximum of 120 characters.
+    4. Question Length: All questions must be a maximum of 120 characters. However, you must strive for a target of 80-100 characters (or ~10-12 words). Shorter, punchier questions are always better. The extra space up to 120 characters should only be used if it is absolutely essential to integrate a long Keyword Anchor phrase naturally.
     5. Structure (for Answer): Answers must be highly readable. Break text into short paragraphs (2-3 sentences max) using <br><br>. End every answer with a "Key Takeaway:" line.
 4. For each generated Q&A pair, you must also provide its corresponding probability relative to the full distribution of possible responses given the input prompt, on a scale from 0.0 to 1.0.
 5. Formatting Consistency: Use HTML bold (<b>...</b>) as the only method for emphasis. Do not use markdown (e.g., **...** or *...*) for emphasis.

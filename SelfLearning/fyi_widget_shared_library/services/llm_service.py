@@ -147,6 +147,9 @@ class LLMService:
             
         Returns:
             LLMGenerationResult with summary in JSON format
+            
+        Note: Grounding is NOT used for summary generation (only for question generation).
+        This method does not accept use_grounding parameter to prevent accidental usage.
         
         Example custom_prompt:
             "You are a technical writer for developers.
@@ -210,7 +213,8 @@ class LLMService:
             model: Optional model name to override instance model for this operation
             temperature: Optional temperature to override instance temperature for this operation
             max_tokens: Optional max_tokens to override instance max_tokens for this operation
-            use_grounding: If True, enables Google Search grounding (Gemini only) for real-time information
+            use_grounding: If True, enables Google Search grounding (Gemini only) for real-time information.
+                          Note: Grounding is ONLY available for question generation, NOT for summary or embeddings.
             
         Returns:
             LLMGenerationResult with questions in JSON format
