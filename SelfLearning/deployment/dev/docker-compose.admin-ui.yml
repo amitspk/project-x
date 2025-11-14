@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  admin-ui:
+    build:
+      context: ../..
+      dockerfile: fyi_widget_admin_ui/Dockerfile
+      args:
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://127.0.0.1:8005}
+    container_name: fyi-admin-ui
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5174:5173"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - fyi-widget-network
+
+networks:
+  fyi-widget-network:
+    external: true

@@ -42,6 +42,7 @@ def set_publisher_repo(repo: PostgresPublisherRepository):
 # ============================================================================
 
 async def verify_admin_key(
+    request: Request,
     x_admin_key: Optional[str] = Header(None, description="Admin API key for managing publishers")
 ) -> bool:
     """
@@ -56,6 +57,9 @@ async def verify_admin_key(
     Raises:
         HTTPException: 401 if key is missing or invalid
     """
+    if request.method.upper() == "OPTIONS":
+        return True
+    
     if not x_admin_key:
         logger.warning("Admin endpoint accessed without X-Admin-Key header")
         raise HTTPException(
