@@ -1,0 +1,23 @@
+services:
+  admin-ui:
+    image: docker.io/amit11081994/fyi-widget-admin-ui:latest
+    container_name: fyi-admin-ui
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - VITE_API_BASE_URL=${ADMIN_UI_API_BASE_URL:?Set the load-balanced API URL exposed via Nginx}
+    ports:
+      - "127.0.0.1:5174:80"
+    networks:
+      - fyi-widget-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+networks:
+  fyi-widget-network:
+    external: true
+
