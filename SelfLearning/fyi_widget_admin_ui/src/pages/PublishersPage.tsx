@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import clsx from 'clsx';
 import { useAdminApi } from '@/hooks/useAdminApi';
@@ -293,6 +293,23 @@ const PublishersPage = () => {
       setValue('use_grounding', false, { shouldDirty: false });
     }
   }, [questionsModel, isGeminiModel, setValue]);
+  
+  // Register questions_model and create a custom onChange handler
+  const questionsModelField = register('questions_model');
+  const { onChange: questionsModelOnChange, ...questionsModelRestProps } = questionsModelField;
+  
+  // Handle questions_model change to trigger watch() re-render
+  const handleQuestionsModelChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    questionsModelOnChange(e);
+    setValue('questions_model', value, { shouldValidate: true, shouldDirty: true });
+  }, [questionsModelOnChange, setValue]);
+  
+  // Memoize select props to avoid re-creating on every render
+  const questionsModelSelectProps = useMemo(() => ({
+    ...questionsModelRestProps,
+    onChange: handleQuestionsModelChange
+  }), [questionsModelRestProps, handleQuestionsModelChange]);
 
   const fetchPublishers = useCallback(async () => {
     setLoading(true);
@@ -548,7 +565,7 @@ const PublishersPage = () => {
             <label className="flex flex-col text-sm">
               <span className="mb-1 font-medium">Questions model</span>
               <select 
-                {...register('questions_model')} 
+                {...questionsModelSelectProps}
                 className="rounded-md border border-slate-300 px-3 py-2"
               >
                 {modelOptions.map((option) => (
