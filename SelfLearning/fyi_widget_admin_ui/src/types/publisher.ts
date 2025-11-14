@@ -13,6 +13,7 @@ export type PublisherConfig = {
   chat_max_tokens: number;
   generate_summary: boolean;
   generate_embeddings: boolean;
+  use_grounding?: boolean;
   daily_blog_limit: number | null;
   max_total_blogs?: number | null;
   whitelisted_blog_urls?: string[] | null;

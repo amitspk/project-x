@@ -660,7 +660,7 @@ async def get_publisher_config(
         
         config_data = {
             "success": True,
-            "config": publisher.config.dict()
+            "config": publisher.config.model_dump()  # Use model_dump() to include all fields including use_grounding
         }
         
         return success_response(
@@ -756,6 +756,7 @@ async def regenerate_publisher_api_key(
                         "chat_max_tokens": publisher.config.chat_max_tokens,
                         "generate_summary": publisher.config.generate_summary,
                         "generate_embeddings": publisher.config.generate_embeddings,
+                        "use_grounding": publisher.config.use_grounding,
                         "daily_blog_limit": publisher.config.daily_blog_limit
                     },
                     "created_at": publisher.created_at.isoformat() if publisher.created_at else None,

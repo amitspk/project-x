@@ -47,7 +47,9 @@ openai>=1.0.0,<2.0.0
 # Anthropic Claude API client
 anthropic>=0.25.0,<1.0.0
 
-# Google Generative AI
+# Google Generative AI (new SDK with GoogleSearch support)
+google-genai>=0.2.0
+# Keep old SDK for backward compatibility if needed
 google-generativeai>=0.7.0,<1.0.0
 
 # Ollama local LLM client (optional)

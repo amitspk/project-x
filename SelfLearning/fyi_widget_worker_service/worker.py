@@ -439,7 +439,7 @@ class BlogProcessingWorker:
             prompt_type = "CUSTOM" if config.custom_question_prompt else "DEFAULT"
             questions_model = get_model(config.questions_model)
             questions_model_label = questions_model or "default"
-            logger.info(f"❓ Generating {config.questions_per_blog} questions with {prompt_type} prompt (model: {questions_model}, temp: {config.questions_temperature}, max_tokens: {config.questions_max_tokens})...")
+            logger.info(f"❓ Generating {config.questions_per_blog} questions with {prompt_type} prompt (model: {questions_model}, temp: {config.questions_temperature}, max_tokens: {config.questions_max_tokens}, grounding: {config.use_grounding})...")
             
             questions_start = time.time()
             try:
@@ -450,7 +450,8 @@ class BlogProcessingWorker:
                     custom_prompt=config.custom_question_prompt,  # Fallback to default if None
                     model=questions_model,  # Use per-operation model
                     temperature=config.questions_temperature,  # Use per-operation temperature
-                    max_tokens=config.questions_max_tokens  # Use per-operation max_tokens
+                    max_tokens=config.questions_max_tokens,  # Use per-operation max_tokens
+                    use_grounding=config.use_grounding  # Use grounding setting from publisher config
                 )
                 
                 # Record LLM metrics

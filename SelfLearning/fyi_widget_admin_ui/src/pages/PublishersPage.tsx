@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import clsx from 'clsx';
 import { useAdminApi } from '@/hooks/useAdminApi';
@@ -32,6 +32,7 @@ type CreatePublisherFormValues = {
   questions_per_blog: number;
   generate_summary: boolean;
   generate_embeddings: boolean;
+  use_grounding: boolean;
   summary_model: string;
   questions_model: string;
   chat_model: string;
@@ -267,6 +268,7 @@ const PublishersPage = () => {
       questions_per_blog: 5,
       generate_summary: true,
       generate_embeddings: true,
+      use_grounding: false,
       summary_model: 'gpt-4o-mini',
       questions_model: 'gpt-4o-mini',
       chat_model: 'gpt-4o-mini',
@@ -280,6 +282,34 @@ const PublishersPage = () => {
     }
   });
   const themeColor = watch('ui_theme_color');
+  const questionsModel = watch('questions_model');
+  
+  // Check if the selected questions model is a Gemini model
+  const isGeminiModel = Boolean(questionsModel && typeof questionsModel === 'string' && questionsModel.toLowerCase().includes('gemini'));
+  
+  // Reset use_grounding to false if a non-Gemini model is selected
+  useEffect(() => {
+    if (!isGeminiModel && questionsModel) {
+      setValue('use_grounding', false, { shouldDirty: false });
+    }
+  }, [questionsModel, isGeminiModel, setValue]);
+  
+  // Register questions_model and create a custom onChange handler
+  const questionsModelField = register('questions_model');
+  const { onChange: questionsModelOnChange, ...questionsModelRestProps } = questionsModelField;
+  
+  // Handle questions_model change to trigger watch() re-render
+  const handleQuestionsModelChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    questionsModelOnChange(e);
+    setValue('questions_model', value, { shouldValidate: true, shouldDirty: true });
+  }, [questionsModelOnChange, setValue]);
+  
+  // Memoize select props to avoid re-creating on every render
+  const questionsModelSelectProps = useMemo(() => ({
+    ...questionsModelRestProps,
+    onChange: handleQuestionsModelChange
+  }), [questionsModelRestProps, handleQuestionsModelChange]);
 
   const fetchPublishers = useCallback(async () => {
     setLoading(true);
@@ -316,10 +346,15 @@ const PublishersPage = () => {
         .map((entry: string) => entry.trim())
         .filter(Boolean);
 
+      // Check if the questions model is a Gemini model
+      const isGemini = values.questions_model?.toLowerCase().includes('gemini') ?? false;
+
       const config: Partial<PublisherConfig> = {
         questions_per_blog: values.questions_per_blog,
         generate_summary: values.generate_summary,
         generate_embeddings: values.generate_embeddings,
+        // Only enable use_grounding if a Gemini model is selected and checkbox is checked
+        use_grounding: isGemini && values.use_grounding ? true : false,
         summary_model: values.summary_model,
         questions_model: values.questions_model,
         chat_model: values.chat_model,
@@ -529,13 +564,21 @@ const PublishersPage = () => {
             </label>
             <label className="flex flex-col text-sm">
               <span className="mb-1 font-medium">Questions model</span>
-              <select {...register('questions_model')} className="rounded-md border border-slate-300 px-3 py-2">
+              <select 
+                {...questionsModelSelectProps}
+                className="rounded-md border border-slate-300 px-3 py-2"
+              >
                 {modelOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
                 ))}
               </select>
+              {questionsModel && (
+                <span className="mt-1 text-xs text-slate-500">
+                  Selected: {questionsModel} {isGeminiModel ? '(Gemini - grounding available)' : '(Grounding not available)'}
+                </span>
+              )}
             </label>
             <label className="flex flex-col text-sm">
               <span className="mb-1 font-medium">Chat model</span>
@@ -554,6 +597,29 @@ const PublishersPage = () => {
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" {...register('generate_embeddings')} />
               Generate embeddings
+            </label>
+            <label
+              className={clsx(
+                'flex items-center gap-2 text-sm',
+                isGeminiModel ? 'text-slate-700' : 'text-slate-400 cursor-not-allowed'
+              )}
+            >
+              <input
+                type="checkbox"
+                {...register('use_grounding')}
+                disabled={!isGeminiModel}
+                className={clsx(
+                  'cursor-pointer disabled:cursor-not-allowed disabled:opacity-50'
+                )}
+              />
+              <span>
+                Use grounding (Gemini only)
+                {isGeminiModel ? (
+                  <span className="ml-1 text-xs text-slate-500">Real-time info via Google Search</span>
+                ) : (
+                  <span className="ml-1 text-xs text-slate-400">Select a Gemini model for questions to enable</span>
+                )}
+              </span>
             </label>
           </div>
 

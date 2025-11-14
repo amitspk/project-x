@@ -8,7 +8,7 @@ import logging
 import uuid
 import secrets
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from sqlalchemy import create_engine, Column, String, Integer, Float, Boolean, DateTime, JSON, Enum as SQLEnum
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker, AsyncEngine
 from sqlalchemy.ext.declarative import declarative_base
@@ -113,6 +113,13 @@ class PostgresPublisherRepository:
         """Generate a secure API key."""
         return f"pub_{secrets.token_urlsafe(32)}"
     
+    def _ensure_use_grounding_in_config(self, config: Optional[Dict[str, Any]]) -> PublisherConfig:
+        """Ensure use_grounding is included in config dict (backward compatibility)."""
+        config_dict = config if config else {}
+        if 'use_grounding' not in config_dict:
+            config_dict['use_grounding'] = False
+        return PublisherConfig(**config_dict)
+    
     def _table_to_model(self, table_obj: PublisherTable) -> Publisher:
         """Convert SQLAlchemy table object to Pydantic model."""
         return Publisher(
@@ -122,7 +129,8 @@ class PostgresPublisherRepository:
             email=table_obj.email,
             api_key=table_obj.api_key,
             status=table_obj.status,
-            config=PublisherConfig(**table_obj.config) if table_obj.config else PublisherConfig(),
+            # Ensure use_grounding is included even if not in database JSON (backward compatibility)
+            config=self._ensure_use_grounding_in_config(table_obj.config),
             created_at=table_obj.created_at,
             updated_at=table_obj.updated_at,
             last_active_at=table_obj.last_active_at,
@@ -156,7 +164,7 @@ class PostgresPublisherRepository:
                     email=publisher.email,
                     api_key=api_key,
                     status=publisher.status,
-                    config=publisher.config.dict(),
+                    config=publisher.config.model_dump(),  # Use model_dump() to include all fields including use_grounding
                     subscription_tier=publisher.subscription_tier or "free"
                 )
                 
@@ -229,7 +237,7 @@ class PostgresPublisherRepository:
                 # Update fields
                 for key, value in updates.items():
                     if key == 'config' and isinstance(value, PublisherConfig):
-                        setattr(db_publisher, key, value.dict())
+                        setattr(db_publisher, key, value.model_dump())  # Use model_dump() to include all fields including use_grounding
                     elif hasattr(db_publisher, key):
                         setattr(db_publisher, key, value)
                 

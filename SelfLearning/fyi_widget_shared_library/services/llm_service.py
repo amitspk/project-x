@@ -147,6 +147,9 @@ class LLMService:
             
         Returns:
             LLMGenerationResult with summary in JSON format
+            
+        Note: Grounding is NOT used for summary generation (only for question generation).
+        This method does not accept use_grounding parameter to prevent accidental usage.
         
         Example custom_prompt:
             "You are a technical writer for developers.
@@ -191,7 +194,8 @@ class LLMService:
         custom_prompt: Optional[str] = None,
         model: Optional[str] = None,
         temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None
+        max_tokens: Optional[int] = None,
+        use_grounding: bool = False
     ) -> LLMGenerationResult:
         """
         Generate question-answer pairs from content.
@@ -209,6 +213,8 @@ class LLMService:
             model: Optional model name to override instance model for this operation
             temperature: Optional temperature to override instance temperature for this operation
             max_tokens: Optional max_tokens to override instance max_tokens for this operation
+            use_grounding: If True, enables Google Search grounding (Gemini only) for real-time information.
+                          Note: Grounding is ONLY available for question generation, NOT for summary or embeddings.
             
         Returns:
             LLMGenerationResult with questions in JSON format
@@ -257,7 +263,22 @@ REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
         logger.debug(f"System Message:\n{OUTPUT_FORMAT_INSTRUCTION}")
         logger.debug("-" * 80)
         
-        # Delegate to provider
+        # Only pass use_grounding to providers that support it (Gemini)
+        if use_grounding and hasattr(provider, 'generate_questions'):
+            # Check if the provider is Gemini by checking provider_name
+            if provider.provider_name == "gemini":
+                return await provider.generate_questions(
+                    content=content,
+                    title=title,
+                    num_questions=num_questions,
+                    custom_prompt=custom_prompt,
+                    system_prompt=OUTPUT_FORMAT_INSTRUCTION,
+                    use_grounding=use_grounding
+                )
+            else:
+                logger.warning(f"❓ Grounding requested but provider {provider.provider_name} doesn't support it, ignoring")
+        
+        # Delegate to provider (without grounding)
         return await provider.generate_questions(
             content=content,
             title=title,
@@ -285,7 +306,8 @@ REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
         context: str = "",
         model: Optional[str] = None,
         temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None
+        max_tokens: Optional[int] = None,
+        use_grounding: bool = False
     ) -> LLMGenerationResult:
         """
         Answer a user's question with optional context.
@@ -296,6 +318,7 @@ REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
             model: Optional model name to override instance model for this operation
             temperature: Optional temperature to override instance temperature for this operation
             max_tokens: Optional max_tokens to override instance max_tokens for this operation
+            use_grounding: If True, enables Google Search grounding (Gemini only) for real-time information
             
         Returns:
             LLMGenerationResult with answer
@@ -308,6 +331,18 @@ REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
             logger.info(f"💬 Using temperature {temperature} for chat (instance: {self.temperature})")
         if max_tokens is not None and max_tokens != self.max_tokens:
             logger.info(f"💬 Using max_tokens {max_tokens} for chat (instance: {self.max_tokens})")
+        
+        # Only pass use_grounding to providers that support it (Gemini)
+        if use_grounding and hasattr(provider, 'answer_question'):
+            # Check if the provider is Gemini by checking provider_name
+            if provider.provider_name == "gemini":
+                return await provider.answer_question(
+                    question=question, 
+                    context=context,
+                    use_grounding=use_grounding
+                )
+            else:
+                logger.warning(f"💬 Grounding requested but provider {provider.provider_name} doesn't support it, ignoring")
         
         return await provider.answer_question(question=question, context=context)
 
