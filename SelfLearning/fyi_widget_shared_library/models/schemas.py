@@ -29,7 +29,7 @@ class GetQuestionsRequest(BaseModel):
 class SearchSimilarRequest(BaseModel):
     """Request to search for similar blogs."""
     question_id: str = Field(..., description="Question ID to find similar blogs for")
-    limit: int = Field(default=3, ge=1, le=10)
+    limit: int = Field(default=6, ge=1, le=10)
 
 
 # ============================================================================
