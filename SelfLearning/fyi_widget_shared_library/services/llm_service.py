@@ -157,9 +157,17 @@ class LLMService:
             code patterns, and practical takeaways for engineers."
         """
         # Get provider for this specific operation with custom parameters
-        provider = self._get_provider_for_model(model, temperature, max_tokens)
-        if model and model != self.model:
+        # If model is None, use instance model (should not happen but handle gracefully)
+        if model is None:
+            logger.warning(f"⚠️  No model specified for summary generation, using instance model: {self.model}")
+            model = self.model
+        elif model != self.model:
             logger.info(f"📝 Using model {model} for summary generation (instance model: {self.model})")
+        
+        provider = self._get_provider_for_model(model, temperature, max_tokens)
+        
+        # Log which provider is actually being used
+        logger.info(f"📝 Summary generation will use provider: {provider.provider_name} with model: {provider.model}")
         if temperature is not None and temperature != self.temperature:
             logger.info(f"📝 Using temperature {temperature} for summary (instance: {self.temperature})")
         if max_tokens is not None and max_tokens != self.max_tokens:

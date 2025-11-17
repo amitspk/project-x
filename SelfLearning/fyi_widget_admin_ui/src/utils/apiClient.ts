@@ -190,7 +190,7 @@ export function createApiClient(config: AdminConfig) {
 
     async getJobStatus(jobId: string): Promise<JobStatus> {
       try {
-        const response = await client.get<ApiSuccess<JobStatus>>(`/jobs/${jobId}`);
+        const response = await client.get<ApiSuccess<JobStatus>>(`/jobs/status/${jobId}`);
         return response.data.result;
       } catch (error) {
         throw toApiError(error);

@@ -145,6 +145,14 @@ REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
             len(user_prompt),
             use_grounding,
         )
+        
+        # Log full prompt for question generation
+        prompt_type = "CUSTOM" if custom_prompt else "DEFAULT_QUESTIONS_PROMPT"
+        logger.info("📝 Full question generation prompt before LLM call:")
+        logger.info(f"   Prompt Type: {prompt_type}")
+        logger.info(f"   System Instruction ({len(system_msg) if system_msg else 0} chars):\n{system_msg if system_msg else '(empty - using default fallback)'}")
+        logger.info(f"   User Prompt ({len(user_prompt)} chars):\n{user_prompt}")
+        logger.info(f"   Configuration: model={self.model}, temperature={self.temperature}, max_tokens={self.max_tokens}, grounding={use_grounding}")
 
         text, tokens_used = await self._generate_content(
             prompt=user_prompt,
@@ -320,8 +328,101 @@ The <b>path of totality</b>, where the Moon completely blocks the Sun, is typica
                 config=config,
             )
             
-            # Extract response text
-            result_text = getattr(response, "text", None) or str(response)
+            # Check for safety blocks or other finish reasons
+            if hasattr(response, "candidates") and response.candidates:
+                candidate = response.candidates[0]
+                finish_reason = getattr(candidate, "finish_reason", None)
+                
+                # Helper function to check if finish_reason is STOP (normal completion)
+                def is_stop_reason(fr):
+                    """Check if finish_reason represents STOP (normal completion)."""
+                    if fr is None:
+                        return True  # No finish_reason means success (default)
+                    
+                    # Check enum name
+                    if hasattr(fr, 'name') and fr.name == "STOP":
+                        return True
+                    
+                    # Check enum value
+                    if hasattr(fr, 'value') and fr.value == 1:
+                        return True
+                    
+                    # Check if it's an int with value 1
+                    if isinstance(fr, int) and fr == 1:
+                        return True
+                    
+                    # Check string representation (handles cases like "FinishReason.STOP")
+                    fr_str = str(fr).upper()
+                    if "STOP" in fr_str and ("FINISH_REASON" in fr_str or "1" in fr_str or fr_str.count(".") > 0):
+                        return True
+                    
+                    return False
+                
+                # Log finish_reason for debugging
+                if finish_reason is not None:
+                    logger.debug(f"🔍 Finish reason: {finish_reason} (type: {type(finish_reason).__name__})")
+                    if is_stop_reason(finish_reason):
+                        logger.debug("✅ Finish reason is STOP - normal completion, proceeding with response")
+                    else:
+                        logger.warning(f"⚠️  Finish reason is NOT STOP: {finish_reason}")
+                
+                # Only treat non-STOP finish reasons as errors
+                if finish_reason is not None and not is_stop_reason(finish_reason):
+                    # Extract numeric value if available for mapping
+                    finish_reason_value = None
+                    if hasattr(finish_reason, 'value'):
+                        finish_reason_value = finish_reason.value
+                    elif isinstance(finish_reason, int):
+                        finish_reason_value = finish_reason
+                    
+                    finish_reason_map = {
+                        2: "SAFETY (blocked by safety filters)",
+                        3: "RECITATION (content matched blocked content)",
+                        4: "OTHER (unknown reason)",
+                    }
+                    reason_text = finish_reason_map.get(finish_reason_value, f"FINISH_REASON_{finish_reason}")
+                    
+                    # Extract detailed safety ratings
+                    safety_details = []
+                    safety_ratings = getattr(candidate, "safety_ratings", [])
+                    if safety_ratings:
+                        for rating in safety_ratings:
+                            category = getattr(rating, "category", None)
+                            probability = getattr(rating, "probability", None)
+                            blocked = getattr(rating, "blocked", False)
+                            
+                            if blocked or probability:
+                                # Format category name (remove HARM_CATEGORY_ prefix if present)
+                                cat_str = str(category).replace("HARM_CATEGORY_", "").replace("_", " ").title() if category else "UNKNOWN"
+                                prob_str = str(probability).replace("HARM_PROBABILITY_", "").replace("_", " ").title() if probability else "UNKNOWN"
+                                
+                                safety_details.append(
+                                    f"{cat_str} (Probability: {prob_str}, Blocked: {blocked})"
+                                )
+                    
+                    # Build detailed error message
+                    error_msg = f"Gemini content generation was blocked ({reason_text})"
+                    if safety_details:
+                        error_msg += f". Safety details: {'; '.join(safety_details)}"
+                    else:
+                        error_msg += ". No detailed safety ratings available"
+                    
+                    # Log full details including prompt preview
+                    logger.error("❌ Gemini response blocked: %s (prompt preview: %s)", reason_text, prompt[:200])
+                    if safety_details:
+                        logger.error("   Safety details: %s", "; ".join(safety_details))
+                    
+                    raise ValueError(error_msg)
+            
+            # Extract response text (only if not blocked)
+            try:
+                result_text = getattr(response, "text", None) or str(response)
+            except Exception as exc:
+                logger.error("❌ Failed to extract text from Gemini response: %s", exc)
+                raise ValueError(
+                    "Gemini response did not contain valid content. "
+                    "This may be due to safety filtering or content policy restrictions."
+                ) from exc
             
             # Extract token usage (new SDK returns usage_metadata as an object)
             tokens_used = 0
@@ -374,10 +475,119 @@ The <b>path of totality</b>, where the Moon completely blocks the Sun, is typica
             logger.error("❌ Gemini content generation failed: %s", exc)
             raise
 
-        result_text = getattr(response, "text", None)
+        # Check for safety blocks or other finish reasons before accessing text
+        if hasattr(response, "candidates") and response.candidates:
+            candidate = response.candidates[0]
+            finish_reason = getattr(candidate, "finish_reason", None)
+            
+            # Helper function to check if finish_reason is STOP (normal completion)
+            def is_stop_reason(fr):
+                """Check if finish_reason represents STOP (normal completion)."""
+                if fr is None:
+                    return True  # No finish_reason means success (default)
+                
+                # Check enum name
+                if hasattr(fr, 'name') and fr.name == "STOP":
+                    return True
+                
+                # Check enum value
+                if hasattr(fr, 'value') and fr.value == 1:
+                    return True
+                
+                # Check if it's an int with value 1
+                if isinstance(fr, int) and fr == 1:
+                    return True
+                
+                # Check string representation (handles cases like "FinishReason.STOP")
+                fr_str = str(fr).upper()
+                if "STOP" in fr_str and ("FINISH_REASON" in fr_str or "1" in fr_str or fr_str.count(".") > 0):
+                    return True
+                
+                return False
+            
+            # Log finish_reason for debugging
+            if finish_reason is not None:
+                logger.debug(f"🔍 Finish reason: {finish_reason} (type: {type(finish_reason).__name__})")
+                if is_stop_reason(finish_reason):
+                    logger.debug("✅ Finish reason is STOP - normal completion, proceeding with response")
+                else:
+                    logger.warning(f"⚠️  Finish reason is NOT STOP: {finish_reason}")
+            
+            # Only treat non-STOP finish reasons as errors
+            if finish_reason is not None and not is_stop_reason(finish_reason):
+                # Extract numeric value if available for mapping
+                finish_reason_value = None
+                if hasattr(finish_reason, 'value'):
+                    finish_reason_value = finish_reason.value
+                elif isinstance(finish_reason, int):
+                    finish_reason_value = finish_reason
+                
+                finish_reason_map = {
+                    2: "SAFETY (blocked by safety filters)",
+                    3: "RECITATION (content matched blocked content)",
+                    4: "OTHER (unknown reason)",
+                }
+                reason_text = finish_reason_map.get(finish_reason_value, f"FINISH_REASON_{finish_reason}")
+                
+                # Extract detailed safety ratings
+                safety_details = []
+                safety_ratings = getattr(candidate, "safety_ratings", [])
+                if safety_ratings:
+                    for rating in safety_ratings:
+                        category = getattr(rating, "category", None)
+                        probability = getattr(rating, "probability", None)
+                        blocked = getattr(rating, "blocked", False)
+                        
+                        # Include all ratings, not just blocked ones, to give full context
+                        if probability or blocked:
+                            # Format category name (remove HARM_CATEGORY_ prefix if present)
+                            cat_str = str(category).replace("HARM_CATEGORY_", "").replace("_", " ").title() if category else "UNKNOWN"
+                            prob_str = str(probability).replace("HARM_PROBABILITY_", "").replace("_", " ").title() if probability else "UNKNOWN"
+                            
+                            if blocked:
+                                safety_details.append(
+                                    f"{cat_str} (Probability: {prob_str}, BLOCKED)"
+                                )
+                            else:
+                                # Also log non-blocked ratings for context
+                                safety_details.append(
+                                    f"{cat_str} (Probability: {prob_str}, allowed)"
+                                )
+                
+                # Build detailed error message
+                error_msg = f"Gemini content generation was blocked ({reason_text})"
+                if safety_details:
+                    error_msg += f". Safety details: {'; '.join(safety_details)}"
+                else:
+                    error_msg += ". No detailed safety ratings available"
+                
+                # Log full details including prompt preview
+                logger.error("❌ Gemini response blocked: %s (prompt preview: %s)", reason_text, prompt[:200])
+                if safety_details:
+                    logger.error("   Safety details: %s", "; ".join(safety_details))
+                    # Log blocked categories separately for emphasis
+                    blocked_only = [d for d in safety_details if "BLOCKED" in d]
+                    if blocked_only:
+                        logger.error("   BLOCKED categories: %s", "; ".join(blocked_only))
+                
+                raise ValueError(error_msg)
+
+        # Extract response text (only if not blocked)
+        try:
+            result_text = getattr(response, "text", None)
+        except Exception as exc:
+            logger.error("❌ Failed to extract text from Gemini response: %s (prompt preview: %s)", exc, prompt[:120])
+            raise ValueError(
+                "Gemini response did not contain valid content. "
+                "This may be due to safety filtering or content policy restrictions."
+            ) from exc
+        
         if not result_text:
             logger.error("❌ Gemini returned empty response for prompt preview: %s", prompt[:120])
-            raise ValueError("Gemini returned an empty response.")
+            raise ValueError(
+                "Gemini returned an empty response. "
+                "This may be due to safety filters or content policy restrictions."
+            )
 
         # Extract token usage
         tokens_used = 0

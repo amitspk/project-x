@@ -73,12 +73,19 @@ class JobRepository:
         
         return job.job_id
     
-    async def enqueue_job(self, blog_url: str) -> ProcessingJob:
+    async def enqueue_job(
+        self, 
+        blog_url: str,
+        publisher_id: Optional[str] = None,
+        config: Optional[dict] = None
+    ) -> ProcessingJob:
         """
-        Enqueue a new processing job (legacy method).
+        Enqueue a new processing job.
         
         Args:
             blog_url: URL of the blog to process
+            publisher_id: ID of the publisher creating the job (optional)
+            config: Publisher configuration for processing (optional)
             
         Returns:
             Created ProcessingJob
@@ -93,12 +100,16 @@ class JobRepository:
             logger.info(f"📋 Job already queued/processing for URL: {blog_url}")
             return ProcessingJob(**existing)
         
-        # Create new job
-        job = ProcessingJob(blog_url=blog_url)
+        # Create new job with publisher context
+        job = ProcessingJob(
+            blog_url=blog_url,
+            publisher_id=publisher_id,
+            config=config
+        )
         job_dict = job.dict()
         
         await self.collection.insert_one(job_dict)
-        logger.info(f"✅ Enqueued job {job.job_id} for URL: {blog_url}")
+        logger.info(f"✅ Enqueued job {job.job_id} for URL: {blog_url} (Publisher: {publisher_id})")
         
         return job
     

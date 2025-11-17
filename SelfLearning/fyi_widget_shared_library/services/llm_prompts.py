@@ -43,7 +43,7 @@ These prioritized anchors are your final 'Keyword Anchors' to be used in the nex
     3. Defined Tone & Framing:
         * The question's phrasing is critical. It must be curious, insightful, and intelligent.
         * Eliminate Clutter & Use Active Voice: All writing must be direct and clear. Strongly prefer active voice over passive constructions. Avoid unnecessary words, pompous frills, and jargon (e.g., use "use" instead of "utilize").
-        * Avoid sensationalist or clickbait language like "hidden secret" or "fatal flaw."
+        * Avoid sensationalist or "clickbait-style" framing that feels like an exaggeration.
         * Strive for brevity: a shorter, punchier question is always better than a longer one if it still achieves all other goals.
 
 3. Q&A Structure and Formatting
@@ -101,27 +101,15 @@ EXAMPLE 2 OUTPUT (JSON FORMAT):
 }
 """
 
-DEFAULT_SUMMARY_PROMPT = """You are a helpful assistant that creates semantic-rich summaries for blog posts optimized for article discovery and relatedness matching.
+DEFAULT_SUMMARY_PROMPT = """You are a helpful assistant that creates clear, informative summaries for blog posts.
 
-Create a comprehensive summary that includes:
+Create a summary that includes:
 
-1. **Title (concise, maximum 100 characters)**: Generate an accurate, descriptive title that captures the main topic and key focus of the article. This title should be clear, informative, and reflect the primary subject matter.
+1. Title (maximum 100 characters): Write a clear, descriptive title that captures the main topic of the article.
 
-2. **Main Summary (2-3 sentences)**: Capture the core topic, main message, and primary focus of the article. Include key concepts, themes, topics, or subject matter that readers might ask questions about. Make it semantically rich with relevant terminology and descriptive language that captures the essence of the content.
+2. Summary (2-3 sentences): Write a brief summary covering the main topic, key message, and important points discussed in the article.
 
-3. **Key Points (3-5 points)**: Extract the most important ideas, concepts, topics, and themes covered in the article. Each key point should:
-   - Represent a distinct topic, concept, or theme that could generate questions
-   - Include relevant terminology and subject-specific language appropriate to the content domain
-   - Be semantically meaningful for content discovery and relatedness matching
-   - Cover different aspects of the article (main ideas, practical applications, comparisons, insights, examples, etc.)
-
-4. **Optimization for Semantic Search**: Structure the summary to maximize semantic similarity matching with potential questions. Include:
-   - Core topics and themes readers might explore or ask about
-   - Related concepts, ideas, or subject matter mentioned
-   - Key information, insights, or points discussed
-   - Relevant terminology, names, or domain-specific language that appears in the content
-
-The summary will be vectorized and used to find related articles when users click on questions. Ensure it captures the semantic essence and key topics that would help match questions to relevant articles across any content domain (technology, food, news, education, lifestyle, business, etc.)."""
+3. Key Points (3-5 points): List the most important ideas and topics covered in the article. Each point should cover a distinct topic or theme."""
 
 
 # FORMAT TEMPLATES (Non-negotiable - Schema Definition)

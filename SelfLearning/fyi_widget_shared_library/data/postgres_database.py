@@ -191,8 +191,17 @@ class PostgresPublisherRepository:
             db_publisher = result.scalar_one_or_none()
             return self._table_to_model(db_publisher) if db_publisher else None
     
-    async def get_publisher_by_domain(self, domain: str) -> Optional[Publisher]:
-        """Get publisher by domain."""
+    async def get_publisher_by_domain(self, domain: str, allow_subdomain: bool = False) -> Optional[Publisher]:
+        """
+        Get publisher by domain.
+        
+        Args:
+            domain: Domain to search for
+            allow_subdomain: If True, allows matching subdomains (e.g., info.contentretina.com matches contentretina.com)
+        
+        Returns:
+            Publisher if found, None otherwise
+        """
         # Normalize domain
         domain = domain.lower().strip()
         for prefix in ['https://', 'http://', 'www.']:
@@ -201,11 +210,43 @@ class PostgresPublisherRepository:
         domain = domain.rstrip('/')
         
         async with self.async_session_factory() as session:
+            # First try exact match
             result = await session.execute(
                 select(PublisherTable).where(PublisherTable.domain == domain)
             )
             db_publisher = result.scalar_one_or_none()
-            return self._table_to_model(db_publisher) if db_publisher else None
+            
+            if db_publisher:
+                return self._table_to_model(db_publisher)
+            
+            # If not found and subdomain matching is enabled, try subdomain match
+            if allow_subdomain:
+                # Get all publishers and check if the domain is a subdomain of any publisher domain
+                all_publishers_result = await session.execute(
+                    select(PublisherTable)
+                )
+                all_publishers = all_publishers_result.scalars().all()
+                
+                # Sort by domain length (shortest first) to prioritize root domains over subdomains
+                # e.g., contentretina.com should match before info.contentretina.com
+                matching_publishers = []
+                for pub in all_publishers:
+                    publisher_domain = pub.domain.lower().strip()
+                    # Check if extracted domain is a subdomain of publisher domain
+                    # e.g., info.contentretina.com ends with .contentretina.com
+                    if domain == publisher_domain or domain.endswith(f".{publisher_domain}"):
+                        matching_publishers.append((pub, len(publisher_domain)))
+                
+                if matching_publishers:
+                    # Return the publisher with the shortest domain (root domain takes precedence)
+                    # e.g., if domain is "info.contentretina.com" and we have publishers for
+                    # "contentretina.com" and "info.contentretina.com", prefer "contentretina.com" (root)
+                    matching_publishers.sort(key=lambda x: x[1])
+                    pub, _ = matching_publishers[0]
+                    logger.info(f"✅ Found publisher by subdomain match: {domain} -> {pub.domain.lower()} (publisher: {pub.name})")
+                    return self._table_to_model(pub)
+            
+            return None
     
     async def get_publisher_by_api_key(self, api_key: str) -> Optional[Publisher]:
         """Get publisher by API key."""

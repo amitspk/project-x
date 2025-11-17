@@ -150,11 +150,11 @@ class BlogProcessingWorker:
             if domain.startswith('www.'):
                 domain = domain[4:]
             
-            # Fetch publisher
-            publisher = await self.publisher_repo.get_publisher_by_domain(domain)
+            # Fetch publisher - first try exact match, then try subdomain matching
+            publisher = await self.publisher_repo.get_publisher_by_domain(domain, allow_subdomain=True)
             
             if publisher:
-                logger.info(f"✅ Using config for publisher: {publisher.name}")
+                logger.info(f"✅ Using config for publisher: {publisher.name} (domain: {publisher.domain}) - matched from blog URL domain: {domain}")
                 return publisher.config
             else:
                 logger.warning(f"⚠️  Publisher not found for domain: {domain}, using defaults")
@@ -269,6 +269,9 @@ class BlogProcessingWorker:
             domain = domain[4:]
         publisher_domain = domain.lower()
         
+        # Initialize blog_id to track if raw content was saved
+        blog_id = None
+        
         try:
             # Mark as processing
             success = await self.job_repo.mark_job_processing(job.job_id)
@@ -324,43 +327,110 @@ class BlogProcessingWorker:
             if has_custom_summary:
                 logger.info(f"   Custom Summary Prompt (preview): {config.custom_summary_prompt[:100]}...")
             
-            # Step 1: Crawl blog
-            logger.info(f"🕷️  Crawling: {normalized_url}")
+            # Step 1: Check for existing raw content or crawl blog
+            logger.info(f"🔍 Checking for existing raw content: {normalized_url}")
             crawl_start = time.time()
-            try:
-                crawl_result = await self.crawler.crawl_url(normalized_url)
+            crawl_result = None
+            
+            # First, check if raw content already exists in database
+            existing_blog = await self.storage.get_blog_by_url(normalized_url)
+            
+            if existing_blog:
+                # Convert existing blog to CrawledContent format
+                from fyi_widget_shared_library.models.schemas import CrawledContent
                 
-                # crawl_result is CrawledContent on success, exception raised on failure
-                if not crawl_result or not crawl_result.content:
-                    raise Exception("Crawl failed: No content extracted")
+                blog_id = str(existing_blog["_id"])
+                crawl_result = CrawledContent(
+                    url=normalized_url,
+                    title=existing_blog.get("title", ""),
+                    content=existing_blog.get("content", ""),
+                    language=existing_blog.get("language", "en"),
+                    word_count=existing_blog.get("word_count", 0),
+                    metadata=existing_blog.get("metadata", {})
+                )
                 
-                # Additional validation: check content quality
-                if len(crawl_result.content.strip()) < 50:
-                    raise Exception(f"Crawl failed: Content too short ({len(crawl_result.content)} chars)")
-                
-                # Record crawl metrics
-                crawl_duration = time.time() - crawl_start
-                crawl_operations_total.labels(publisher_domain=publisher_domain, status="success").inc()
-                crawl_duration_seconds.labels(publisher_domain=publisher_domain).observe(crawl_duration)
-                crawl_content_size_bytes.labels(publisher_domain=publisher_domain).observe(len(crawl_result.content.encode('utf-8')))
-                crawl_word_count.labels(publisher_domain=publisher_domain).observe(crawl_result.word_count)
-                
-                logger.info(f"✅ Crawl successful: {crawl_result.word_count} words extracted")
-                
-            except Exception as crawl_error:
-                # Record crawl failure
-                crawl_duration = time.time() - crawl_start
-                crawl_operations_total.labels(publisher_domain=publisher_domain, status="failed").inc()
-                crawl_duration_seconds.labels(publisher_domain=publisher_domain).observe(crawl_duration)
-                processing_errors_total.labels(publisher_domain=publisher_domain, error_type="crawl_error").inc()
-                logger.error(f"❌ Crawl failed for {normalized_url}: {crawl_error}")
-                raise Exception(f"Crawl failed: {str(crawl_error)}")
+                # Validate existing content
+                if not crawl_result.content or len(crawl_result.content.strip()) < 50:
+                    logger.warning(f"⚠️  Existing content is invalid, will re-crawl: {normalized_url}")
+                    crawl_result = None  # Force re-crawl
+                else:
+                    crawl_duration = time.time() - crawl_start
+                    crawl_operations_total.labels(publisher_domain=publisher_domain, status="cached").inc()
+                    crawl_duration_seconds.labels(publisher_domain=publisher_domain).observe(crawl_duration)
+                    crawl_content_size_bytes.labels(publisher_domain=publisher_domain).observe(len(crawl_result.content.encode('utf-8')))
+                    crawl_word_count.labels(publisher_domain=publisher_domain).observe(crawl_result.word_count)
+                    
+                    logger.info(f"✅ Using existing raw content: {crawl_result.word_count} words (blog_id: {blog_id})")
+            
+            # If no existing content or invalid, crawl the blog
+            if crawl_result is None:
+                logger.info(f"🕷️  Crawling: {normalized_url}")
+                try:
+                    crawl_result = await self.crawler.crawl_url(normalized_url)
+                    
+                    # crawl_result is CrawledContent on success, exception raised on failure
+                    if not crawl_result or not crawl_result.content:
+                        raise Exception("Crawl failed: No content extracted")
+                    
+                    # Additional validation: check content quality
+                    if len(crawl_result.content.strip()) < 50:
+                        raise Exception(f"Crawl failed: Content too short ({len(crawl_result.content)} chars)")
+                    
+                    # Record crawl metrics
+                    crawl_duration = time.time() - crawl_start
+                    crawl_operations_total.labels(publisher_domain=publisher_domain, status="success").inc()
+                    crawl_duration_seconds.labels(publisher_domain=publisher_domain).observe(crawl_duration)
+                    crawl_content_size_bytes.labels(publisher_domain=publisher_domain).observe(len(crawl_result.content.encode('utf-8')))
+                    crawl_word_count.labels(publisher_domain=publisher_domain).observe(crawl_result.word_count)
+                    
+                    logger.info(f"✅ Crawl successful: {crawl_result.word_count} words extracted")
+                    
+                    # Save raw blog content immediately after crawl succeeds
+                    # This ensures content is preserved even if later processing steps fail
+                    logger.info("💾 Saving raw blog content...")
+                    db_start = time.time()
+                    try:
+                        blog_id = await self.storage.save_blog_content(
+                            url=normalized_url,
+                            title=crawl_result.title,  # Will be updated later if LLM generates a better title
+                            content=crawl_result.content,
+                            language=crawl_result.language,
+                            word_count=crawl_result.word_count,
+                            metadata=crawl_result.metadata
+                        )
+                        db_duration = time.time() - db_start
+                        db_operations_total.labels(operation="save_blog", collection="raw_blog_content", status="success").inc()
+                        db_operation_duration_seconds.labels(operation="save_blog", collection="raw_blog_content").observe(db_duration)
+                        logger.info(f"✅ Raw blog content saved: {blog_id}")
+                    except Exception as save_error:
+                        db_duration = time.time() - db_start
+                        db_operations_total.labels(operation="save_blog", collection="raw_blog_content", status="error").inc()
+                        db_operation_duration_seconds.labels(operation="save_blog", collection="raw_blog_content").observe(db_duration)
+                        # Log but don't fail - we can try again later or the content might already exist
+                        logger.warning(f"⚠️  Failed to save raw blog content: {save_error}. Continuing with processing...")
+                        blog_id = None
+                    
+                except Exception as crawl_error:
+                    # Record crawl failure
+                    crawl_duration = time.time() - crawl_start
+                    crawl_operations_total.labels(publisher_domain=publisher_domain, status="failed").inc()
+                    crawl_duration_seconds.labels(publisher_domain=publisher_domain).observe(crawl_duration)
+                    processing_errors_total.labels(publisher_domain=publisher_domain, error_type="crawl_error").inc()
+                    logger.error(f"❌ Crawl failed for {normalized_url}: {crawl_error}")
+                    raise Exception(f"Crawl failed: {str(crawl_error)}")
             
             # Step 2: Generate summary (with custom prompt if available)
             prompt_type = "CUSTOM" if config.custom_summary_prompt else "DEFAULT"
             summary_model = get_model(config.summary_model)
             summary_model_label = summary_model or "default"
-            logger.info(f"📝 Generating summary with {prompt_type} prompt (model: {summary_model}, temp: {config.summary_temperature}, max_tokens: {config.summary_max_tokens})...")
+            
+            # Log detailed model info for debugging
+            logger.info(f"📝 Generating summary with {prompt_type} prompt:")
+            logger.info(f"   Config summary_model (raw): {config.summary_model}")
+            logger.info(f"   Extracted summary_model: {summary_model}")
+            logger.info(f"   LLM Service instance model: {self.llm_service.model}")
+            logger.info(f"   Will use model: {summary_model or self.llm_service.model}")
+            logger.info(f"   Temperature: {config.summary_temperature}, max_tokens: {config.summary_max_tokens}")
             
             summary_start = time.time()
             try:
@@ -368,7 +438,7 @@ class BlogProcessingWorker:
                     content=crawl_result.content,
                     title=crawl_result.title,
                     custom_prompt=config.custom_summary_prompt,  # Fallback to default if None
-                    model=summary_model,  # Use per-operation model
+                    model=summary_model,  # Use per-operation model (None will fall back to instance model)
                     temperature=config.summary_temperature,  # Use per-operation temperature
                     max_tokens=config.summary_max_tokens  # Use per-operation max_tokens
                 )
@@ -656,29 +726,36 @@ class BlogProcessingWorker:
                     raise
             
             # Step 5: Save to database
-            logger.info("💾 Saving to database...")
+            logger.info("💾 Saving processed data to database...")
             
-            # Save raw blog content (use normalized URL)
-            # Use LLM-generated title if available, otherwise use crawled title
-            db_start = time.time()
-            try:
-                blog_id = await self.storage.save_blog_content(
-                    url=normalized_url,
-                    title=final_title,  # LLM-generated title or crawled title fallback
-                    content=crawl_result.content,
-                    language=crawl_result.language,
-                    word_count=crawl_result.word_count,
-                    metadata=crawl_result.metadata
-                )
-                db_duration = time.time() - db_start
-                db_operations_total.labels(operation="save_blog", collection="raw_blog_content", status="success").inc()
-                db_operation_duration_seconds.labels(operation="save_blog", collection="raw_blog_content").observe(db_duration)
-            except Exception as e:
-                db_duration = time.time() - db_start
-                db_operations_total.labels(operation="save_blog", collection="raw_blog_content", status="error").inc()
-                db_operation_duration_seconds.labels(operation="save_blog", collection="raw_blog_content").observe(db_duration)
-                processing_errors_total.labels(publisher_domain=publisher_domain, error_type="db_error").inc()
-                raise
+            # Raw blog content should already be saved after crawl (Step 1)
+            # If it wasn't saved (e.g., due to error during save), try to save it now
+            if blog_id is None:
+                logger.warning("⚠️  Blog content not saved yet, attempting to save now...")
+                db_start = time.time()
+                try:
+                    blog_id = await self.storage.save_blog_content(
+                        url=normalized_url,
+                        title=final_title,  # LLM-generated title or crawled title fallback
+                        content=crawl_result.content,
+                        language=crawl_result.language,
+                        word_count=crawl_result.word_count,
+                        metadata=crawl_result.metadata
+                    )
+                    db_duration = time.time() - db_start
+                    db_operations_total.labels(operation="save_blog", collection="raw_blog_content", status="success").inc()
+                    db_operation_duration_seconds.labels(operation="save_blog", collection="raw_blog_content").observe(db_duration)
+                    logger.info(f"✅ Raw blog content saved: {blog_id}")
+                except Exception as e:
+                    db_duration = time.time() - db_start
+                    db_operations_total.labels(operation="save_blog", collection="raw_blog_content", status="error").inc()
+                    db_operation_duration_seconds.labels(operation="save_blog", collection="raw_blog_content").observe(db_duration)
+                    processing_errors_total.labels(publisher_domain=publisher_domain, error_type="db_error").inc()
+                    raise
+            else:
+                # Update title if LLM generated a better one
+                if final_title != crawl_result.title:
+                    logger.info(f"📝 LLM generated a better title, but raw content already saved. New title will be used for summary/questions only.")
             
             # Save summary (use normalized URL)
             # Pass LLM-generated title for storage (optional, stored for reference)
@@ -770,7 +847,8 @@ class BlogProcessingWorker:
                 if domain.startswith('www.'):
                     domain = domain[4:]
                 
-                publisher = await self.publisher_repo.get_publisher_by_domain(domain)
+                # Use subdomain matching to find publisher (e.g., info.contentretina.com -> contentretina.com)
+                publisher = await self.publisher_repo.get_publisher_by_domain(domain, allow_subdomain=True)
                 if publisher:
                     # Check if this blog was already processed before (to prevent double counting)
                     # Count completed jobs for this normalized URL (excluding current job)
@@ -842,18 +920,28 @@ class BlogProcessingWorker:
 
             try:
                 if self.publisher_repo:
+                    # Try to get publisher_id from job first (should be set by API now)
                     publisher_id = job.publisher_id
                     if not publisher_id and publisher:
                         publisher_id = publisher.id
                     if not publisher_id:
-                        db_publisher = await self.publisher_repo.get_publisher_by_domain(publisher_domain)
+                        # Fallback: try to find publisher by domain (with subdomain matching)
+                        db_publisher = await self.publisher_repo.get_publisher_by_domain(
+                            publisher_domain, 
+                            allow_subdomain=True
+                        )
                         if db_publisher:
                             publisher_id = db_publisher.id
+                            logger.info(f"📋 Found publisher by domain for slot release: {db_publisher.name} (domain: {db_publisher.domain})")
+                    
                     if publisher_id:
                         await self.publisher_repo.release_blog_slot(
                             publisher_id,
                             processed=False,
                         )
+                        logger.info(f"✅ Released blog slot for publisher: {publisher_id}")
+                    else:
+                        logger.warning(f"⚠️  Could not find publisher_id to release blog slot (domain: {publisher_domain})")
             except Exception as release_error:
                 logger.warning(f"⚠️  Failed to release reserved blog slot after failure: {release_error}")
 

@@ -47,7 +47,7 @@ class LLMModelConfig:
     # Operation-specific defaults for different use cases
     
     DEFAULT_MAX_TOKENS_SUMMARY = 2000
-    DEFAULT_MAX_TOKENS_QUESTIONS = 10000  # Higher for detailed Q&A generation
+    DEFAULT_MAX_TOKENS_QUESTIONS = 20000  # Higher for detailed Q&A generation
     DEFAULT_MAX_TOKENS_CHAT = 300
     
     # ========================================================================

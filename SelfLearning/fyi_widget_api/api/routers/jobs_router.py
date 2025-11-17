@@ -188,7 +188,12 @@ async def enqueue_blog_processing(
             if auth_module.publisher_repo:
                 await auth_module.publisher_repo.reserve_blog_slot(publisher.id)
                 slot_reserved = True
-            job = await job_repo.enqueue_job(normalized_url)
+            # Pass publisher_id and config so worker can release the slot properly
+            job = await job_repo.enqueue_job(
+                normalized_url,
+                publisher_id=publisher.id,
+                config=publisher.config.model_dump() if publisher.config else None
+            )
         except UsageLimitExceededError as exc:
             logger.warning(f"[{request_id}] ❌ Blog limit reached for publisher {publisher.id}: {exc}")
             raise HTTPException(
@@ -250,23 +255,22 @@ async def enqueue_blog_processing(
 @router.get(
     "/status/{job_id}",
     response_model=SwaggerJobStatusResponse,
+    dependencies=[Depends(verify_admin_key)],
     responses={
         200: {"description": "Job status retrieved successfully"},
-        401: {"model": StandardErrorResponse, "description": "Authentication required - X-API-Key header missing"},
-        403: {"model": StandardErrorResponse, "description": "Publisher account not active"},
+        401: {"model": StandardErrorResponse, "description": "Admin authentication required - X-Admin-Key header missing"},
         404: {"model": StandardErrorResponse, "description": "Job not found"}
     }
 )
 async def get_job_status(
     http_request: Request,
     job_id: str,
-    publisher: Publisher = Depends(get_current_publisher),
     job_repo: JobRepository = Depends(get_job_repository)
 ) -> Dict[str, Any]:
     """
     Get the status of a processing job.
     
-    **Authentication**: Requires X-API-Key header with valid publisher API key.
+    **Admin Only**: This endpoint requires admin authentication (X-Admin-Key header).
     
     Returns job details including status, timestamps, error messages (if any),
     and processing results.
