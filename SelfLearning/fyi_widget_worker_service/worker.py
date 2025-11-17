@@ -912,38 +912,52 @@ class BlogProcessingWorker:
             
             logger.error(f"❌ Job {job.job_id} failed: {error_msg}", exc_info=True)
             
+            # Mark job as failed (may requeue if under max retries)
             await self.job_repo.mark_job_failed(
                 job_id=job.job_id,
                 error_message=error_msg,
                 should_retry=True
             )
-
-            try:
-                if self.publisher_repo:
-                    # Try to get publisher_id from job first (should be set by API now)
-                    publisher_id = job.publisher_id
-                    if not publisher_id and publisher:
-                        publisher_id = publisher.id
-                    if not publisher_id:
-                        # Fallback: try to find publisher by domain (with subdomain matching)
-                        db_publisher = await self.publisher_repo.get_publisher_by_domain(
-                            publisher_domain, 
-                            allow_subdomain=True
-                        )
-                        if db_publisher:
-                            publisher_id = db_publisher.id
-                            logger.info(f"📋 Found publisher by domain for slot release: {db_publisher.name} (domain: {db_publisher.domain})")
-                    
-                    if publisher_id:
-                        await self.publisher_repo.release_blog_slot(
-                            publisher_id,
-                            processed=False,
-                        )
-                        logger.info(f"✅ Released blog slot for publisher: {publisher_id}")
-                    else:
-                        logger.warning(f"⚠️  Could not find publisher_id to release blog slot (domain: {publisher_domain})")
-            except Exception as release_error:
-                logger.warning(f"⚠️  Failed to release reserved blog slot after failure: {release_error}")
+            
+            # Check if job was permanently failed or requeued
+            updated_job = await self.job_repo.get_job_by_id(job.job_id)
+            if not updated_job:
+                logger.error(f"❌ Job {job.job_id} not found after marking as failed - cannot determine status, keeping slot reserved for safety")
+                return  # Keep slot reserved as fail-safe
+            
+            is_permanently_failed = updated_job.status == JobStatus.FAILED
+            
+            # Only release slot if job is permanently failed (not requeued)
+            # If requeued, keep the slot reserved since the job will retry
+            if is_permanently_failed:
+                try:
+                    if self.publisher_repo:
+                        # Try to get publisher_id from job first (should be set by API now)
+                        publisher_id = job.publisher_id
+                        if not publisher_id and publisher:
+                            publisher_id = publisher.id
+                        if not publisher_id:
+                            # Fallback: try to find publisher by domain (with subdomain matching)
+                            db_publisher = await self.publisher_repo.get_publisher_by_domain(
+                                publisher_domain, 
+                                allow_subdomain=True
+                            )
+                            if db_publisher:
+                                publisher_id = db_publisher.id
+                                logger.info(f"📋 Found publisher by domain for slot release: {db_publisher.name} (domain: {db_publisher.domain})")
+                        
+                        if publisher_id:
+                            await self.publisher_repo.release_blog_slot(
+                                publisher_id,
+                                processed=False,
+                            )
+                            logger.info(f"✅ Released blog slot for permanently failed job (publisher: {publisher_id})")
+                        else:
+                            logger.warning(f"⚠️  Could not find publisher_id to release blog slot (domain: {publisher_domain})")
+                except Exception as release_error:
+                    logger.warning(f"⚠️  Failed to release reserved blog slot after permanent failure: {release_error}")
+            else:
+                logger.info(f"🔄 Job {job.job_id} requeued for retry - keeping slot reserved")
 
 
 # Global worker instance
