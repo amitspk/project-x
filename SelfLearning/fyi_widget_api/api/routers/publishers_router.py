@@ -256,6 +256,7 @@ async def get_publisher_by_domain(
     Get publisher by domain.
     
     Useful for checking if a domain is already onboarded.
+    Supports subdomain matching (e.g., info.contentretina.com will find contentretina.com publisher).
     """
     # Get request_id from middleware (fallback to generating one if not available)
     request_id = getattr(http_request.state, 'request_id', None) or generate_request_id()
@@ -263,7 +264,8 @@ async def get_publisher_by_domain(
     try:
         logger.info(f"[{request_id}] 📖 Getting publisher by domain: {domain}")
         
-        publisher = await repo.get_publisher_by_domain(domain)
+        # Enable subdomain matching for admin lookups (e.g., info.contentretina.com -> contentretina.com)
+        publisher = await repo.get_publisher_by_domain(domain, allow_subdomain=True)
         
         if not publisher:
             raise HTTPException(

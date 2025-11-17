@@ -109,6 +109,14 @@ REQUIRED OUTPUT FORMAT (you must use this exact JSON structure):
 
         logger.debug(f"❓ Anthropic generating {num_questions} questions (system: {len(system_msg)} chars, user: {len(user_prompt)} chars)")
 
+        # Log full prompt for question generation
+        prompt_type = "CUSTOM" if custom_prompt else "DEFAULT_QUESTIONS_PROMPT"
+        logger.info("📝 Full question generation prompt before LLM call:")
+        logger.info(f"   Prompt Type: {prompt_type}")
+        logger.info(f"   System Prompt ({len(system_msg) if system_msg else 0} chars):\n{system_msg if system_msg else '(empty - using default fallback)'}")
+        logger.info(f"   User Prompt ({len(user_prompt)} chars):\n{user_prompt}")
+        logger.info(f"   Configuration: model={self.model}, temperature={self.temperature}, max_tokens={self.max_tokens}")
+
         try:
             response = await self.client.messages.create(
                 model=self.model,
