@@ -24,7 +24,7 @@ class CrawlerService:
         self,
         timeout: int = 30,
         max_retries: int = 3,
-        user_agent: str = "BlogQA-Crawler/1.0",
+        user_agent: str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         max_content_size: int = 10 * 1024 * 1024
     ):
         self.timeout = timeout
@@ -47,6 +47,7 @@ class CrawlerService:
         """
         logger.info(f"🕷️  Crawling URL: {url}")
         
+        # Try standard HTTP fetch first
         for attempt in range(self.max_retries):
             try:
                 html_content = await self._fetch_html(url)
@@ -55,6 +56,14 @@ class CrawlerService:
                 logger.info(f"✅ Crawled successfully: {url} ({extracted.word_count} words)")
                 return extracted
                 
+            except ValueError as e:
+                # Validation errors - retry with exponential backoff
+                if attempt < self.max_retries - 1:
+                    wait_time = 2 ** attempt
+                    logger.warning(f"⚠️  Retry {attempt + 1}/{self.max_retries} for {url}: {e}")
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise
             except Exception as e:
                 if attempt < self.max_retries - 1:
                     wait_time = 2 ** attempt  # Exponential backoff
@@ -103,7 +112,21 @@ class CrawlerService:
                         raise ValueError("Response content is empty")
                 
                 # Get text - httpx handles encoding automatically
-                text = response.text
+                # But try to handle encoding issues more gracefully
+                try:
+                    text = response.text
+                except UnicodeDecodeError:
+                    # Try to decode with different encodings
+                    logger.warning(f"⚠️  Unicode decode error, trying alternative encodings for {url}")
+                    for encoding in ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']:
+                        try:
+                            text = response.content.decode(encoding)
+                            logger.info(f"✅ Successfully decoded with {encoding}")
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                    else:
+                        raise ValueError("Failed to decode content with any encoding")
                 
                 # Validate that we got actual text (not binary)
                 if self._is_invalid_content(text):
@@ -111,16 +134,22 @@ class CrawlerService:
                     logger.warning(f"   Content-Type: {response.headers.get('content-type', 'unknown')}")
                     logger.warning(f"   Content-Length: {len(response.content)} bytes")
                     logger.warning(f"   Text length: {len(text)} chars")
-                    logger.warning(f"   First 200 chars: {repr(text[:200])}")
+                    logger.warning(f"   First 500 chars: {repr(text[:500])}")
+                    # Check if it might be a JS-rendered site (has script tags but minimal content)
+                    if '<script' in text.lower() and text.count('<script') > 5:
+                        logger.info(f"   Detected potential JavaScript-rendered site (has {text.count('<script')} script tags)")
                     raise ValueError("Content appears to be binary or corrupted - cannot extract valid HTML")
                 
-                # Additional check: verify it looks like HTML
-                if not any(tag in text.lower() for tag in ['<html', '<body', '<div', '<article', '<main', '<p']):
+                # Additional check: verify it looks like HTML (be more lenient for JS-rendered sites)
+                html_indicators = ['<html', '<body', '<div', '<article', '<main', '<p', '<h1', '<h2', '<script', '<head', '<title']
+                has_html_tags = any(tag in text.lower() for tag in html_indicators)
+                
+                if not has_html_tags:
                     # Might be valid plain text, but for a web page it's suspicious
                     logger.warning(f"⚠️  Content doesn't appear to contain HTML tags")
                     # But don't fail if it's valid text with enough words
                     words = text.split()
-                    if len(words) < 50:
+                    if len(words) < 30:  # Reduced threshold from 50
                         raise ValueError("Content doesn't appear to be valid HTML or text")
                 
                 return text
@@ -137,35 +166,45 @@ class CrawlerService:
         
         Returns True if content is likely invalid.
         """
-        if not text or len(text) < 100:
+        if not text or len(text) < 50:  # Reduced from 100 to be less strict
             return True
         
         # Count printable vs non-printable characters
         printable_chars = sum(1 for c in text if c.isprintable() or c.isspace())
         total_chars = len(text)
         
-        # If less than 70% of characters are printable, likely binary/junk
-        if total_chars > 0 and (printable_chars / total_chars) < 0.7:
+        # If less than 50% of characters are printable, likely binary/junk (reduced from 70%)
+        if total_chars > 0 and (printable_chars / total_chars) < 0.5:
             logger.warning(f"⚠️  Low printable character ratio: {printable_chars/total_chars:.2%}")
             return True
         
-        # Check for high ratio of Unicode replacement characters ()
+        # Check for high ratio of Unicode replacement characters (increased threshold)
         replacement_chars = text.count('\ufffd')
-        if replacement_chars > len(text) * 0.1:  # More than 10% replacement chars
+        if replacement_chars > len(text) * 0.2:  # Increased from 10% to 20%
             logger.warning(f"⚠️  High ratio of replacement characters: {replacement_chars}/{len(text)}")
             return True
         
-        # Check if content looks like HTML (should have HTML tags)
-        if '<html' not in text.lower() and '<body' not in text.lower() and '<div' not in text.lower():
-            # Might be plain text, which is okay, but if it's all non-ASCII weirdness, it's suspicious
-            if len(text) > 500 and replacement_chars > len(text) * 0.05:
+        # Check if content looks like HTML - be more lenient
+        # Many JS-rendered sites have minimal HTML structure
+        html_indicators = ['<html', '<body', '<div', '<article', '<main', '<p', '<h1', '<h2', '<script', '<head']
+        has_html_tags = any(tag in text.lower() for tag in html_indicators)
+        
+        if not has_html_tags:
+            # If no HTML tags but has substantial text, might be plain text (acceptable)
+            words = text.split()
+            if len(words) < 20:  # Very short content without HTML is suspicious
                 return True
         
         return False
     
     async def _extract_content(self, html: str, url: str) -> CrawledContent:
         """Extract meaningful content from HTML."""
-        soup = BeautifulSoup(html, 'html.parser')
+        # Try lxml parser first (faster, more robust), fallback to html.parser
+        try:
+            soup = BeautifulSoup(html, 'lxml')
+        except Exception:
+            # Fallback to html.parser if lxml fails
+            soup = BeautifulSoup(html, 'html.parser')
         
         # Remove unwanted elements
         for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'iframe', 'noscript']):
@@ -177,12 +216,13 @@ class CrawlerService:
         # Extract main content
         content = self._extract_main_content(soup)
         
-        # Validate extracted content
-        if not content or len(content.strip()) < 50:
+        # Validate extracted content (be more lenient)
+        if not content or len(content.strip()) < 30:  # Reduced from 50
             raise ValueError("Extracted content is too short or empty")
         
-        # Additional validation: check if content looks valid
-        if self._is_invalid_content(content):
+        # Additional validation: check if content looks valid (but be less strict)
+        # Only fail if it's clearly invalid, not just because it's short
+        if len(content.strip()) > 100 and self._is_invalid_content(content):
             raise ValueError("Extracted content appears to be invalid/binary data")
         
         # Detect language
@@ -236,31 +276,74 @@ class CrawlerService:
         # Try to find main article container
         article = soup.find('article')
         if article:
-            return self._clean_text(article.get_text())
+            text = self._clean_text(article.get_text())
+            if len(text.split()) >= 50:  # Ensure we got substantial content
+                return text
         
         # Try main tag
         main = soup.find('main')
         if main:
-            return self._clean_text(main.get_text())
+            text = self._clean_text(main.get_text())
+            if len(text.split()) >= 50:
+                return text
         
-        # Try common blog content classes
+        # Try common blog content classes (also try partial matches)
         content_classes = [
             'post-content', 'article-content', 'entry-content',
-            'blog-post', 'post-body', 'content', 'main-content'
+            'blog-post', 'post-body', 'content', 'main-content',
+            'post', 'article', 'entry', 'story', 'text'
         ]
         
         for cls in content_classes:
+            # Try exact match first
             content_div = soup.find('div', class_=cls)
+            if not content_div:
+                # Try partial class match (for cases like "post-content-wrapper")
+                content_div = soup.find('div', class_=lambda x: x and cls in ' '.join(x) if isinstance(x, list) else cls in str(x))
             if content_div:
-                return self._clean_text(content_div.get_text())
+                text = self._clean_text(content_div.get_text())
+                if len(text.split()) >= 50:
+                    return text
         
-        # Fallback: get all paragraphs
+        # Try data attributes that might contain content
+        content_div = soup.find('div', attrs={'data-content': True}) or soup.find('div', attrs={'data-post': True})
+        if content_div:
+            text = self._clean_text(content_div.get_text())
+            if len(text.split()) >= 50:
+                return text
+        
+        # Fallback: get all paragraphs (filter out very short ones)
         paragraphs = soup.find_all('p')
         if paragraphs:
-            text = ' '.join(p.get_text() for p in paragraphs)
-            return self._clean_text(text)
+            # Filter paragraphs by length
+            meaningful_paragraphs = [p for p in paragraphs if len(p.get_text().strip()) > 20]
+            if meaningful_paragraphs:
+                text = ' '.join(p.get_text() for p in meaningful_paragraphs)
+                cleaned = self._clean_text(text)
+                if len(cleaned.split()) >= 50:
+                    return cleaned
         
-        # Last resort: body text
+        # Try getting text from all headings and paragraphs
+        headings = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+        if headings:
+            heading_text = ' '.join(h.get_text() for h in headings)
+            if paragraphs:
+                combined = heading_text + ' ' + ' '.join(p.get_text() for p in paragraphs[:20])  # Limit paragraphs
+                cleaned = self._clean_text(combined)
+                if len(cleaned.split()) >= 50:
+                    return cleaned
+        
+        # Last resort: body text (but filter out script/style content more aggressively)
+        body = soup.find('body')
+        if body:
+            # Remove all script and style tags
+            for tag in body(['script', 'style', 'nav', 'header', 'footer', 'aside', 'iframe', 'noscript', 'svg']):
+                tag.decompose()
+            text = self._clean_text(body.get_text())
+            if len(text.split()) >= 50:
+                return text
+        
+        # Final fallback: entire document
         return self._clean_text(soup.get_text())
     
     def _clean_text(self, text: str) -> str:
