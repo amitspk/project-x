@@ -5,22 +5,27 @@ export type PublisherConfig = {
   summary_model: string;
   questions_model: string;
   chat_model: string;
-  summary_temperature: number;
-  questions_temperature: number;
-  chat_temperature: number;
+  // Temperature fields are always excluded from GET responses (default: 0.7)
+  // generate_summary and generate_embeddings are always excluded from GET responses (default: true)
   summary_max_tokens: number;
   questions_max_tokens: number;
   chat_max_tokens: number;
-  generate_summary: boolean;
-  generate_embeddings: boolean;
   use_grounding?: boolean;
   daily_blog_limit: number | null;
   max_total_blogs?: number | null;
   whitelisted_blog_urls?: string[] | null;
   custom_question_prompt?: string | null;
   custom_summary_prompt?: string | null;
-  ui_theme_color?: string | null;
-  ui_icon_style?: string | null;
+  widget?: {
+    useDummyData?: boolean;
+    theme?: string;
+    currentStructure?: string;
+    gaTrackingId?: string;
+    gaEnabled?: boolean;
+    adsenseForSearch?: any;
+    adsenseDisplay?: any;
+    googleAdManager?: any;
+  } | null;
 };
 
 export type Publisher = {

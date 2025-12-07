@@ -220,14 +220,11 @@ class PublisherConfigSchema(BaseModel):
     summary_model: str = Field(..., example="gpt-4o-mini")
     questions_model: str = Field(..., example="gpt-4o-mini")
     chat_model: str = Field(..., example="gpt-4o-mini")
-    summary_temperature: float = Field(..., example=0.7)
-    questions_temperature: float = Field(..., example=0.7)
-    chat_temperature: float = Field(..., example=0.7)
+    # Temperature fields are always excluded from GET responses
     summary_max_tokens: int = Field(..., example=LLMModelConfig.DEFAULT_MAX_TOKENS_SUMMARY)
     questions_max_tokens: int = Field(..., example=LLMModelConfig.DEFAULT_MAX_TOKENS_QUESTIONS)
     chat_max_tokens: int = Field(..., example=LLMModelConfig.DEFAULT_MAX_TOKENS_CHAT)
-    generate_summary: bool = Field(..., example=True)
-    generate_embeddings: bool = Field(..., example=True)
+    # generate_summary and generate_embeddings are always excluded from GET responses
     use_grounding: bool = Field(False, example=False, description="Enable Google Search grounding for question generation during blog processing (Gemini models only). When enabled, provides real-time information and citations. Note: Grounding is NOT used in the Q&A /ask endpoint to control costs.")
     daily_blog_limit: int = Field(..., example=100)
     max_total_blogs: int | None = Field(None, example=500, description="Maximum total blogs allowed (null for unlimited)")

@@ -228,16 +228,6 @@ class PublisherConfig(BaseModel):
         """
     )
     
-    # UI customization
-    ui_theme_color: Optional[str] = Field(
-        default="#6366f1",
-        description="Primary color for question cards"
-    )
-    ui_icon_style: Optional[str] = Field(
-        default="emoji",
-        description="Icon style: emoji, material, fontawesome"
-    )
-    
     class Config:
         """Pydantic config."""
         use_enum_values = True

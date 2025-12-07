@@ -73,6 +73,10 @@ async def enrich_publisher_with_widget_config(
     The widget config is stored in config.widget in the database JSON,
     but the PublisherConfig Pydantic model doesn't include it.
     This function fetches the raw config and adds widget config to the response.
+    
+    Also excludes fields from GET responses:
+    - Temperature fields (summary_temperature, questions_temperature, chat_temperature) - always excluded
+    - generate_summary and generate_embeddings - always excluded
     """
     # Get raw config from database to access widget config
     raw_config = await repo.get_publisher_raw_config_by_domain(
@@ -82,6 +86,19 @@ async def enrich_publisher_with_widget_config(
     
     # Convert publisher to dict
     publisher_dict = publisher.model_dump()
+    
+    # Remove fields that should not appear in GET responses
+    if "config" in publisher_dict:
+        config = publisher_dict["config"]
+        
+        # Always remove temperature fields from GET responses
+        config.pop("summary_temperature", None)
+        config.pop("questions_temperature", None)
+        config.pop("chat_temperature", None)
+        
+        # Always remove generate_summary and generate_embeddings from GET responses
+        config.pop("generate_summary", None)
+        config.pop("generate_embeddings", None)
     
     # Add widget config if it exists
     if raw_config and isinstance(raw_config, dict):
@@ -893,6 +910,16 @@ async def get_publisher_config(
         # Start with the Pydantic model config
         config_dict = publisher.config.model_dump()
         
+        # Always remove fields that should not appear in GET responses
+        # Always remove temperature fields from GET responses
+        config_dict.pop("summary_temperature", None)
+        config_dict.pop("questions_temperature", None)
+        config_dict.pop("chat_temperature", None)
+        
+        # Always remove generate_summary and generate_embeddings from GET responses
+        config_dict.pop("generate_summary", None)
+        config_dict.pop("generate_embeddings", None)
+        
         # Add widget config if it exists in raw config
         if raw_config and isinstance(raw_config, dict):
             widget_config = raw_config.get("widget")
@@ -989,14 +1016,11 @@ async def regenerate_publisher_api_key(
                         "summary_model": publisher.config.summary_model.value if hasattr(publisher.config.summary_model, 'value') else str(publisher.config.summary_model),
                         "questions_model": publisher.config.questions_model.value if hasattr(publisher.config.questions_model, 'value') else str(publisher.config.questions_model),
                         "chat_model": publisher.config.chat_model.value if hasattr(publisher.config.chat_model, 'value') else str(publisher.config.chat_model),
-                        "summary_temperature": publisher.config.summary_temperature,
-                        "questions_temperature": publisher.config.questions_temperature,
-                        "chat_temperature": publisher.config.chat_temperature,
+                        # Temperature fields always excluded from GET responses
                         "summary_max_tokens": publisher.config.summary_max_tokens,
                         "questions_max_tokens": publisher.config.questions_max_tokens,
                         "chat_max_tokens": publisher.config.chat_max_tokens,
-                        "generate_summary": publisher.config.generate_summary,
-                        "generate_embeddings": publisher.config.generate_embeddings,
+                        # generate_summary and generate_embeddings always excluded from GET responses
                         "use_grounding": publisher.config.use_grounding,
                         "daily_blog_limit": publisher.config.daily_blog_limit
                     },

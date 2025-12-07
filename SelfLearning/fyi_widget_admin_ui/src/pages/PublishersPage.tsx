@@ -30,8 +30,6 @@ type CreatePublisherFormValues = {
   email: string;
   subscription_tier?: string;
   questions_per_blog: number;
-  generate_summary: boolean;
-  generate_embeddings: boolean;
   use_grounding: boolean;
   summary_model: string;
   questions_model: string;
@@ -41,8 +39,6 @@ type CreatePublisherFormValues = {
   whitelisted_blog_urls: string;
   custom_question_prompt?: string;
   custom_summary_prompt?: string;
-  ui_theme_color?: string;
-  ui_icon_style?: string;
 };
 
 type UpdatePublisherFormValues = {
@@ -266,8 +262,6 @@ const PublishersPage = () => {
       email: '',
       subscription_tier: 'free',
       questions_per_blog: 5,
-      generate_summary: true,
-      generate_embeddings: true,
       use_grounding: false,
       summary_model: 'gpt-4o-mini',
       questions_model: 'gpt-4o-mini',
@@ -276,12 +270,9 @@ const PublishersPage = () => {
       max_total_blogs: '',
       whitelisted_blog_urls: '',
       custom_question_prompt: '',
-      custom_summary_prompt: '',
-      ui_theme_color: '#6366f1',
-      ui_icon_style: 'emoji'
+      custom_summary_prompt: ''
     }
   });
-  const themeColor = watch('ui_theme_color');
   const questionsModel = watch('questions_model');
   
   // Check if the selected questions model is a Gemini model
@@ -351,8 +342,7 @@ const PublishersPage = () => {
 
       const config: Partial<PublisherConfig> = {
         questions_per_blog: values.questions_per_blog,
-        generate_summary: values.generate_summary,
-        generate_embeddings: values.generate_embeddings,
+        // generate_summary and generate_embeddings default to true, no need to send
         // Only enable use_grounding if a Gemini model is selected and checkbox is checked
         use_grounding: isGemini && values.use_grounding ? true : false,
         summary_model: values.summary_model,
@@ -362,9 +352,7 @@ const PublishersPage = () => {
         max_total_blogs: toNumberOrUndefined(values.max_total_blogs),
         whitelisted_blog_urls: whitelistEntries.length > 0 ? whitelistEntries : undefined,
         custom_question_prompt: values.custom_question_prompt?.trim() || undefined,
-        custom_summary_prompt: values.custom_summary_prompt?.trim() || undefined,
-        ui_theme_color: values.ui_theme_color?.trim() || undefined,
-        ui_icon_style: values.ui_icon_style?.trim() || undefined
+        custom_summary_prompt: values.custom_summary_prompt?.trim() || undefined
       };
       const cleanedConfig = Object.fromEntries(
         Object.entries(config).filter(([, value]) => value !== undefined)
@@ -590,14 +578,6 @@ const PublishersPage = () => {
                 ))}
               </select>
             </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" {...register('generate_summary')} />
-              Generate summary
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" {...register('generate_embeddings')} />
-              Generate embeddings
-            </label>
             <label
               className={clsx(
                 'flex items-center gap-2 text-sm',
@@ -683,35 +663,6 @@ const PublishersPage = () => {
             </label>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="flex flex-col text-sm">
-              <span className="mb-1 font-medium">UI theme color</span>
-              <div className="flex items-center gap-3">
-                <input
-                  type="color"
-                  value={themeColor || '#6366f1'}
-                  onChange={(event) => setValue('ui_theme_color', event.target.value, { shouldDirty: true })}
-                  className="h-10 w-16 cursor-pointer rounded border border-slate-300 bg-transparent p-1"
-                />
-                <input
-                  type="text"
-                  {...register('ui_theme_color')}
-                  className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
-                  placeholder="#6366f1"
-                />
-              </div>
-              <span className="mt-1 text-xs text-slate-500">Primary color for widgets shown to end users.</span>
-            </label>
-            <label className="flex flex-col text-sm">
-              <span className="mb-1 font-medium">UI icon style</span>
-              <select {...register('ui_icon_style')} className="rounded-md border border-slate-300 px-3 py-2">
-                <option value="emoji">Emoji</option>
-                <option value="material">Material</option>
-                <option value="fontawesome">Font Awesome</option>
-              </select>
-              <span className="mt-1 text-xs text-slate-500">Controls which icon set appears in the widget UI.</span>
-            </label>
-          </div>
 
           <div className="flex items-center gap-2">
             <button
