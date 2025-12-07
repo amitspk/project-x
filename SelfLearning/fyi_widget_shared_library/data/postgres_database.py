@@ -470,6 +470,57 @@ class PostgresPublisherRepository:
                 logger.error(f"❌ Failed to release blog slot: {e}")
                 raise
     
+    async def get_publisher_raw_config_by_domain(self, domain: str, allow_subdomain: bool = False) -> Optional[Dict[str, Any]]:
+        """
+        Get raw config JSON from database by domain (without converting to Pydantic model).
+        
+        This is useful when you need to access nested keys in the config JSON that aren't
+        part of the PublisherConfig Pydantic model (e.g., widget config).
+        
+        Args:
+            domain: Domain to search for
+            allow_subdomain: If True, allows matching subdomains
+        
+        Returns:
+            Raw config dict if found, None otherwise
+        """
+        # Normalize domain
+        domain = domain.lower().strip()
+        for prefix in ['https://', 'http://', 'www.']:
+            if domain.startswith(prefix):
+                domain = domain[len(prefix):]
+        domain = domain.rstrip('/')
+        
+        async with self.async_session_factory() as session:
+            # First try exact match
+            result = await session.execute(
+                select(PublisherTable).where(PublisherTable.domain == domain)
+            )
+            db_publisher = result.scalar_one_or_none()
+            
+            if db_publisher:
+                return db_publisher.config if db_publisher.config else {}
+            
+            # If not found and subdomain matching is enabled, try subdomain match
+            if allow_subdomain:
+                all_publishers_result = await session.execute(
+                    select(PublisherTable)
+                )
+                all_publishers = all_publishers_result.scalars().all()
+                
+                matching_publishers = []
+                for pub in all_publishers:
+                    publisher_domain = pub.domain.lower().strip()
+                    if domain == publisher_domain or domain.endswith(f".{publisher_domain}"):
+                        matching_publishers.append((pub, len(publisher_domain)))
+                
+                if matching_publishers:
+                    matching_publishers.sort(key=lambda x: x[1])
+                    pub, _ = matching_publishers[0]
+                    return pub.config if pub.config else {}
+            
+            return None
+    
     async def health_check(self) -> dict:
         """Check database health."""
         try:
