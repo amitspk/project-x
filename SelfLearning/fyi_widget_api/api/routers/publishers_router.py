@@ -138,8 +138,9 @@ async def onboard_publisher(
     - You can omit the `config` field entirely to use all default values
     - You can pass `config` with only the fields you want to customize
     - All fields not provided will use their default values from the model
+    - `widget_config` is required and must be provided to set widget-specific settings (theme, GA, ads, etc.)
     
-    Example with custom config:
+    Example with custom config and widget_config:
     ```json
     {
         "name": "Tech Blog Inc",
@@ -148,6 +149,15 @@ async def onboard_publisher(
         "config": {
             "questions_per_blog": 7,
             "summary_model": "gpt-4o-mini"
+        },
+        "widget_config": {
+            "theme": "light",
+            "gaTrackingId": "G-XXXXXXXXXX",
+            "gaEnabled": true,
+            "adsenseForSearch": {
+                "enabled": true,
+                "pubId": "partner-pub-XXXXX"
+            }
         }
     }
     ```
@@ -184,8 +194,13 @@ async def onboard_publisher(
             subscription_tier=request.subscription_tier
         )
         
-        # Save to database
-        created_publisher = await repo.create_publisher(publisher)
+        # Prepare config dict with widget_config (required)
+        config_dict = publisher.config.model_dump()
+        config_dict["widget"] = request.widget_config
+        logger.info(f"[{request_id}] 📦 Widget config provided: {list(request.widget_config.keys())}")
+        
+        # Save to database with widget_config merged into config
+        created_publisher = await repo.create_publisher(publisher, config_dict)
         
         logger.info(f"[{request_id}] ✅ Publisher onboarded: {created_publisher.id}")
         

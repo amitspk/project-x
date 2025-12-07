@@ -240,17 +240,6 @@ class PublisherConfigSchema(BaseModel):
         "adsenseDisplay": None,
         "googleAdManager": None
     }, description="Widget configuration including theme, GA settings, and ad configs")
-    # Widget configuration (stored in config.widget in database)
-    widget: Optional[Dict[str, Any]] = Field(None, example={
-        "useDummyData": False,
-        "theme": "light",
-        "currentStructure": "",
-        "gaTrackingId": "G-WPWFCMCSS3",
-        "gaEnabled": True,
-        "adsenseForSearch": None,
-        "adsenseDisplay": None,
-        "googleAdManager": None
-    }, description="Widget configuration including theme, GA settings, and ad configs")
 
 
 class PublisherSchema(BaseModel):

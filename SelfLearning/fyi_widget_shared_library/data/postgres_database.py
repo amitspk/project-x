@@ -140,12 +140,14 @@ class PostgresPublisherRepository:
             subscription_tier=table_obj.subscription_tier
         )
     
-    async def create_publisher(self, publisher: Publisher) -> Publisher:
+    async def create_publisher(self, publisher: Publisher, config_dict: Optional[Dict[str, Any]] = None) -> Publisher:
         """
         Create a new publisher.
         
         Args:
             publisher: Publisher object (without id and api_key)
+            config_dict: Optional config dict to use instead of publisher.config.model_dump()
+                        Useful for adding nested fields like widget config
         
         Returns:
             Created publisher with id and api_key
@@ -156,6 +158,9 @@ class PostgresPublisherRepository:
                 publisher_id = str(uuid.uuid4())
                 api_key = self._generate_api_key()
                 
+                # Use provided config_dict or fall back to model_dump()
+                config_to_store = config_dict if config_dict is not None else publisher.config.model_dump()
+                
                 # Create table object
                 db_publisher = PublisherTable(
                     id=publisher_id,
@@ -164,7 +169,7 @@ class PostgresPublisherRepository:
                     email=publisher.email,
                     api_key=api_key,
                     status=publisher.status,
-                    config=publisher.config.model_dump(),  # Use model_dump() to include all fields including use_grounding
+                    config=config_to_store,  # Use config_dict if provided, otherwise model_dump()
                     subscription_tier=publisher.subscription_tier or "free"
                 )
                 

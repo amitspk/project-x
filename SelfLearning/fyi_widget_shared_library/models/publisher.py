@@ -337,6 +337,22 @@ class PublisherCreateRequest(BaseModel):
     email: str
     config: Optional[PublisherConfig] = Field(default_factory=PublisherConfig)
     subscription_tier: Optional[str] = Field(default="free")
+    widget_config: Dict[str, Any] = Field(
+        ...,
+        description="Widget configuration (theme, GA settings, ad configs, etc.). Stored in config.widget in database. Required field.",
+        example={
+            "theme": "light",
+            "useDummyData": False,
+            "currentStructure": "",
+            "gaTrackingId": "G-WPWFCMCSS3",
+            "gaEnabled": True,
+            "adsenseForSearch": {
+                "enabled": True,
+                "pubId": "partner-pub-XXXXX",
+                "styleId": "7395764353"
+            }
+        }
+    )
 
 
 class PublisherUpdateRequest(BaseModel):

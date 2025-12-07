@@ -39,6 +39,7 @@ type CreatePublisherFormValues = {
   whitelisted_blog_urls: string;
   custom_question_prompt?: string;
   custom_summary_prompt?: string;
+  widget_config: string;
 };
 
 type UpdatePublisherFormValues = {
@@ -270,7 +271,8 @@ const PublishersPage = () => {
       max_total_blogs: '',
       whitelisted_blog_urls: '',
       custom_question_prompt: '',
-      custom_summary_prompt: ''
+      custom_summary_prompt: '',
+      widget_config: ''
     }
   });
   const questionsModel = watch('questions_model');
@@ -358,12 +360,35 @@ const PublishersPage = () => {
         Object.entries(config).filter(([, value]) => value !== undefined)
       ) as Partial<PublisherConfig>;
 
+      // Parse widget_config (required)
+      if (!values.widget_config?.trim()) {
+        notify({
+          title: 'Widget config required',
+          description: 'Widget config is required. Please provide a valid JSON configuration.',
+          type: 'error'
+        });
+        return;
+      }
+      
+      let widgetConfig: Record<string, any>;
+      try {
+        widgetConfig = JSON.parse(values.widget_config.trim());
+      } catch (error) {
+        notify({
+          title: 'Invalid widget config JSON',
+          description: 'Please check the widget config JSON format.',
+          type: 'error'
+        });
+        return;
+      }
+
       const payload = {
         name: values.name.trim(),
         domain: values.domain.trim(),
         email: values.email.trim(),
         subscription_tier: values.subscription_tier?.trim() || undefined,
-        config: cleanedConfig
+        config: cleanedConfig,
+        widget_config: widgetConfig
       };
       const result = await api.createPublisher(payload);
       setLastCreated({
@@ -663,6 +688,22 @@ const PublishersPage = () => {
             </label>
           </div>
 
+          <label className="flex flex-col text-sm">
+            <span className="mb-1 font-medium">
+              Widget config <span className="text-rose-600">*</span>
+            </span>
+            <textarea
+              {...register('widget_config', { required: 'Widget config is required' })}
+              className="min-h-[200px] rounded-md border border-slate-300 px-3 py-2 font-mono text-xs"
+              placeholder={`{\n  "theme": "light",\n  "useDummyData": false,\n  "gaTrackingId": "G-XXXXXXXXXX",\n  "gaEnabled": true,\n  "adsenseForSearch": {\n    "enabled": true,\n    "pubId": "partner-pub-XXXXX"\n  }\n}`}
+            />
+            <span className="mt-1 text-xs text-slate-500">
+              JSON configuration for widget settings (theme, GA, ads, etc.). Required field.
+            </span>
+            {formState.errors.widget_config && (
+              <span className="mt-1 text-xs text-rose-600">{formState.errors.widget_config.message}</span>
+            )}
+          </label>
 
           <div className="flex items-center gap-2">
             <button
