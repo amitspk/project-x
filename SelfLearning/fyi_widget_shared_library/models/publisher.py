@@ -176,6 +176,13 @@ class PublisherConfig(BaseModel):
         description="Maximum total number of blogs that can be processed for this publisher (None for unlimited)"
     )
 
+    # Processing threshold
+    threshold_before_processing_blog: int = Field(
+        default=0,
+        ge=0,
+        description="Threshold value before processing a blog. Defaults to 0 when publisher is onboarded."
+    )
+
     # URL restrictions
     whitelisted_blog_urls: Optional[List[str]] = Field(
         default=None,

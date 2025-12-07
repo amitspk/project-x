@@ -51,6 +51,7 @@ class JobRepository:
             Job ID (string)
         """
         # Check if URL is already queued or processing
+        # Allow immediate requeuing of skipped jobs, but prevent duplicate QUEUED/PROCESSING jobs
         existing = await self.collection.find_one({
             "blog_url": blog_url,
             "status": {"$in": [JobStatus.QUEUED.value, JobStatus.PROCESSING.value]}
@@ -246,6 +247,38 @@ class JobRepository:
         )
         
         return update_result.modified_count > 0
+    
+    async def mark_job_skipped(
+        self,
+        job_id: str,
+        error_message: str = "Job skipped due to threshold check"
+    ) -> bool:
+        """
+        Mark a job as skipped.
+        
+        Args:
+            job_id: Job ID
+            error_message: Reason for skipping
+            
+        Returns:
+            True if successfully updated
+        """
+        update_result = await self.collection.update_one(
+            {"job_id": job_id},
+            {
+                "$set": {
+                    "status": JobStatus.SKIPPED.value,
+                    "completed_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow(),
+                    "error_message": error_message
+                }
+            }
+        )
+        
+        if update_result.modified_count > 0:
+            logger.info(f"⏭️  Job {job_id} marked as skipped: {error_message}")
+            return True
+        return False
     
     async def get_job_stats(self) -> dict:
         """Get statistics about jobs in the queue."""

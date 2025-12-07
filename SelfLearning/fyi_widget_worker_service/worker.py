@@ -200,7 +200,8 @@ class BlogProcessingWorker:
                             "pending": 0,
                             "processing": 0,
                             "completed": 0,
-                            "failed": 0
+                            "failed": 0,
+                            "skipped": 0
                         }
                         
                         # Update with actual counts from aggregation
@@ -214,6 +215,7 @@ class BlogProcessingWorker:
                         job_queue_size.labels(status="processing").set(status_counts["processing"])
                         job_queue_size.labels(status="completed").set(status_counts["completed"])
                         job_queue_size.labels(status="failed").set(status_counts["failed"])
+                        job_queue_size.labels(status="skipped").set(status_counts["skipped"])
                 except Exception as e:
                     logger.debug(f"Error updating queue size: {e}")
                 await asyncio.sleep(30)
@@ -331,11 +333,15 @@ class BlogProcessingWorker:
             logger.info(f"🔍 Checking for existing raw content: {normalized_url}")
             crawl_start = time.time()
             crawl_result = None
+            blog_doc = None  # Store blog document for reuse
             
             # First, check if raw content already exists in database
             existing_blog = await self.storage.get_blog_by_url(normalized_url)
             
             if existing_blog:
+                # Store blog document for later use (threshold check)
+                blog_doc = existing_blog
+                
                 # Convert existing blog to CrawledContent format
                 from fyi_widget_shared_library.models.schemas import CrawledContent
                 
@@ -353,6 +359,7 @@ class BlogProcessingWorker:
                 if not crawl_result.content or len(crawl_result.content.strip()) < 50:
                     logger.warning(f"⚠️  Existing content is invalid, will re-crawl: {normalized_url}")
                     crawl_result = None  # Force re-crawl
+                    blog_doc = None  # Clear blog_doc since we'll re-crawl
                 else:
                     crawl_duration = time.time() - crawl_start
                     crawl_operations_total.labels(publisher_domain=publisher_domain, status="cached").inc()
@@ -402,6 +409,11 @@ class BlogProcessingWorker:
                         db_operations_total.labels(operation="save_blog", collection="raw_blog_content", status="success").inc()
                         db_operation_duration_seconds.labels(operation="save_blog", collection="raw_blog_content").observe(db_duration)
                         logger.info(f"✅ Raw blog content saved: {blog_id}")
+                        
+                        # Get the saved blog document for threshold check (single call)
+                        blog_doc = await self.storage.get_blog_by_url(normalized_url)
+                        if not blog_doc:
+                            raise Exception("Blog document not found after save")
                     except Exception as save_error:
                         db_duration = time.time() - db_start
                         db_operations_total.labels(operation="save_blog", collection="raw_blog_content", status="error").inc()
@@ -409,6 +421,7 @@ class BlogProcessingWorker:
                         # Log but don't fail - we can try again later or the content might already exist
                         logger.warning(f"⚠️  Failed to save raw blog content: {save_error}. Continuing with processing...")
                         blog_id = None
+                        blog_doc = None
                     
                 except Exception as crawl_error:
                     # Record crawl failure
@@ -418,6 +431,94 @@ class BlogProcessingWorker:
                     processing_errors_total.labels(publisher_domain=publisher_domain, error_type="crawl_error").inc()
                     logger.error(f"❌ Crawl failed for {normalized_url}: {crawl_error}")
                     raise Exception(f"Crawl failed: {str(crawl_error)}")
+            
+            # Ensure blog_id and blog_doc are available
+            if blog_id is None or blog_doc is None:
+                # Fallback: Try to get blog from database
+                fallback_blog = await self.storage.get_blog_by_url(normalized_url)
+                if fallback_blog:
+                    blog_id = str(fallback_blog["_id"])
+                    blog_doc = fallback_blog
+                else:
+                    raise Exception("Blog ID and document not available after crawl/save")
+            
+            # Threshold check: Check if we should process based on triggered_no_of_times
+            logger.info("🔍 Checking processing threshold...")
+            
+            # Use the blog_doc we already have (no additional DB call)
+            if not blog_doc:
+                raise Exception("Blog document not found for threshold check")
+            
+            # Get triggered_count (default to 0 for backward compatibility with existing blogs)
+            triggered_count = blog_doc.get("triggered_no_of_times", 0)
+            threshold = config.threshold_before_processing_blog
+            
+            # If blog doesn't have triggered_no_of_times field yet, initialize it to 0
+            # (will be incremented to 1 below)
+            if "triggered_no_of_times" not in blog_doc:
+                logger.info(f"📝 Initializing triggered_no_of_times for existing blog (was missing)")
+                triggered_count = 0
+            
+            logger.info(f"📊 Threshold check: triggered_no_of_times={triggered_count}, threshold={threshold}")
+            
+            # Check: (triggered_no_of_times + 1) > threshold_before_processing_blog
+            should_process = (triggered_count + 1) > threshold
+            
+            # Always increment triggered_no_of_times (whether processing or skipping)
+            new_triggered_count = await self.storage.increment_triggered_count(blog_id)
+            logger.info(f"📈 Incremented triggered_no_of_times: {triggered_count} → {new_triggered_count}")
+            
+            if not should_process:
+                # Skip processing - threshold not met
+                logger.info(
+                    f"⏭️  Skipping processing: ({triggered_count} + 1) = {triggered_count + 1} is NOT > {threshold}. "
+                    f"Blog needs {threshold + 1} triggers before processing."
+                )
+                
+                # Mark job as skipped
+                await self.job_repo.mark_job_skipped(
+                    job_id=job.job_id,
+                    error_message=f"Threshold not met: triggered_count ({triggered_count + 1}) <= threshold ({threshold})"
+                )
+                
+                # Release blog slot (skipped is an end state like failed/completed)
+                try:
+                    publisher_id = job.publisher_id
+                    if not publisher_id:
+                        # Try to find publisher by domain
+                        from urllib.parse import urlparse
+                        parsed_url = urlparse(normalized_url)
+                        domain = parsed_url.netloc
+                        if domain.startswith('www.'):
+                            domain = domain[4:]
+                        db_publisher = await self.publisher_repo.get_publisher_by_domain(
+                            domain.lower(), 
+                            allow_subdomain=True
+                        )
+                        if db_publisher:
+                            publisher_id = db_publisher.id
+                    
+                    if publisher_id:
+                        await self.publisher_repo.release_blog_slot(
+                            publisher_id,
+                            processed=False,
+                        )
+                        logger.info(f"✅ Released blog slot for skipped job (publisher: {publisher_id})")
+                except Exception as release_error:
+                    logger.warning(f"⚠️  Failed to release reserved blog slot after skip: {release_error}")
+                
+                # Record metrics
+                jobs_processed_total.labels(publisher_domain=publisher_domain, status="skipped").inc()
+                jobs_processing_active.labels(publisher_domain=publisher_domain).dec()
+                
+                logger.info(f"✅ Job {job.job_id} skipped due to threshold check")
+                return  # Exit early - job is done (skipped)
+            
+            # Threshold check passed - proceed with processing
+            logger.info(
+                f"✅ Threshold check passed: ({triggered_count} + 1) = {triggered_count + 1} > {threshold}. "
+                f"Proceeding with processing..."
+            )
             
             # Step 2: Generate summary (with custom prompt if available)
             prompt_type = "CUSTOM" if config.custom_summary_prompt else "DEFAULT"

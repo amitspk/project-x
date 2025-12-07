@@ -114,10 +114,12 @@ class PostgresPublisherRepository:
         return f"pub_{secrets.token_urlsafe(32)}"
     
     def _ensure_use_grounding_in_config(self, config: Optional[Dict[str, Any]]) -> PublisherConfig:
-        """Ensure use_grounding is included in config dict (backward compatibility)."""
+        """Ensure use_grounding and threshold_before_processing_blog are included in config dict (backward compatibility)."""
         config_dict = config if config else {}
         if 'use_grounding' not in config_dict:
             config_dict['use_grounding'] = False
+        if 'threshold_before_processing_blog' not in config_dict:
+            config_dict['threshold_before_processing_blog'] = 0
         return PublisherConfig(**config_dict)
     
     def _table_to_model(self, table_obj: PublisherTable) -> Publisher:
@@ -453,10 +455,17 @@ class PostgresPublisherRepository:
                 )
                 db_publisher = result.scalar_one_or_none()
                 if not db_publisher:
+                    logger.warning(f"⚠️  Publisher not found for slot release: {publisher_id}")
                     return
 
-                if db_publisher.blog_slots_reserved and db_publisher.blog_slots_reserved > 0:
-                    db_publisher.blog_slots_reserved -= 1
+                # Get current value (handle None as 0)
+                current_reserved = db_publisher.blog_slots_reserved or 0
+                
+                if current_reserved > 0:
+                    db_publisher.blog_slots_reserved = current_reserved - 1
+                    logger.info(f"📉 Decremented blog_slots_reserved: {current_reserved} → {db_publisher.blog_slots_reserved} (publisher: {publisher_id})")
+                else:
+                    logger.warning(f"⚠️  Cannot decrement blog_slots_reserved: already at {current_reserved} (publisher: {publisher_id})")
 
                 if processed:
                     db_publisher.total_blogs_processed += 1

@@ -745,22 +745,7 @@ async def regenerate_publisher_api_key(
                     "domain": publisher.domain,
                     "email": publisher.email,
                     "status": publisher.status,
-                    "config": {
-                        "questions_per_blog": publisher.config.questions_per_blog,
-                        "summary_model": publisher.config.summary_model.value if hasattr(publisher.config.summary_model, 'value') else str(publisher.config.summary_model),
-                        "questions_model": publisher.config.questions_model.value if hasattr(publisher.config.questions_model, 'value') else str(publisher.config.questions_model),
-                        "chat_model": publisher.config.chat_model.value if hasattr(publisher.config.chat_model, 'value') else str(publisher.config.chat_model),
-                        "summary_temperature": publisher.config.summary_temperature,
-                        "questions_temperature": publisher.config.questions_temperature,
-                        "chat_temperature": publisher.config.chat_temperature,
-                        "summary_max_tokens": publisher.config.summary_max_tokens,
-                        "questions_max_tokens": publisher.config.questions_max_tokens,
-                        "chat_max_tokens": publisher.config.chat_max_tokens,
-                        "generate_summary": publisher.config.generate_summary,
-                        "generate_embeddings": publisher.config.generate_embeddings,
-                        "use_grounding": publisher.config.use_grounding,
-                        "daily_blog_limit": publisher.config.daily_blog_limit
-                    },
+                    "config": publisher.config.model_dump(),  # Use model_dump() to include all fields including threshold_before_processing_blog
                     "created_at": publisher.created_at.isoformat() if publisher.created_at else None,
                     "subscription_tier": publisher.subscription_tier
                 },

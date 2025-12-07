@@ -61,7 +61,8 @@ class StorageService:
             logger.info(f"📝 Blog already exists: {url}")
             return str(existing["_id"])
         
-        # Create document
+        # Create document with triggered_no_of_times = 0 for first time
+        # It will be incremented when processing is requested
         doc = {
             "url": url,
             "title": title,
@@ -69,6 +70,7 @@ class StorageService:
             "language": language,
             "word_count": word_count,
             "metadata": metadata or {},
+            "triggered_no_of_times": 0,  # Will be incremented when processing starts
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         }
@@ -76,7 +78,7 @@ class StorageService:
         result = await collection.insert_one(doc)
         blog_id = str(result.inserted_id)
         
-        logger.info(f"✅ Blog saved: {blog_id}")
+        logger.info(f"✅ Blog saved: {blog_id} (triggered_no_of_times: 0)")
         return blog_id
     
     async def save_summary(
@@ -161,6 +163,44 @@ class StorageService:
         collection = self.database[self.blogs_collection]
         blog = await collection.find_one({"url": url})
         return blog
+    
+    async def increment_triggered_count(self, blog_id: str) -> int:
+        """
+        Increment triggered_no_of_times for a blog.
+        
+        Args:
+            blog_id: Blog ID (MongoDB ObjectId as string)
+            
+        Returns:
+            New triggered_no_of_times count
+        """
+        collection = self.database[self.blogs_collection]
+        
+        try:
+            from bson import ObjectId
+            blog_object_id = ObjectId(blog_id)
+        except Exception as e:
+            logger.error(f"Invalid blog_id format: {blog_id}")
+            raise ValueError(f"Invalid blog_id format: {e}")
+        
+        # Increment triggered_no_of_times (initialize to 1 if field doesn't exist)
+        result = await collection.find_one_and_update(
+            {"_id": blog_object_id},
+            {
+                "$inc": {"triggered_no_of_times": 1},
+                "$set": {"updated_at": datetime.utcnow()}
+            },
+            return_document=True  # Return updated document
+        )
+        
+        if result:
+            # Get the updated count (handle case where field didn't exist before)
+            count = result.get("triggered_no_of_times", 1)
+            logger.info(f"✅ Incremented triggered_no_of_times for blog {blog_id}: {count}")
+            return count
+        else:
+            logger.warning(f"⚠️  Blog not found for triggered count increment: {blog_id}")
+            raise ValueError(f"Blog not found: {blog_id}")
     
     async def get_blogs_by_urls(self, urls: List[str]) -> Dict[str, Dict[str, Any]]:
         """
