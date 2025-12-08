@@ -248,6 +248,7 @@ const PublishersPage = () => {
   const [loading, setLoading] = useState(false);
   const [domainSearch, setDomainSearch] = useState('');
   const [lastCreated, setLastCreated] = useState<{ publisher: Publisher; apiKey?: string } | null>(null);
+  const [lastRegenerated, setLastRegenerated] = useState<{ publisher: Publisher; apiKey: string } | null>(null);
 
   const {
     register,
@@ -411,11 +412,20 @@ const PublishersPage = () => {
   const handleRegenerateApiKey = async (publisherId: string) => {
     try {
       const result = await api.regenerateApiKey(publisherId);
-      notify({
-        title: 'API key regenerated',
-        description: `New key: ${result.api_key}. Copy it now – the old key was invalidated.`,
-        type: 'info'
-      });
+      // Find the publisher to display in the banner
+      const publisher = publishers.find(p => p.id === publisherId);
+      if (publisher && result.api_key) {
+        setLastRegenerated({
+          publisher,
+          apiKey: result.api_key
+        });
+        notify({
+          title: 'API key regenerated',
+          description: 'Review the new API key below and copy it before closing.',
+          type: 'success'
+        });
+      }
+      await fetchPublishers();
     } catch (error: any) {
       notify({
         title: 'Failed to regenerate API key',
@@ -504,6 +514,44 @@ const PublishersPage = () => {
           ) : (
             <p className="mt-4 text-sm text-emerald-800">Publisher onboarded successfully (no new key issued).</p>
           )}
+        </section>
+      )}
+
+      {lastRegenerated && (
+        <section className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-6 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-indigo-900">API key regenerated successfully</h3>
+              <p className="mt-1 text-sm text-indigo-800">
+                {lastRegenerated.publisher.name} · {lastRegenerated.publisher.domain}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="self-start rounded-md border border-indigo-300 px-3 py-1 text-xs font-medium text-indigo-800 hover:bg-indigo-100"
+              onClick={() => setLastRegenerated(null)}
+            >
+              Close
+            </button>
+          </div>
+          <div className="mt-4 space-y-2">
+            <p className="text-xs uppercase tracking-wide text-indigo-800">New API key</p>
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+              <code className="flex-1 break-all rounded-md bg-white px-3 py-2 text-sm text-indigo-900 shadow-sm">
+                {lastRegenerated.apiKey}
+              </code>
+              <button
+                type="button"
+                className="rounded-md border border-indigo-300 px-3 py-2 text-sm font-medium text-indigo-800 hover:bg-indigo-100"
+                onClick={() => navigator.clipboard.writeText(lastRegenerated.apiKey)}
+              >
+                Copy key
+              </button>
+            </div>
+            <p className="text-xs text-indigo-700">
+              Store this securely. The old key was invalidated and this key will be hidden once you close this banner.
+            </p>
+          </div>
         </section>
       )}
 
