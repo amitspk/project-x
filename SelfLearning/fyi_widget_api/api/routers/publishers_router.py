@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query, Header, Request
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 # Import auth
-from fyi_widget_api.api.auth import verify_admin_key
+from fyi_widget_api.api.auth import verify_admin_key, get_current_publisher, validate_blog_url_domain
 
 from fyi_widget_shared_library.models.publisher import (
     Publisher,
@@ -33,6 +33,7 @@ from fyi_widget_shared_library.models import (
     PublisherDeleteResponse,
     PublisherConfigResponse,
     PublisherRegenerateApiKeyResponse,
+    PublisherMetadataResponse,
     StandardErrorResponse
 )
 from fyi_widget_shared_library.data.postgres_database import PostgresPublisherRepository
@@ -40,7 +41,8 @@ from fyi_widget_shared_library.utils import (
     success_response,
     handle_http_exception,
     handle_generic_exception,
-    generate_request_id
+    generate_request_id,
+    extract_domain
 )
 
 logger = logging.getLogger(__name__)
@@ -59,6 +61,55 @@ def get_publisher_repo() -> PostgresPublisherRepository:
             detail="Publisher repository not initialized"
         )
     return publisher_repo
+
+
+async def enrich_publisher_with_widget_config(
+    publisher: Publisher,
+    repo: PostgresPublisherRepository
+) -> Dict[str, Any]:
+    """
+    Enrich publisher response with widget config from database.
+    
+    The widget config is stored in config.widget in the database JSON,
+    but the PublisherConfig Pydantic model doesn't include it.
+    This function fetches the raw config and adds widget config to the response.
+    
+    Also excludes fields from GET responses:
+    - Temperature fields (summary_temperature, questions_temperature, chat_temperature) - always excluded
+    - generate_summary and generate_embeddings - always excluded
+    """
+    # Get raw config from database to access widget config
+    raw_config = await repo.get_publisher_raw_config_by_domain(
+        publisher.domain,
+        allow_subdomain=False
+    )
+    
+    # Convert publisher to dict
+    publisher_dict = publisher.model_dump()
+    
+    # Remove fields that should not appear in GET responses
+    if "config" in publisher_dict:
+        config = publisher_dict["config"]
+        
+        # Always remove temperature fields from GET responses
+        config.pop("summary_temperature", None)
+        config.pop("questions_temperature", None)
+        config.pop("chat_temperature", None)
+        
+        # Always remove generate_summary and generate_embeddings from GET responses
+        config.pop("generate_summary", None)
+        config.pop("generate_embeddings", None)
+    
+    # Add widget config if it exists
+    if raw_config and isinstance(raw_config, dict):
+        widget_config = raw_config.get("widget")
+        if widget_config:
+            # Ensure config dict exists
+            if "config" not in publisher_dict:
+                publisher_dict["config"] = {}
+            publisher_dict["config"]["widget"] = widget_config
+    
+    return publisher_dict
 
 
 @router.post(
@@ -87,8 +138,9 @@ async def onboard_publisher(
     - You can omit the `config` field entirely to use all default values
     - You can pass `config` with only the fields you want to customize
     - All fields not provided will use their default values from the model
+    - `widget_config` is required and must be provided to set widget-specific settings (theme, GA, ads, etc.)
     
-    Example with custom config:
+    Example with custom config and widget_config:
     ```json
     {
         "name": "Tech Blog Inc",
@@ -97,6 +149,15 @@ async def onboard_publisher(
         "config": {
             "questions_per_blog": 7,
             "summary_model": "gpt-4o-mini"
+        },
+        "widget_config": {
+            "theme": "light",
+            "gaTrackingId": "G-XXXXXXXXXX",
+            "gaEnabled": true,
+            "adsenseForSearch": {
+                "enabled": true,
+                "pubId": "partner-pub-XXXXX"
+            }
         }
     }
     ```
@@ -133,20 +194,32 @@ async def onboard_publisher(
             subscription_tier=request.subscription_tier
         )
         
-        # Save to database
-        created_publisher = await repo.create_publisher(publisher)
+        # Prepare config dict with widget_config (required)
+        config_dict = publisher.config.model_dump()
+        config_dict["widget"] = request.widget_config
+        logger.info(f"[{request_id}] 📦 Widget config provided: {list(request.widget_config.keys())}")
+        
+        # Save to database with widget_config merged into config
+        created_publisher = await repo.create_publisher(publisher, config_dict)
         
         logger.info(f"[{request_id}] ✅ Publisher onboarded: {created_publisher.id}")
         
+        # Enrich with widget config from database (may be empty for new publisher)
+        enriched_publisher = await enrich_publisher_with_widget_config(created_publisher, repo)
+        
         publisher_response = PublisherResponse(
             success=True,
-            publisher=created_publisher,
+            publisher=created_publisher,  # Use original for Pydantic validation
             api_key=created_publisher.api_key,  # Only returned on creation
             message="Publisher onboarded successfully"
         )
         
+        # Get the response dict and update it with enriched data
+        response_dict = publisher_response.model_dump()
+        response_dict["publisher"] = enriched_publisher
+        
         return success_response(
-            result=publisher_response.model_dump(),
+            result=response_dict,
             message="Publisher onboarded successfully",
             status_code=201,
             request_id=request_id
@@ -164,6 +237,150 @@ async def onboard_publisher(
         response_data = handle_generic_exception(
             e,
             message="Failed to onboard publisher",
+            request_id=request_id
+        )
+        raise HTTPException(
+            status_code=response_data["status_code"],
+            detail=response_data
+        )
+
+
+@router.get(
+    "/metadata",
+    response_model=PublisherMetadataResponse,
+    responses={
+        200: {"description": "Publisher metadata retrieved successfully"},
+        401: {"model": StandardErrorResponse, "description": "Authentication required - X-API-Key header missing"},
+        403: {"model": StandardErrorResponse, "description": "Publisher account not active or domain mismatch"},
+        404: {"model": StandardErrorResponse, "description": "Publisher not found for the provided blog URL"},
+        422: {"model": StandardErrorResponse, "description": "Validation error - missing or invalid parameters"}
+    }
+)
+async def get_publisher_metadata(
+    http_request: Request,
+    blog_url: str = Query(..., description="The full blog URL (e.g., https://example.com/blog/post)"),
+    adVariation: str = Query(..., description="Ad variation to return: 'adsenseForSearch', 'adsenseDisplay', or 'googleAdManager'"),
+    publisher: Publisher = Depends(get_current_publisher),
+    repo: PostgresPublisherRepository = Depends(get_publisher_repo)
+) -> Dict[str, Any]:
+    """
+    Get publisher metadata including widget configuration and ad settings.
+    
+    **Authentication**: Requires X-API-Key header with valid publisher API key.
+    
+    **Parameters**:
+    - `blog_url`: Full blog URL (e.g., https://example.com/blog/post)
+    - `adVariation`: Which ad configuration to return ('adsenseForSearch', 'adsenseDisplay', or 'googleAdManager')
+    
+    **Response**:
+    Returns publisher metadata including:
+    - Domain, publisher ID, and name
+    - Widget configuration (theme, GA settings, etc.)
+    - Ad configuration for the requested variation (others will be null)
+    
+    The widget config is stored in the `config.widget` JSON column in the database.
+    """
+    request_id = getattr(http_request.state, 'request_id', None) or generate_request_id()
+    
+    try:
+        # Validate adVariation parameter
+        valid_ad_variations = ["adsenseForSearch", "adsenseDisplay", "googleAdManager"]
+        if adVariation not in valid_ad_variations:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "status": "error",
+                    "status_code": 422,
+                    "message": "Validation error",
+                    "error": {
+                        "code": "VALIDATION_ERROR",
+                        "detail": f"adVariation must be one of: {', '.join(valid_ad_variations)}"
+                    }
+                }
+            )
+        
+        # Extract domain from blog_url
+        blog_domain = extract_domain(blog_url)
+        logger.info(f"[{request_id}] 📖 Getting publisher metadata for domain: {blog_domain} (adVariation: {adVariation})")
+        
+        # Validate blog URL domain matches publisher's domain
+        await validate_blog_url_domain(blog_url, publisher)
+        
+        # Get publisher by domain (with subdomain support) to ensure we have the latest config
+        # This also handles subdomain matching (e.g., info.contentretina.com -> contentretina.com)
+        domain_publisher = await repo.get_publisher_by_domain(blog_domain, allow_subdomain=True)
+        
+        if not domain_publisher:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "status": "error",
+                    "status_code": 404,
+                    "message": "Publisher not found for the provided blog URL",
+                    "error": {
+                        "code": "NOT_FOUND",
+                        "detail": f"No publisher found for domain: {blog_domain}"
+                    }
+                }
+            )
+        
+        # Get raw config JSON from database to access nested widget config
+        # The PublisherConfig Pydantic model doesn't include widget config, so we need raw JSON
+        raw_config = await repo.get_publisher_raw_config_by_domain(blog_domain, allow_subdomain=True)
+        
+        if not raw_config:
+            raw_config = {}
+        
+        # Extract widget config from config.widget (nested structure)
+        widget_config = raw_config.get("widget", {}) if isinstance(raw_config, dict) else {}
+        
+        # Build result with widget config fields (return null if missing)
+        result_data = {
+            "domain": domain_publisher.domain,
+            "publisher_id": domain_publisher.id,
+            "publisher_name": domain_publisher.name,
+            "useDummyData": widget_config.get("useDummyData"),
+            "theme": widget_config.get("theme"),
+            "currentStructure": widget_config.get("currentStructure"),
+            "gaTrackingId": widget_config.get("gaTrackingId"),
+            "gaEnabled": widget_config.get("gaEnabled"),
+            "adsenseForSearch": None,
+            "adsenseDisplay": None,
+            "googleAdManager": None
+        }
+        
+        # Set the requested ad variation config, others remain null
+        if adVariation == "adsenseForSearch":
+            adsense_for_search = widget_config.get("adsenseForSearch")
+            if adsense_for_search:
+                result_data["adsenseForSearch"] = adsense_for_search
+        elif adVariation == "adsenseDisplay":
+            adsense_display = widget_config.get("adsenseDisplay")
+            if adsense_display:
+                result_data["adsenseDisplay"] = adsense_display
+        elif adVariation == "googleAdManager":
+            google_ad_manager = widget_config.get("googleAdManager")
+            if google_ad_manager:
+                result_data["googleAdManager"] = google_ad_manager
+        
+        logger.info(f"[{request_id}] ✅ Publisher metadata retrieved for: {domain_publisher.domain}")
+        
+        return success_response(
+            result=result_data,
+            message="Publisher metadata retrieved successfully",
+            status_code=200,
+            request_id=request_id
+        )
+        
+    except HTTPException as exc:
+        logger.error(f"[{request_id}] ❌ HTTP error: {exc.detail}")
+        # Re-raise HTTPException as-is (it already has proper format)
+        raise
+    except Exception as e:
+        logger.error(f"[{request_id}] ❌ Failed to get publisher metadata: {e}", exc_info=True)
+        response_data = handle_generic_exception(
+            e,
+            message="Failed to get publisher metadata",
             request_id=request_id
         )
         raise HTTPException(
@@ -205,13 +422,21 @@ async def get_publisher(
         # Don't return API key in GET requests
         publisher.api_key = None
         
+        # Enrich with widget config from database
+        enriched_publisher = await enrich_publisher_with_widget_config(publisher, repo)
+        
+        # Create response with enriched publisher dict (widget config included)
         publisher_response = PublisherResponse(
             success=True,
-            publisher=publisher
+            publisher=publisher  # Use original publisher for Pydantic validation
         )
         
+        # Get the response dict and update it with enriched data
+        response_dict = publisher_response.model_dump()
+        response_dict["publisher"] = enriched_publisher
+        
         return success_response(
-            result=publisher_response.model_dump(),
+            result=response_dict,
             message="Publisher retrieved successfully",
             status_code=200,
             request_id=request_id
@@ -276,13 +501,21 @@ async def get_publisher_by_domain(
         # Don't return API key
         publisher.api_key = None
         
+        # Enrich with widget config from database
+        enriched_publisher = await enrich_publisher_with_widget_config(publisher, repo)
+        
+        # Create response with enriched publisher dict (widget config included)
         publisher_response = PublisherResponse(
             success=True,
-            publisher=publisher
+            publisher=publisher  # Use original publisher for Pydantic validation
         )
         
+        # Get the response dict and update it with enriched data
+        response_dict = publisher_response.model_dump()
+        response_dict["publisher"] = enriched_publisher
+        
         return success_response(
-            result=publisher_response.model_dump(),
+            result=response_dict,
             message="Publisher retrieved successfully",
             status_code=200,
             request_id=request_id
@@ -370,14 +603,21 @@ async def update_publisher(
         
         logger.info(f"[{request_id}] ✅ Publisher updated: {publisher_id}")
         
+        # Enrich with widget config from database
+        enriched_publisher = await enrich_publisher_with_widget_config(updated_publisher, repo)
+        
         publisher_response = PublisherResponse(
             success=True,
-            publisher=updated_publisher,
+            publisher=updated_publisher,  # Use original for Pydantic validation
             message="Publisher updated successfully"
         )
         
+        # Get the response dict and update it with enriched data
+        response_dict = publisher_response.model_dump()
+        response_dict["publisher"] = enriched_publisher
+        
         return success_response(
-            result=publisher_response.model_dump(),
+            result=response_dict,
             message="Publisher updated successfully",
             status_code=200,
             request_id=request_id
@@ -531,14 +771,21 @@ async def reactivate_publisher(
         
         logger.info(f"[{request_id}] ✅ Publisher reactivated: {publisher_id}")
         
+        # Enrich with widget config from database
+        enriched_publisher = await enrich_publisher_with_widget_config(updated_publisher, repo)
+        
         publisher_response = PublisherResponse(
             success=True,
-            publisher=updated_publisher,
+            publisher=updated_publisher,  # Use original for Pydantic validation
             message="Publisher reactivated successfully"
         )
         
+        # Get the response dict and update it with enriched data
+        response_dict = publisher_response.model_dump()
+        response_dict["publisher"] = enriched_publisher
+        
         return success_response(
-            result=publisher_response.model_dump(),
+            result=response_dict,
             message="Publisher reactivated successfully",
             status_code=200,
             request_id=request_id
@@ -597,6 +844,7 @@ async def list_publishers(
         for pub in publishers:
             pub.api_key = None
         
+        # Create list response first (for Pydantic validation)
         list_response = PublisherListResponse(
             success=True,
             publishers=publishers,
@@ -605,9 +853,17 @@ async def list_publishers(
             page_size=page_size
         )
         
+        # Enrich each publisher with widget config
+        response_dict = list_response.model_dump()
+        enriched_publishers = []
+        for pub in publishers:
+            enriched = await enrich_publisher_with_widget_config(pub, repo)
+            enriched_publishers.append(enriched)
+        response_dict["publishers"] = enriched_publishers
+        
         return success_response(
-            result=list_response.model_dump(),
-            message=f"Retrieved {len(publishers)} publishers",
+            result=response_dict,
+            message=f"Retrieved {len(enriched_publishers)} publishers",
             status_code=200,
             metadata={"total": total, "page": page, "page_size": page_size},
             request_id=request_id
@@ -660,9 +916,34 @@ async def get_publisher_config(
                 detail=f"Publisher not found: {publisher_id}"
             )
         
+        # Get raw config from database to include widget config
+        raw_config = await repo.get_publisher_raw_config_by_domain(
+            publisher.domain,
+            allow_subdomain=False
+        )
+        
+        # Start with the Pydantic model config
+        config_dict = publisher.config.model_dump()
+        
+        # Always remove fields that should not appear in GET responses
+        # Always remove temperature fields from GET responses
+        config_dict.pop("summary_temperature", None)
+        config_dict.pop("questions_temperature", None)
+        config_dict.pop("chat_temperature", None)
+        
+        # Always remove generate_summary and generate_embeddings from GET responses
+        config_dict.pop("generate_summary", None)
+        config_dict.pop("generate_embeddings", None)
+        
+        # Add widget config if it exists in raw config
+        if raw_config and isinstance(raw_config, dict):
+            widget_config = raw_config.get("widget")
+            if widget_config:
+                config_dict["widget"] = widget_config
+        
         config_data = {
             "success": True,
-            "config": publisher.config.model_dump()  # Use model_dump() to include all fields including use_grounding
+            "config": config_dict
         }
         
         return success_response(
@@ -745,7 +1026,19 @@ async def regenerate_publisher_api_key(
                     "domain": publisher.domain,
                     "email": publisher.email,
                     "status": publisher.status,
-                    "config": publisher.config.model_dump(),  # Use model_dump() to include all fields including threshold_before_processing_blog
+                    "config": {
+                        "questions_per_blog": publisher.config.questions_per_blog,
+                        "summary_model": publisher.config.summary_model.value if hasattr(publisher.config.summary_model, 'value') else str(publisher.config.summary_model),
+                        "questions_model": publisher.config.questions_model.value if hasattr(publisher.config.questions_model, 'value') else str(publisher.config.questions_model),
+                        "chat_model": publisher.config.chat_model.value if hasattr(publisher.config.chat_model, 'value') else str(publisher.config.chat_model),
+                        # Temperature fields always excluded from GET responses
+                        "summary_max_tokens": publisher.config.summary_max_tokens,
+                        "questions_max_tokens": publisher.config.questions_max_tokens,
+                        "chat_max_tokens": publisher.config.chat_max_tokens,
+                        # generate_summary and generate_embeddings always excluded from GET responses
+                        "use_grounding": publisher.config.use_grounding,
+                        "daily_blog_limit": publisher.config.daily_blog_limit
+                    },
                     "created_at": publisher.created_at.isoformat() if publisher.created_at else None,
                     "subscription_tier": publisher.subscription_tier
                 },

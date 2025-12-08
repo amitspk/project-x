@@ -38,6 +38,7 @@ export type CreatePublisherPayload = {
   email: string;
   subscription_tier?: string;
   config?: Partial<PublisherConfig>;
+  widget_config: Record<string, any>;
 };
 
 export type UpdatePublisherPayload = {

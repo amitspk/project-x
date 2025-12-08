@@ -30,8 +30,6 @@ type CreatePublisherFormValues = {
   email: string;
   subscription_tier?: string;
   questions_per_blog: number;
-  generate_summary: boolean;
-  generate_embeddings: boolean;
   use_grounding: boolean;
   summary_model: string;
   questions_model: string;
@@ -41,8 +39,7 @@ type CreatePublisherFormValues = {
   whitelisted_blog_urls: string;
   custom_question_prompt?: string;
   custom_summary_prompt?: string;
-  ui_theme_color?: string;
-  ui_icon_style?: string;
+  widget_config: string;
 };
 
 type UpdatePublisherFormValues = {
@@ -251,6 +248,7 @@ const PublishersPage = () => {
   const [loading, setLoading] = useState(false);
   const [domainSearch, setDomainSearch] = useState('');
   const [lastCreated, setLastCreated] = useState<{ publisher: Publisher; apiKey?: string } | null>(null);
+  const [lastRegenerated, setLastRegenerated] = useState<{ publisher: Publisher; apiKey: string } | null>(null);
 
   const {
     register,
@@ -266,8 +264,6 @@ const PublishersPage = () => {
       email: '',
       subscription_tier: 'free',
       questions_per_blog: 5,
-      generate_summary: true,
-      generate_embeddings: true,
       use_grounding: false,
       summary_model: 'gpt-4o-mini',
       questions_model: 'gpt-4o-mini',
@@ -277,11 +273,9 @@ const PublishersPage = () => {
       whitelisted_blog_urls: '',
       custom_question_prompt: '',
       custom_summary_prompt: '',
-      ui_theme_color: '#6366f1',
-      ui_icon_style: 'emoji'
+      widget_config: ''
     }
   });
-  const themeColor = watch('ui_theme_color');
   const questionsModel = watch('questions_model');
   
   // Check if the selected questions model is a Gemini model
@@ -351,8 +345,7 @@ const PublishersPage = () => {
 
       const config: Partial<PublisherConfig> = {
         questions_per_blog: values.questions_per_blog,
-        generate_summary: values.generate_summary,
-        generate_embeddings: values.generate_embeddings,
+        // generate_summary and generate_embeddings default to true, no need to send
         // Only enable use_grounding if a Gemini model is selected and checkbox is checked
         use_grounding: isGemini && values.use_grounding ? true : false,
         summary_model: values.summary_model,
@@ -362,20 +355,41 @@ const PublishersPage = () => {
         max_total_blogs: toNumberOrUndefined(values.max_total_blogs),
         whitelisted_blog_urls: whitelistEntries.length > 0 ? whitelistEntries : undefined,
         custom_question_prompt: values.custom_question_prompt?.trim() || undefined,
-        custom_summary_prompt: values.custom_summary_prompt?.trim() || undefined,
-        ui_theme_color: values.ui_theme_color?.trim() || undefined,
-        ui_icon_style: values.ui_icon_style?.trim() || undefined
+        custom_summary_prompt: values.custom_summary_prompt?.trim() || undefined
       };
       const cleanedConfig = Object.fromEntries(
         Object.entries(config).filter(([, value]) => value !== undefined)
       ) as Partial<PublisherConfig>;
+
+      // Parse widget_config (required)
+      if (!values.widget_config?.trim()) {
+        notify({
+          title: 'Widget config required',
+          description: 'Widget config is required. Please provide a valid JSON configuration.',
+          type: 'error'
+        });
+        return;
+      }
+      
+      let widgetConfig: Record<string, any>;
+      try {
+        widgetConfig = JSON.parse(values.widget_config.trim());
+      } catch (error) {
+        notify({
+          title: 'Invalid widget config JSON',
+          description: 'Please check the widget config JSON format.',
+          type: 'error'
+        });
+        return;
+      }
 
       const payload = {
         name: values.name.trim(),
         domain: values.domain.trim(),
         email: values.email.trim(),
         subscription_tier: values.subscription_tier?.trim() || undefined,
-        config: cleanedConfig
+        config: cleanedConfig,
+        widget_config: widgetConfig
       };
       const result = await api.createPublisher(payload);
       setLastCreated({
@@ -398,11 +412,20 @@ const PublishersPage = () => {
   const handleRegenerateApiKey = async (publisherId: string) => {
     try {
       const result = await api.regenerateApiKey(publisherId);
-      notify({
-        title: 'API key regenerated',
-        description: `New key: ${result.api_key}. Copy it now – the old key was invalidated.`,
-        type: 'info'
-      });
+      // Find the publisher to display in the banner
+      const publisher = publishers.find(p => p.id === publisherId);
+      if (publisher && result.api_key) {
+        setLastRegenerated({
+          publisher,
+          apiKey: result.api_key
+        });
+        notify({
+          title: 'API key regenerated',
+          description: 'Review the new API key below and copy it before closing.',
+          type: 'success'
+        });
+      }
+      await fetchPublishers();
     } catch (error: any) {
       notify({
         title: 'Failed to regenerate API key',
@@ -491,6 +514,44 @@ const PublishersPage = () => {
           ) : (
             <p className="mt-4 text-sm text-emerald-800">Publisher onboarded successfully (no new key issued).</p>
           )}
+        </section>
+      )}
+
+      {lastRegenerated && (
+        <section className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-6 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-indigo-900">API key regenerated successfully</h3>
+              <p className="mt-1 text-sm text-indigo-800">
+                {lastRegenerated.publisher.name} · {lastRegenerated.publisher.domain}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="self-start rounded-md border border-indigo-300 px-3 py-1 text-xs font-medium text-indigo-800 hover:bg-indigo-100"
+              onClick={() => setLastRegenerated(null)}
+            >
+              Close
+            </button>
+          </div>
+          <div className="mt-4 space-y-2">
+            <p className="text-xs uppercase tracking-wide text-indigo-800">New API key</p>
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+              <code className="flex-1 break-all rounded-md bg-white px-3 py-2 text-sm text-indigo-900 shadow-sm">
+                {lastRegenerated.apiKey}
+              </code>
+              <button
+                type="button"
+                className="rounded-md border border-indigo-300 px-3 py-2 text-sm font-medium text-indigo-800 hover:bg-indigo-100"
+                onClick={() => navigator.clipboard.writeText(lastRegenerated.apiKey)}
+              >
+                Copy key
+              </button>
+            </div>
+            <p className="text-xs text-indigo-700">
+              Store this securely. The old key was invalidated and this key will be hidden once you close this banner.
+            </p>
+          </div>
         </section>
       )}
 
@@ -590,14 +651,6 @@ const PublishersPage = () => {
                 ))}
               </select>
             </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" {...register('generate_summary')} />
-              Generate summary
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" {...register('generate_embeddings')} />
-              Generate embeddings
-            </label>
             <label
               className={clsx(
                 'flex items-center gap-2 text-sm',
@@ -683,35 +736,22 @@ const PublishersPage = () => {
             </label>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="flex flex-col text-sm">
-              <span className="mb-1 font-medium">UI theme color</span>
-              <div className="flex items-center gap-3">
-                <input
-                  type="color"
-                  value={themeColor || '#6366f1'}
-                  onChange={(event) => setValue('ui_theme_color', event.target.value, { shouldDirty: true })}
-                  className="h-10 w-16 cursor-pointer rounded border border-slate-300 bg-transparent p-1"
-                />
-                <input
-                  type="text"
-                  {...register('ui_theme_color')}
-                  className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
-                  placeholder="#6366f1"
-                />
-              </div>
-              <span className="mt-1 text-xs text-slate-500">Primary color for widgets shown to end users.</span>
-            </label>
-            <label className="flex flex-col text-sm">
-              <span className="mb-1 font-medium">UI icon style</span>
-              <select {...register('ui_icon_style')} className="rounded-md border border-slate-300 px-3 py-2">
-                <option value="emoji">Emoji</option>
-                <option value="material">Material</option>
-                <option value="fontawesome">Font Awesome</option>
-              </select>
-              <span className="mt-1 text-xs text-slate-500">Controls which icon set appears in the widget UI.</span>
-            </label>
-          </div>
+          <label className="flex flex-col text-sm">
+            <span className="mb-1 font-medium">
+              Widget config <span className="text-rose-600">*</span>
+            </span>
+            <textarea
+              {...register('widget_config', { required: 'Widget config is required' })}
+              className="min-h-[200px] rounded-md border border-slate-300 px-3 py-2 font-mono text-xs"
+              placeholder={`{\n  "theme": "light",\n  "useDummyData": false,\n  "gaTrackingId": "G-XXXXXXXXXX",\n  "gaEnabled": true,\n  "adsenseForSearch": {\n    "enabled": true,\n    "pubId": "partner-pub-XXXXX"\n  }\n}`}
+            />
+            <span className="mt-1 text-xs text-slate-500">
+              JSON configuration for widget settings (theme, GA, ads, etc.). Required field.
+            </span>
+            {formState.errors.widget_config && (
+              <span className="mt-1 text-xs text-rose-600">{formState.errors.widget_config.message}</span>
+            )}
+          </label>
 
           <div className="flex items-center gap-2">
             <button
