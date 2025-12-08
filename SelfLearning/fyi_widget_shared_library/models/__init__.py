@@ -33,6 +33,7 @@ from .swagger_responses import (
     PublisherDeleteResponse,
     PublisherConfigResponse,
     PublisherRegenerateApiKeyResponse,
+    PublisherMetadataResponse,
 )
 
 # Import schemas if they exist
@@ -70,4 +71,5 @@ __all__ = [
     "PublisherDeleteResponse",
     "PublisherConfigResponse",
     "PublisherRegenerateApiKeyResponse",
+    "PublisherMetadataResponse",
 ]

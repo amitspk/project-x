@@ -228,16 +228,6 @@ class PublisherConfig(BaseModel):
         """
     )
     
-    # UI customization
-    ui_theme_color: Optional[str] = Field(
-        default="#6366f1",
-        description="Primary color for question cards"
-    )
-    ui_icon_style: Optional[str] = Field(
-        default="emoji",
-        description="Icon style: emoji, material, fontawesome"
-    )
-    
     class Config:
         """Pydantic config."""
         use_enum_values = True
@@ -347,6 +337,22 @@ class PublisherCreateRequest(BaseModel):
     email: str
     config: Optional[PublisherConfig] = Field(default_factory=PublisherConfig)
     subscription_tier: Optional[str] = Field(default="free")
+    widget_config: Dict[str, Any] = Field(
+        ...,
+        description="Widget configuration (theme, GA settings, ad configs, etc.). Stored in config.widget in database. Required field.",
+        example={
+            "theme": "light",
+            "useDummyData": False,
+            "currentStructure": "",
+            "gaTrackingId": "G-WPWFCMCSS3",
+            "gaEnabled": True,
+            "adsenseForSearch": {
+                "enabled": True,
+                "pubId": "partner-pub-XXXXX",
+                "styleId": "7395764353"
+            }
+        }
+    )
 
 
 class PublisherUpdateRequest(BaseModel):

@@ -220,18 +220,26 @@ class PublisherConfigSchema(BaseModel):
     summary_model: str = Field(..., example="gpt-4o-mini")
     questions_model: str = Field(..., example="gpt-4o-mini")
     chat_model: str = Field(..., example="gpt-4o-mini")
-    summary_temperature: float = Field(..., example=0.7)
-    questions_temperature: float = Field(..., example=0.7)
-    chat_temperature: float = Field(..., example=0.7)
+    # Temperature fields are always excluded from GET responses
     summary_max_tokens: int = Field(..., example=LLMModelConfig.DEFAULT_MAX_TOKENS_SUMMARY)
     questions_max_tokens: int = Field(..., example=LLMModelConfig.DEFAULT_MAX_TOKENS_QUESTIONS)
     chat_max_tokens: int = Field(..., example=LLMModelConfig.DEFAULT_MAX_TOKENS_CHAT)
-    generate_summary: bool = Field(..., example=True)
-    generate_embeddings: bool = Field(..., example=True)
+    # generate_summary and generate_embeddings are always excluded from GET responses
     use_grounding: bool = Field(False, example=False, description="Enable Google Search grounding for question generation during blog processing (Gemini models only). When enabled, provides real-time information and citations. Note: Grounding is NOT used in the Q&A /ask endpoint to control costs.")
     daily_blog_limit: int = Field(..., example=100)
     max_total_blogs: int | None = Field(None, example=500, description="Maximum total blogs allowed (null for unlimited)")
     whitelisted_blog_urls: List[str] | None = Field(None, example=["https://example.com/blog/","/news/"], description="Allowed blog URL prefixes. Use '*' or null to allow all.")
+    # Widget configuration (stored in config.widget in database)
+    widget: Optional[Dict[str, Any]] = Field(None, example={
+        "useDummyData": False,
+        "theme": "light",
+        "currentStructure": "",
+        "gaTrackingId": "G-WPWFCMCSS3",
+        "gaEnabled": True,
+        "adsenseForSearch": None,
+        "adsenseDisplay": None,
+        "googleAdManager": None
+    }, description="Widget configuration including theme, GA settings, and ad configs")
 
 
 class PublisherSchema(BaseModel):
@@ -331,4 +339,72 @@ class PublisherRegenerateApiKeyResponse(StandardSuccessResponse):
     """Response for POST /publishers/{publisher_id}/regenerate-api-key."""
     result: PublisherRegenerateApiKeyResult = Field(..., description="Details of the publisher and the new API key")
     message: str = "API key regenerated successfully"
+
+
+# ============================================================================
+# Publisher Metadata Response Models
+# ============================================================================
+
+class AdSenseForSearchConfig(BaseModel):
+    """AdSense for Search configuration schema."""
+    enabled: bool = Field(..., example=True)
+    pubId: Optional[str] = Field(None, example="partner-pub-4082803764726235")
+    styleId: Optional[str] = Field(None, example="7395764353")
+    adtest: Optional[bool] = Field(None, example=False)
+    numberOfAds: Optional[int] = Field(None, example=3)
+    hl: Optional[str] = Field(None, example="en")
+    channel: Optional[str] = Field(None, example="7374542267")
+    defaultQuery: Optional[str] = Field(None, example="")
+    querySource: Optional[str] = Field(None, example="question")
+    containerSuffix: Optional[str] = Field(None, example="-search-ads")
+    renderMode: Optional[str] = Field(None, example="iframe")
+    width: Optional[str] = Field(None, example="auto")
+    minHeight: Optional[int] = Field(None, example=100)
+    linkTarget: Optional[str] = Field(None, example="_top")
+    adsafe: Optional[str] = Field(None, example="low")
+    resultsPageQueryParam: Optional[str] = Field(None, example="query")
+    ignoredPageParams: Optional[List[str]] = Field(None, example=["utm_source", "utm_medium", "ref"])
+    adUnitOptions: Optional[Dict[str, Any]] = Field(None, example={})
+
+
+class AdSenseDisplayConfig(BaseModel):
+    """AdSense Display Ads configuration schema."""
+    enabled: bool = Field(..., example=True)
+    pubId: Optional[str] = Field(None, example="ca-pub-123456789")
+    slotId: Optional[str] = Field(None, example="1234567890")
+    adFormat: Optional[str] = Field(None, example="auto")
+    adtest: Optional[bool] = Field(None, example=False)
+    useIsolation: Optional[bool] = Field(None, example=None)
+
+
+class GoogleAdManagerConfig(BaseModel):
+    """Google Ad Manager configuration schema."""
+    enabled: bool = Field(..., example=True)
+    adUnitPath: Optional[str] = Field(None, example="/12345678/example/display")
+    sizes: Optional[List[List[int]]] = Field(None, example=[[300, 250], [728, 90]])
+    targeting: Optional[Dict[str, Any]] = Field(None, example={"pos": "top"})
+    channel: Optional[str] = Field(None, example="12345678")
+    collapseEmpty: Optional[bool] = Field(None, example=True)
+    responsive: Optional[bool] = Field(None, example=True)
+    useIsolation: Optional[bool] = Field(None, example=None)
+
+
+class PublisherMetadataResult(BaseModel):
+    """Publisher metadata result schema."""
+    domain: str = Field(..., example="example.com")
+    publisher_id: str = Field(..., example="pub_123456")
+    publisher_name: Optional[str] = Field(None, example="Example Blog Network")
+    useDummyData: Optional[bool] = Field(None, example=False)
+    theme: Optional[str] = Field(None, example="light")
+    currentStructure: Optional[str] = Field(None, example="")
+    gaTrackingId: Optional[str] = Field(None, example="G-WPWFCMCSS3")
+    gaEnabled: Optional[bool] = Field(None, example=True)
+    adsenseForSearch: Optional[AdSenseForSearchConfig] = None
+    adsenseDisplay: Optional[AdSenseDisplayConfig] = None
+    googleAdManager: Optional[GoogleAdManagerConfig] = None
+
+
+class PublisherMetadataResponse(StandardSuccessResponse):
+    """Response for GET /publishers/metadata."""
+    result: PublisherMetadataResult
 
