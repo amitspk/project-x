@@ -253,6 +253,9 @@ class PublisherSchema(BaseModel):
     config: PublisherConfigSchema
     created_at: str = Field(..., example="2025-10-18T14:30:00")
     subscription_tier: str = Field(..., example="free")
+    total_blogs_processed: int = Field(0, example=42, description="Total number of blogs processed for this publisher")
+    total_questions_generated: int = Field(0, example=210, description="Total number of questions generated for this publisher")
+    blog_slots_reserved: int = Field(0, example=2, description="Number of blog processing slots currently reserved")
 
 
 class PublisherOnboardResult(BaseModel):

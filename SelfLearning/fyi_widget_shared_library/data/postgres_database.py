@@ -136,8 +136,8 @@ class PostgresPublisherRepository:
             created_at=table_obj.created_at,
             updated_at=table_obj.updated_at,
             last_active_at=table_obj.last_active_at,
-            total_blogs_processed=table_obj.total_blogs_processed,
-            total_questions_generated=table_obj.total_questions_generated,
+            total_blogs_processed=table_obj.total_blogs_processed or 0,
+            total_questions_generated=table_obj.total_questions_generated or 0,
             blog_slots_reserved=getattr(table_obj, "blog_slots_reserved", 0) or 0,
             subscription_tier=table_obj.subscription_tier
         )
