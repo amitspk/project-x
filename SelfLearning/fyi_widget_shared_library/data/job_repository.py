@@ -38,7 +38,7 @@ class JobRepository:
         blog_url: str,
         publisher_id: Optional[str] = None,
         config: Optional[dict] = None
-    ) -> str:
+    ) -> tuple[str, bool]:
         """
         Create a new processing job with publisher context.
         
@@ -48,7 +48,9 @@ class JobRepository:
             config: Publisher configuration for processing
             
         Returns:
-            Job ID (string)
+            Tuple of (job_id: str, is_new_job: bool)
+            - job_id: The job ID (existing or newly created)
+            - is_new_job: True if a new job was created, False if an existing job was returned
         """
         # Check if URL is already queued or processing
         # Allow immediate requeuing of skipped jobs, but prevent duplicate QUEUED/PROCESSING jobs
@@ -59,7 +61,7 @@ class JobRepository:
         
         if existing:
             logger.info(f"📋 Job already queued/processing for URL: {blog_url}")
-            return existing.get("job_id")
+            return existing.get("job_id"), False
         
         # Create new job
         job = ProcessingJob(
@@ -72,7 +74,7 @@ class JobRepository:
         await self.collection.insert_one(job_dict)
         logger.info(f"✅ Created job {job.job_id} for URL: {blog_url} (Publisher: {publisher_id})")
         
-        return job.job_id
+        return job.job_id, True
     
     async def enqueue_job(
         self, 

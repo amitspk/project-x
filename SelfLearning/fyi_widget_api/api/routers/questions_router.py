@@ -205,18 +205,20 @@ async def check_and_load_questions(
         
         ensure_url_whitelisted(normalized_url, publisher)
 
-        # Create job
+        # Create job - only reserve slot if we're actually creating a NEW job
         slot_reserved = False
         try:
-            if auth_module.publisher_repo:
-                await auth_module.publisher_repo.reserve_blog_slot(publisher.id)
-                slot_reserved = True
-
-            job_id = await job_repo.create_job(
+            # Check if job exists first, then only reserve slot if creating new job
+            job_id, is_new_job = await job_repo.create_job(
                 blog_url=normalized_url,
                 publisher_id=publisher.id,
                 config=publisher_config
             )
+            
+            # Only reserve slot if we created a NEW job
+            if is_new_job and auth_module.publisher_repo:
+                await auth_module.publisher_repo.reserve_blog_slot(publisher.id)
+                slot_reserved = True
         except UsageLimitExceededError as exc:
             logger.warning(f"[{request_id}] ❌ Blog limit reached for publisher {publisher.id}: {exc}")
             raise HTTPException(

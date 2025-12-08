@@ -368,6 +368,20 @@ class PublisherUpdateRequest(BaseModel):
     email: Optional[str] = None
     status: Optional[PublisherStatus] = None
     config: Optional[PublisherConfig] = None
+    widget_config: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Widget configuration (theme, GA settings, ad configs, etc.). Stored in config.widget in database. Optional field.",
+        example={
+            "theme": "light",
+            "useDummyData": False,
+            "gaTrackingId": "G-XXXXXXXXXX",
+            "gaEnabled": True,
+            "adsenseForSearch": {
+                "enabled": True,
+                "pubId": "partner-pub-XXXXX"
+            }
+        }
+    )
     subscription_tier: Optional[str] = None
 
 

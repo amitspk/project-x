@@ -48,6 +48,18 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         # Store in request state for endpoint access
         request.state.request_id = request_id
         
+        # Store raw body for PUT/PATCH requests to publishers endpoint (for widget extraction)
+        if request.method in ["PUT", "PATCH"] and "/api/v1/publishers/" in str(request.url.path):
+            try:
+                body_bytes = await request.body()
+                request.state.raw_body = body_bytes.decode('utf-8')
+                # Recreate the request body stream for FastAPI to consume
+                async def receive():
+                    return {"type": "http.request", "body": body_bytes}
+                request._receive = receive
+            except Exception as e:
+                logger.debug(f"Could not store raw body: {e}")
+        
         # Start timer
         start_time = time.time()
         
