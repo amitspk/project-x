@@ -150,10 +150,11 @@ async def check_and_load_questions(
         # STEP 2: No questions found - Check if processing job exists
         logger.info(f"[{request_id}] 🔄 No questions found, checking for existing job")
         
-        # Check for existing job (pending, processing, or failed)
+        # Check for existing active job (pending or processing)
+        # Allow immediate requeuing of skipped jobs - they can be requeued right away
         existing_job = await job_repo.collection.find_one({
             "blog_url": normalized_url,
-            "status": {"$in": ["pending", "processing", "failed"]}
+            "status": {"$in": ["pending", "processing"]}
         }, sort=[("created_at", -1)])
         
         if existing_job:
@@ -180,66 +181,74 @@ async def check_and_load_questions(
                     "job_id": job_id,
                     "message": "Blog processing is queued"
                 }
-            else:  # failed
-                logger.info(f"[{request_id}] ⚠️ Previous job failed: {job_id}, will create new job")
-                # Previous job failed, create a new one
-                existing_job = None  # Will create new job below
+            
+            # Return early if we have an active job (processing or pending)
+            # Skipped jobs are NOT included in the query, so they can be immediately requeued
+            return success_response(
+                result=result_data,
+                message="Job status retrieved",
+                status_code=200,
+                request_id=request_id
+            )
         
         # STEP 3: No active job - Create new processing job
-        if not existing_job or existing_job.get("status") == "failed":
-            from fyi_widget_shared_library.models.job_queue import JobCreateRequest, JobStatus
-            from datetime import datetime
-            
-            logger.info(f"[{request_id}] 🚀 Creating new processing job")
-            
-            # Get publisher config
-            from fyi_widget_api.api import auth as auth_module
-            publisher_config = publisher.config.dict() if publisher.config else {}
-            
-            ensure_url_whitelisted(normalized_url, publisher)
+        # This includes cases where: no job exists, job was skipped, or job failed
+        # Skipped jobs can be immediately requeued
+        from fyi_widget_shared_library.models.job_queue import JobCreateRequest, JobStatus
+        from datetime import datetime
+        
+        logger.info(f"[{request_id}] 🚀 Creating new processing job")
+        
+        # Get publisher config
+        from fyi_widget_api.api import auth as auth_module
+        publisher_config = publisher.config.dict() if publisher.config else {}
+        
+        ensure_url_whitelisted(normalized_url, publisher)
 
-            # Create job
-            slot_reserved = False
-            try:
-                if auth_module.publisher_repo:
-                    await auth_module.publisher_repo.reserve_blog_slot(publisher.id)
-                    slot_reserved = True
-
-                job_id = await job_repo.create_job(
-                    blog_url=normalized_url,
-                    publisher_id=publisher.id,
-                    config=publisher_config
-                )
-            except UsageLimitExceededError as exc:
-                logger.warning(f"[{request_id}] ❌ Blog limit reached for publisher {publisher.id}: {exc}")
-                raise HTTPException(
-                    status_code=403,
-                    detail=str(exc),
-                )
-            except Exception:
-                if slot_reserved and auth_module.publisher_repo:
-                    try:
-                        await auth_module.publisher_repo.release_blog_slot(
-                            publisher.id,
-                            processed=False,
-                        )
-                    except Exception as release_error:  # pragma: no cover - logging only
-                        logger.warning(f"[{request_id}] ⚠️ Failed to release reserved blog slot: {release_error}")
-                raise
+        # Create job - only reserve slot if we're actually creating a NEW job
+        slot_reserved = False
+        try:
+            # Check if job exists first, then only reserve slot if creating new job
+            job_id, is_new_job = await job_repo.create_job(
+                blog_url=normalized_url,
+                publisher_id=publisher.id,
+                config=publisher_config
+            )
             
-            # Note: Usage tracking (blogs_processed) will be handled by worker when job completes
-            # This prevents double counting since worker also increments on completion
-            
-            logger.info(f"[{request_id}] ✅ Processing job created: {job_id}")
-            
-            result_data = {
-                "processing_status": "not_started",
-                "blog_url": normalized_url,
-                "questions": None,
-                "blog_info": None,
-                "job_id": job_id,
-                "message": "Processing started - check back in 30-60 seconds"
-            }
+            # Only reserve slot if we created a NEW job
+            if is_new_job and auth_module.publisher_repo:
+                await auth_module.publisher_repo.reserve_blog_slot(publisher.id)
+                slot_reserved = True
+        except UsageLimitExceededError as exc:
+            logger.warning(f"[{request_id}] ❌ Blog limit reached for publisher {publisher.id}: {exc}")
+            raise HTTPException(
+                status_code=403,
+                detail=str(exc),
+            )
+        except Exception:
+            if slot_reserved and auth_module.publisher_repo:
+                try:
+                    await auth_module.publisher_repo.release_blog_slot(
+                        publisher.id,
+                        processed=False,
+                    )
+                except Exception as release_error:  # pragma: no cover - logging only
+                    logger.warning(f"[{request_id}] ⚠️ Failed to release reserved blog slot: {release_error}")
+            raise
+        
+        # Note: Usage tracking (blogs_processed) will be handled by worker when job completes
+        # This prevents double counting since worker also increments on completion
+        
+        logger.info(f"[{request_id}] ✅ Processing job created: {job_id}")
+        
+        result_data = {
+            "processing_status": "not_started",
+            "blog_url": normalized_url,
+            "questions": None,
+            "blog_info": None,
+            "job_id": job_id,
+            "message": "Processing started - check back in 30-60 seconds"
+        }
         
         return success_response(
             result=result_data,

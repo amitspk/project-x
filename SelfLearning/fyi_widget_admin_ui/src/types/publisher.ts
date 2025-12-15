@@ -13,6 +13,7 @@ export type PublisherConfig = {
   use_grounding?: boolean;
   daily_blog_limit: number | null;
   max_total_blogs?: number | null;
+  threshold_before_processing_blog?: number;
   whitelisted_blog_urls?: string[] | null;
   custom_question_prompt?: string | null;
   custom_summary_prompt?: string | null;

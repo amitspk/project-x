@@ -9,7 +9,7 @@ import uuid
 import secrets
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from sqlalchemy import create_engine, Column, String, Integer, Float, Boolean, DateTime, JSON, Enum as SQLEnum
+from sqlalchemy import create_engine, Column, String, Integer, Float, Boolean, DateTime, JSON, Enum as SQLEnum, update, case
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker, AsyncEngine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -114,10 +114,12 @@ class PostgresPublisherRepository:
         return f"pub_{secrets.token_urlsafe(32)}"
     
     def _ensure_use_grounding_in_config(self, config: Optional[Dict[str, Any]]) -> PublisherConfig:
-        """Ensure use_grounding is included in config dict (backward compatibility)."""
+        """Ensure use_grounding and threshold_before_processing_blog are included in config dict (backward compatibility)."""
         config_dict = config if config else {}
         if 'use_grounding' not in config_dict:
             config_dict['use_grounding'] = False
+        if 'threshold_before_processing_blog' not in config_dict:
+            config_dict['threshold_before_processing_blog'] = 0
         return PublisherConfig(**config_dict)
     
     def _table_to_model(self, table_obj: PublisherTable) -> Publisher:
@@ -134,8 +136,8 @@ class PostgresPublisherRepository:
             created_at=table_obj.created_at,
             updated_at=table_obj.updated_at,
             last_active_at=table_obj.last_active_at,
-            total_blogs_processed=table_obj.total_blogs_processed,
-            total_questions_generated=table_obj.total_questions_generated,
+            total_blogs_processed=table_obj.total_blogs_processed or 0,
+            total_questions_generated=table_obj.total_questions_generated or 0,
             blog_slots_reserved=getattr(table_obj, "blog_slots_reserved", 0) or 0,
             subscription_tier=table_obj.subscription_tier
         )
@@ -282,8 +284,24 @@ class PostgresPublisherRepository:
                 
                 # Update fields
                 for key, value in updates.items():
-                    if key == 'config' and isinstance(value, PublisherConfig):
-                        setattr(db_publisher, key, value.model_dump())  # Use model_dump() to include all fields including use_grounding
+                    if key == 'config':
+                        # Handle config update - can be PublisherConfig object or dict
+                        if isinstance(value, PublisherConfig):
+                            config_dict = value.model_dump()
+                        elif isinstance(value, dict):
+                            config_dict = value
+                        else:
+                            config_dict = value
+                        
+                        # Merge with existing config to preserve widget field if not being updated
+                        existing_config = db_publisher.config or {}
+                        if isinstance(existing_config, dict):
+                            # Preserve widget config if not being updated
+                            if "widget" not in config_dict and "widget" in existing_config:
+                                config_dict["widget"] = existing_config["widget"]
+                            logger.info(f"💾 Saving config with widget: {'widget' in config_dict}, widget keys: {list(config_dict.get('widget', {}).keys()) if 'widget' in config_dict else 'N/A'}")
+                        
+                        setattr(db_publisher, key, config_dict)
                     elif hasattr(db_publisher, key):
                         setattr(db_publisher, key, value)
                 
@@ -451,25 +469,38 @@ class PostgresPublisherRepository:
         """Release a reserved slot and optionally record successful processing."""
         async with self.async_session_factory() as session:
             try:
-                result = await session.execute(
-                    select(PublisherTable)
-                    .where(PublisherTable.id == publisher_id)
-                    .with_for_update()
-                )
-                db_publisher = result.scalar_one_or_none()
-                if not db_publisher:
-                    return
-
-                if db_publisher.blog_slots_reserved and db_publisher.blog_slots_reserved > 0:
-                    db_publisher.blog_slots_reserved -= 1
-
+                # Use atomic UPDATE to prevent race conditions
+                # This ensures the decrement happens directly in the database
+                # Build values dict conditionally based on processed flag
+                values_dict = {
+                    "blog_slots_reserved": case(
+                        (PublisherTable.blog_slots_reserved > 0, PublisherTable.blog_slots_reserved - 1),
+                        else_=0
+                    ),
+                    "last_active_at": datetime.utcnow()
+                }
+                
+                # Conditionally add processed fields if processed is True
                 if processed:
-                    db_publisher.total_blogs_processed += 1
-                    db_publisher.total_questions_generated += questions_generated
-
-                db_publisher.last_active_at = datetime.utcnow()
-
+                    values_dict["total_blogs_processed"] = PublisherTable.total_blogs_processed + 1
+                    values_dict["total_questions_generated"] = PublisherTable.total_questions_generated + questions_generated
+                
+                update_stmt = (
+                    update(PublisherTable)
+                    .where(PublisherTable.id == publisher_id)
+                    .values(**values_dict)
+                )
+                
+                result = await session.execute(update_stmt)
                 await session.commit()
+                
+                if result.rowcount == 0:
+                    logger.warning(f"⚠️  Publisher not found for slot release: {publisher_id}")
+                    return
+                
+                # Log the release (we can't get the exact before/after value with atomic update,
+                # but we know it was decremented if it was > 0)
+                logger.info(f"📉 Released blog slot (publisher: {publisher_id}, processed: {processed})")
             except Exception as e:
                 await session.rollback()
                 logger.error(f"❌ Failed to release blog slot: {e}")

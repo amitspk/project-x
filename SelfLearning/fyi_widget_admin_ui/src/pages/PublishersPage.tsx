@@ -28,7 +28,7 @@ type CreatePublisherFormValues = {
   name: string;
   domain: string;
   email: string;
-  subscription_tier?: string;
+  subscription_tier: string;
   questions_per_blog: number;
   use_grounding: boolean;
   summary_model: string;
@@ -36,6 +36,7 @@ type CreatePublisherFormValues = {
   chat_model: string;
   daily_blog_limit?: string;
   max_total_blogs?: string;
+  threshold_before_processing_blog: number;
   whitelisted_blog_urls: string;
   custom_question_prompt?: string;
   custom_summary_prompt?: string;
@@ -100,7 +101,10 @@ const PublisherCard: React.FC<{
           <span className={clsx('rounded-full px-2 py-1', statusBadgeColor(publisher.status))}>{publisher.status}</span>
           <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-500">Tier: {publisher.subscription_tier ?? 'free'}</span>
           <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-500">
-            Blogs processed: {publisher.total_blogs_processed}
+            Blogs processed: {publisher.total_blogs_processed ?? 0}
+          </span>
+          <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-500">
+            Questions generated: {publisher.total_questions_generated ?? 0}
           </span>
           <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-500">
             Slots reserved: {publisher.blog_slots_reserved ?? 0}
@@ -270,6 +274,7 @@ const PublishersPage = () => {
       chat_model: 'gpt-4o-mini',
       daily_blog_limit: '',
       max_total_blogs: '',
+      threshold_before_processing_blog: 0,
       whitelisted_blog_urls: '',
       custom_question_prompt: '',
       custom_summary_prompt: '',
@@ -289,7 +294,7 @@ const PublishersPage = () => {
   }, [questionsModel, isGeminiModel, setValue]);
   
   // Register questions_model and create a custom onChange handler
-  const questionsModelField = register('questions_model');
+  const questionsModelField = register('questions_model', { required: 'Questions model is required' });
   const { onChange: questionsModelOnChange, ...questionsModelRestProps } = questionsModelField;
   
   // Handle questions_model change to trigger watch() re-render
@@ -353,6 +358,7 @@ const PublishersPage = () => {
         chat_model: values.chat_model,
         daily_blog_limit: toNumberOrUndefined(values.daily_blog_limit),
         max_total_blogs: toNumberOrUndefined(values.max_total_blogs),
+        threshold_before_processing_blog: values.threshold_before_processing_blog ?? 0,
         whitelisted_blog_urls: whitelistEntries.length > 0 ? whitelistEntries : undefined,
         custom_question_prompt: values.custom_question_prompt?.trim() || undefined,
         custom_summary_prompt: values.custom_summary_prompt?.trim() || undefined
@@ -387,7 +393,7 @@ const PublishersPage = () => {
         name: values.name.trim(),
         domain: values.domain.trim(),
         email: values.email.trim(),
-        subscription_tier: values.subscription_tier?.trim() || undefined,
+        subscription_tier: values.subscription_tier.trim(),
         config: cleanedConfig,
         widget_config: widgetConfig
       };
@@ -564,67 +570,107 @@ const PublishersPage = () => {
         <form onSubmit={onCreatePublisher} className="mt-4 space-y-6">
           <div className="grid gap-4 md:grid-cols-2">
             <label className="flex flex-col text-sm">
-              <span className="mb-1 font-medium">Name</span>
+              <span className="mb-1 font-medium">
+                Name <span className="text-rose-600">*</span>
+              </span>
               <input
                 type="text"
-                {...register('name', { required: true })}
+                {...register('name', { required: 'Name is required' })}
                 className="rounded-md border border-slate-300 px-3 py-2"
                 placeholder="Tech Blog Inc"
               />
+              {formState.errors.name && (
+                <span className="mt-1 text-xs text-rose-600">{formState.errors.name.message}</span>
+              )}
             </label>
             <label className="flex flex-col text-sm">
-              <span className="mb-1 font-medium">Domain</span>
+              <span className="mb-1 font-medium">
+                Domain <span className="text-rose-600">*</span>
+              </span>
               <input
                 type="text"
-                {...register('domain', { required: true })}
+                {...register('domain', { required: 'Domain is required' })}
                 className="rounded-md border border-slate-300 px-3 py-2"
                 placeholder="example.com"
               />
+              {formState.errors.domain && (
+                <span className="mt-1 text-xs text-rose-600">{formState.errors.domain.message}</span>
+              )}
             </label>
             <label className="flex flex-col text-sm">
-              <span className="mb-1 font-medium">Admin email</span>
+              <span className="mb-1 font-medium">
+                Admin email <span className="text-rose-600">*</span>
+              </span>
               <input
                 type="email"
-                {...register('email', { required: true })}
+                {...register('email', { required: 'Admin email is required' })}
                 className="rounded-md border border-slate-300 px-3 py-2"
                 placeholder="admin@example.com"
               />
+              {formState.errors.email && (
+                <span className="mt-1 text-xs text-rose-600">{formState.errors.email.message}</span>
+              )}
             </label>
             <label className="flex flex-col text-sm">
-              <span className="mb-1 font-medium">Subscription tier</span>
+              <span className="mb-1 font-medium">
+                Subscription tier <span className="text-rose-600">*</span>
+              </span>
               <input
                 type="text"
-                {...register('subscription_tier')}
+                {...register('subscription_tier', { required: 'Subscription tier is required' })}
                 className="rounded-md border border-slate-300 px-3 py-2"
                 placeholder="free / basic / pro"
               />
+              {formState.errors.subscription_tier && (
+                <span className="mt-1 text-xs text-rose-600">{formState.errors.subscription_tier.message}</span>
+              )}
             </label>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
             <label className="flex flex-col text-sm">
-              <span className="mb-1 font-medium">Questions per blog</span>
+              <span className="mb-1 font-medium">
+                Questions per blog <span className="text-rose-600">*</span>
+              </span>
               <input
                 type="number"
                 min={1}
                 max={20}
-                {...register('questions_per_blog', { valueAsNumber: true, min: 1, max: 20 })}
+                {...register('questions_per_blog', { 
+                  required: 'Questions per blog is required',
+                  valueAsNumber: true, 
+                  min: { value: 1, message: 'Must be at least 1' }, 
+                  max: { value: 20, message: 'Must be at most 20' }
+                })}
                 className="rounded-md border border-slate-300 px-3 py-2"
               />
               <span className="mt-1 text-xs text-slate-500">Default is 5. Choose between 1 and 20.</span>
+              {formState.errors.questions_per_blog && (
+                <span className="mt-1 text-xs text-rose-600">{formState.errors.questions_per_blog.message}</span>
+              )}
             </label>
             <label className="flex flex-col text-sm">
-              <span className="mb-1 font-medium">Summary model</span>
-              <select {...register('summary_model')} className="rounded-md border border-slate-300 px-3 py-2">
+              <span className="mb-1 font-medium">
+                Summary model <span className="text-rose-600">*</span>
+              </span>
+              <select 
+                {...register('summary_model', { required: 'Summary model is required' })} 
+                className="rounded-md border border-slate-300 px-3 py-2"
+              >
                 {modelOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
                 ))}
               </select>
+              {formState.errors.summary_model && (
+                <span className="mt-1 text-xs text-rose-600">{formState.errors.summary_model.message}</span>
+              )}
             </label>
             <label className="flex flex-col text-sm">
-              <span className="mb-1 font-medium">Questions model</span>
+              <span className="mb-1 font-medium">
+                Questions model <span className="text-rose-600">*</span>
+              </span>
               <select 
                 {...questionsModelSelectProps}
                 className="rounded-md border border-slate-300 px-3 py-2"
@@ -640,16 +686,27 @@ const PublishersPage = () => {
                   Selected: {questionsModel} {isGeminiModel ? '(Gemini - grounding available)' : '(Grounding not available)'}
                 </span>
               )}
+              {formState.errors.questions_model && (
+                <span className="mt-1 text-xs text-rose-600">{formState.errors.questions_model.message}</span>
+              )}
             </label>
             <label className="flex flex-col text-sm">
-              <span className="mb-1 font-medium">Chat model</span>
-              <select {...register('chat_model')} className="rounded-md border border-slate-300 px-3 py-2">
+              <span className="mb-1 font-medium">
+                Chat model <span className="text-rose-600">*</span>
+              </span>
+              <select 
+                {...register('chat_model', { required: 'Chat model is required' })} 
+                className="rounded-md border border-slate-300 px-3 py-2"
+              >
                 {modelOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
                 ))}
               </select>
+              {formState.errors.chat_model && (
+                <span className="mt-1 text-xs text-rose-600">{formState.errors.chat_model.message}</span>
+              )}
             </label>
             <label
               className={clsx(
@@ -676,7 +733,7 @@ const PublishersPage = () => {
             </label>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <label className="flex flex-col text-sm">
               <span className="mb-1 font-medium">Daily blog limit (optional)</span>
               <input
@@ -696,6 +753,19 @@ const PublishersPage = () => {
                 className="rounded-md border border-slate-300 px-3 py-2"
                 placeholder="Leave blank for unlimited"
               />
+            </label>
+            <label className="flex flex-col text-sm">
+              <span className="mb-1 font-medium">Threshold before processing blog</span>
+              <input
+                type="number"
+                min={0}
+                {...register('threshold_before_processing_blog', { valueAsNumber: true, min: 0 })}
+                className="rounded-md border border-slate-300 px-3 py-2"
+                placeholder="0"
+              />
+              <span className="mt-1 text-xs text-slate-500">
+                Number of triggers required before processing (default: 0)
+              </span>
             </label>
           </div>
 

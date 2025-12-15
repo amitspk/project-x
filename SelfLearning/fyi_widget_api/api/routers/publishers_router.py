@@ -567,6 +567,17 @@ async def update_publisher(
     # Get request_id from middleware (fallback to generating one if not available)
     request_id = getattr(http_request.state, 'request_id', None) or generate_request_id()
     
+    # Extract widget from raw request body if it's nested in config (Pydantic strips it)
+    widget_from_request = None
+    if hasattr(http_request.state, 'raw_body'):
+        try:
+            import json
+            body = json.loads(http_request.state.raw_body)
+            if isinstance(body, dict) and "config" in body and isinstance(body["config"], dict) and "widget" in body["config"]:
+                widget_from_request = body["config"].get("widget")
+        except Exception:
+            pass
+    
     try:
         logger.info(f"[{request_id}] 📝 Updating publisher: {publisher_id}")
         
@@ -578,10 +589,37 @@ async def update_publisher(
             updates['email'] = request.email
         if request.status is not None:
             updates['status'] = request.status
-        if request.config is not None:
-            updates['config'] = request.config
         if request.subscription_tier is not None:
             updates['subscription_tier'] = request.subscription_tier
+        
+        # Handle config update - merge widget_config if provided (same as create endpoint)
+        if request.config is not None or request.widget_config is not None:
+            # Get current publisher to preserve existing config
+            current_publisher = await repo.get_publisher_by_id(publisher_id)
+            if not current_publisher:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Publisher not found: {publisher_id}"
+                )
+            
+            # Start with current config (same pattern as create endpoint)
+            if request.config is not None:
+                config_dict = request.config.model_dump()
+            else:
+                config_dict = current_publisher.config.model_dump()
+            
+            # Merge widget_config into config.widget if provided (same as create endpoint)
+            if request.widget_config is not None:
+                config_dict["widget"] = request.widget_config
+            elif widget_from_request is not None:
+                config_dict["widget"] = widget_from_request
+            elif "widget" not in config_dict:
+                # Preserve existing widget if not being updated
+                existing_config = await repo.get_publisher_raw_config_by_domain(current_publisher.domain)
+                if existing_config and isinstance(existing_config, dict) and "widget" in existing_config:
+                    config_dict["widget"] = existing_config.get("widget", {})
+            
+            updates['config'] = config_dict
         
         if not updates:
             raise HTTPException(

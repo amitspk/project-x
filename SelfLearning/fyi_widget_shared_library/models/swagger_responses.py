@@ -228,6 +228,7 @@ class PublisherConfigSchema(BaseModel):
     use_grounding: bool = Field(False, example=False, description="Enable Google Search grounding for question generation during blog processing (Gemini models only). When enabled, provides real-time information and citations. Note: Grounding is NOT used in the Q&A /ask endpoint to control costs.")
     daily_blog_limit: int = Field(..., example=100)
     max_total_blogs: int | None = Field(None, example=500, description="Maximum total blogs allowed (null for unlimited)")
+    threshold_before_processing_blog: int = Field(0, example=0, description="Threshold value before processing a blog. Defaults to 0 when publisher is onboarded.")
     whitelisted_blog_urls: List[str] | None = Field(None, example=["https://example.com/blog/","/news/"], description="Allowed blog URL prefixes. Use '*' or null to allow all.")
     # Widget configuration (stored in config.widget in database)
     widget: Optional[Dict[str, Any]] = Field(None, example={
@@ -252,6 +253,9 @@ class PublisherSchema(BaseModel):
     config: PublisherConfigSchema
     created_at: str = Field(..., example="2025-10-18T14:30:00")
     subscription_tier: str = Field(..., example="free")
+    total_blogs_processed: int = Field(0, example=42, description="Total number of blogs processed for this publisher")
+    total_questions_generated: int = Field(0, example=210, description="Total number of questions generated for this publisher")
+    blog_slots_reserved: int = Field(0, example=2, description="Number of blog processing slots currently reserved")
 
 
 class PublisherOnboardResult(BaseModel):
