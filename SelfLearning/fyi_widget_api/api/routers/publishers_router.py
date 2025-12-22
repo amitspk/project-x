@@ -108,6 +108,19 @@ async def enrich_publisher_with_widget_config(
             if "config" not in publisher_dict:
                 publisher_dict["config"] = {}
             publisher_dict["config"]["widget"] = widget_config
+            logger.info(f"✅ Added widget config to response with keys: {list(widget_config.keys()) if isinstance(widget_config, dict) else 'N/A'}")
+        else:
+            logger.warning(f"⚠️ Widget config not found in raw_config for domain: {publisher.domain}")
+            # Ensure config dict exists and set widget to empty object instead of null
+            if "config" not in publisher_dict:
+                publisher_dict["config"] = {}
+            publisher_dict["config"]["widget"] = {}
+    else:
+        logger.warning(f"⚠️ Raw config not found or invalid for domain: {publisher.domain}, raw_config: {raw_config}")
+        # Ensure config dict exists and set widget to empty object instead of null
+        if "config" not in publisher_dict:
+            publisher_dict["config"] = {}
+        publisher_dict["config"]["widget"] = {}
     
     return publisher_dict
 
@@ -259,7 +272,6 @@ async def onboard_publisher(
 async def get_publisher_metadata(
     http_request: Request,
     blog_url: str = Query(..., description="The full blog URL (e.g., https://example.com/blog/post)"),
-    adVariation: str = Query(..., description="Ad variation to return: 'adsenseForSearch', 'adsenseDisplay', or 'googleAdManager'"),
     publisher: Publisher = Depends(get_current_publisher),
     repo: PostgresPublisherRepository = Depends(get_publisher_repo)
 ) -> Dict[str, Any]:
@@ -270,38 +282,24 @@ async def get_publisher_metadata(
     
     **Parameters**:
     - `blog_url`: Full blog URL (e.g., https://example.com/blog/post)
-    - `adVariation`: Which ad configuration to return ('adsenseForSearch', 'adsenseDisplay', or 'googleAdManager')
     
     **Response**:
     Returns publisher metadata including:
     - Domain, publisher ID, and name
     - Widget configuration (theme, GA settings, etc.)
-    - Ad configuration for the requested variation (others will be null)
+    - Ad configuration based on `adVariation` stored in widget config (others will be null)
+    
+    The `adVariation` field in widget config determines which ad configuration to return.
+    Valid values: 'adsenseForSearch', 'adsenseDisplay', or 'googleAdManager'
     
     The widget config is stored in the `config.widget` JSON column in the database.
     """
     request_id = getattr(http_request.state, 'request_id', None) or generate_request_id()
     
     try:
-        # Validate adVariation parameter
-        valid_ad_variations = ["adsenseForSearch", "adsenseDisplay", "googleAdManager"]
-        if adVariation not in valid_ad_variations:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "status": "error",
-                    "status_code": 422,
-                    "message": "Validation error",
-                    "error": {
-                        "code": "VALIDATION_ERROR",
-                        "detail": f"adVariation must be one of: {', '.join(valid_ad_variations)}"
-                    }
-                }
-            )
-        
         # Extract domain from blog_url
         blog_domain = extract_domain(blog_url)
-        logger.info(f"[{request_id}] 📖 Getting publisher metadata for domain: {blog_domain} (adVariation: {adVariation})")
+        logger.info(f"[{request_id}] 📖 Getting publisher metadata for domain: {blog_domain}")
         
         # Validate blog URL domain matches publisher's domain
         await validate_blog_url_domain(blog_url, publisher)
@@ -334,6 +332,17 @@ async def get_publisher_metadata(
         # Extract widget config from config.widget (nested structure)
         widget_config = raw_config.get("widget", {}) if isinstance(raw_config, dict) else {}
         
+        # Get adVariation from widget config (defaults to None if not set)
+        ad_variation = widget_config.get("adVariation")
+        
+        # Validate adVariation if present
+        valid_ad_variations = ["adsenseForSearch", "adsenseDisplay", "googleAdManager"]
+        if ad_variation and ad_variation not in valid_ad_variations:
+            logger.warning(f"[{request_id}] ⚠️ Invalid adVariation '{ad_variation}' in widget config. Valid values: {', '.join(valid_ad_variations)}")
+            ad_variation = None
+        
+        logger.info(f"[{request_id}] 📖 Using adVariation from widget config: {ad_variation}")
+        
         # Build result with widget config fields (return null if missing)
         result_data = {
             "domain": domain_publisher.domain,
@@ -344,24 +353,27 @@ async def get_publisher_metadata(
             "currentStructure": widget_config.get("currentStructure"),
             "gaTrackingId": widget_config.get("gaTrackingId"),
             "gaEnabled": widget_config.get("gaEnabled"),
+            "adVariation": ad_variation,
             "adsenseForSearch": None,
             "adsenseDisplay": None,
             "googleAdManager": None
         }
         
-        # Set the requested ad variation config, others remain null
-        if adVariation == "adsenseForSearch":
+        # Set the ad variation config based on adVariation from widget config, others remain null
+        if ad_variation == "adsenseForSearch":
             adsense_for_search = widget_config.get("adsenseForSearch")
             if adsense_for_search:
                 result_data["adsenseForSearch"] = adsense_for_search
-        elif adVariation == "adsenseDisplay":
+        elif ad_variation == "adsenseDisplay":
             adsense_display = widget_config.get("adsenseDisplay")
             if adsense_display:
                 result_data["adsenseDisplay"] = adsense_display
-        elif adVariation == "googleAdManager":
+        elif ad_variation == "googleAdManager":
             google_ad_manager = widget_config.get("googleAdManager")
             if google_ad_manager:
                 result_data["googleAdManager"] = google_ad_manager
+        elif ad_variation is None:
+            logger.info(f"[{request_id}] ⚠️ No adVariation specified in widget config, all ad configs will be null")
         
         logger.info(f"[{request_id}] ✅ Publisher metadata retrieved for: {domain_publisher.domain}")
         
@@ -572,14 +584,33 @@ async def update_publisher(
     if hasattr(http_request.state, 'raw_body'):
         try:
             import json
-            body = json.loads(http_request.state.raw_body)
-            if isinstance(body, dict) and "config" in body and isinstance(body["config"], dict) and "widget" in body["config"]:
+            raw_body_str = http_request.state.raw_body
+            logger.info(f"[{request_id}] 📦 Raw body length: {len(raw_body_str) if raw_body_str else 0} bytes")
+            body = json.loads(raw_body_str)
+            logger.info(f"[{request_id}] 📦 Parsed body keys: {list(body.keys()) if isinstance(body, dict) else 'N/A'}")
+            
+            # Check for widget_config as top-level key
+            if isinstance(body, dict) and "widget_config" in body:
+                widget_from_request = body.get("widget_config")
+                logger.info(f"[{request_id}] 🔍 Found widget_config in raw body (top-level) with keys: {list(widget_from_request.keys()) if isinstance(widget_from_request, dict) else 'N/A'}")
+            # Check for widget as top-level key (alternative format)
+            elif isinstance(body, dict) and "widget" in body:
+                widget_from_request = body.get("widget")
+                logger.info(f"[{request_id}] 🔍 Found widget in raw body (top-level) with keys: {list(widget_from_request.keys()) if isinstance(widget_from_request, dict) else 'N/A'}")
+            # Check for widget nested in config
+            elif isinstance(body, dict) and "config" in body and isinstance(body["config"], dict) and "widget" in body["config"]:
                 widget_from_request = body["config"].get("widget")
-        except Exception:
-            pass
+                logger.info(f"[{request_id}] 🔍 Found widget in raw body (nested in config) with keys: {list(widget_from_request.keys()) if isinstance(widget_from_request, dict) else 'N/A'}")
+            else:
+                logger.info(f"[{request_id}] ⚠️ Widget not found in raw body. Body structure: widget={('widget' in body) if isinstance(body, dict) else False}, config={('config' in body) if isinstance(body, dict) else False}, widget_config={('widget_config' in body) if isinstance(body, dict) else False}")
+        except Exception as e:
+            logger.warning(f"[{request_id}] ⚠️ Failed to parse raw body: {e}", exc_info=True)
+    else:
+        logger.warning(f"[{request_id}] ⚠️ No raw_body in request.state")
     
     try:
         logger.info(f"[{request_id}] 📝 Updating publisher: {publisher_id}")
+        logger.info(f"[{request_id}] 🔍 Request check - config: {request.config is not None}, widget_config: {request.widget_config is not None}, widget_from_request: {widget_from_request is not None}")
         
         # Build updates dict (only include non-None values)
         updates = {}
@@ -593,7 +624,8 @@ async def update_publisher(
             updates['subscription_tier'] = request.subscription_tier
         
         # Handle config update - merge widget_config if provided (same as create endpoint)
-        if request.config is not None or request.widget_config is not None:
+        # Also check widget_from_request (widget nested in config in raw body)
+        if request.config is not None or request.widget_config is not None or widget_from_request is not None:
             # Get current publisher to preserve existing config
             current_publisher = await repo.get_publisher_by_id(publisher_id)
             if not current_publisher:
@@ -608,17 +640,26 @@ async def update_publisher(
             else:
                 config_dict = current_publisher.config.model_dump()
             
+            # Log what we received
+            logger.info(f"[{request_id}] 🔍 Widget config check - request.widget_config: {request.widget_config is not None}, widget_from_request: {widget_from_request is not None}, config_dict has widget: {'widget' in config_dict}")
+            
             # Merge widget_config into config.widget if provided (same as create endpoint)
             if request.widget_config is not None:
                 config_dict["widget"] = request.widget_config
+                logger.info(f"[{request_id}] ✅ Using request.widget_config with keys: {list(request.widget_config.keys())}")
             elif widget_from_request is not None:
                 config_dict["widget"] = widget_from_request
+                logger.info(f"[{request_id}] ✅ Using widget_from_request (raw body) with keys: {list(widget_from_request.keys())}")
             elif "widget" not in config_dict:
                 # Preserve existing widget if not being updated
                 existing_config = await repo.get_publisher_raw_config_by_domain(current_publisher.domain)
                 if existing_config and isinstance(existing_config, dict) and "widget" in existing_config:
                     config_dict["widget"] = existing_config.get("widget", {})
+                    logger.info(f"[{request_id}] ✅ Preserved existing widget from DB with keys: {list(config_dict['widget'].keys())}")
+                else:
+                    logger.info(f"[{request_id}] ⚠️ No widget config found in request or DB")
             
+            logger.info(f"[{request_id}] 💾 Final config_dict has widget: {'widget' in config_dict}, widget keys: {list(config_dict.get('widget', {}).keys()) if 'widget' in config_dict else 'N/A'}")
             updates['config'] = config_dict
         
         if not updates:
@@ -973,11 +1014,15 @@ async def get_publisher_config(
         config_dict.pop("generate_summary", None)
         config_dict.pop("generate_embeddings", None)
         
-        # Add widget config if it exists in raw config
+        # Add widget config if it exists in raw config, otherwise set to empty object
         if raw_config and isinstance(raw_config, dict):
             widget_config = raw_config.get("widget")
             if widget_config:
                 config_dict["widget"] = widget_config
+            else:
+                config_dict["widget"] = {}
+        else:
+            config_dict["widget"] = {}
         
         config_data = {
             "success": True,

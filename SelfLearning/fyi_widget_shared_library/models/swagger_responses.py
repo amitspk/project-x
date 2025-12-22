@@ -237,10 +237,11 @@ class PublisherConfigSchema(BaseModel):
         "currentStructure": "",
         "gaTrackingId": "G-WPWFCMCSS3",
         "gaEnabled": True,
+        "adVariation": "adsenseForSearch",
         "adsenseForSearch": None,
         "adsenseDisplay": None,
         "googleAdManager": None
-    }, description="Widget configuration including theme, GA settings, and ad configs")
+    }, description="Widget configuration including theme, GA settings, ad variation, and ad configs")
 
 
 class PublisherSchema(BaseModel):
@@ -403,6 +404,7 @@ class PublisherMetadataResult(BaseModel):
     currentStructure: Optional[str] = Field(None, example="")
     gaTrackingId: Optional[str] = Field(None, example="G-WPWFCMCSS3")
     gaEnabled: Optional[bool] = Field(None, example=True)
+    adVariation: Optional[str] = Field(None, example="adsenseForSearch", description="Ad variation type: 'adsenseForSearch', 'adsenseDisplay', or 'googleAdManager'")
     adsenseForSearch: Optional[AdSenseForSearchConfig] = None
     adsenseDisplay: Optional[AdSenseDisplayConfig] = None
     googleAdManager: Optional[GoogleAdManagerConfig] = None
