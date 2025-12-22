@@ -353,6 +353,7 @@ class PublisherCreateRequest(BaseModel):
             "currentStructure": "",
             "gaTrackingId": "G-WPWFCMCSS3",
             "gaEnabled": True,
+            "adVariation": "adsenseForSearch",
             "adsenseForSearch": {
                 "enabled": True,
                 "pubId": "partner-pub-XXXXX",
@@ -376,6 +377,7 @@ class PublisherUpdateRequest(BaseModel):
             "useDummyData": False,
             "gaTrackingId": "G-XXXXXXXXXX",
             "gaEnabled": True,
+            "adVariation": "adsenseForSearch",
             "adsenseForSearch": {
                 "enabled": True,
                 "pubId": "partner-pub-XXXXX"

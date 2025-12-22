@@ -74,7 +74,8 @@ const PublisherCard: React.FC<{
       name: publisher.name,
       email: publisher.email,
       status: publisher.status,
-      subscription_tier: publisher.subscription_tier ?? 'free'
+      subscription_tier: publisher.subscription_tier ?? 'free',
+      config_json: publisher.config ? JSON.stringify(publisher.config, null, 2) : ''
     }
   });
 
@@ -278,7 +279,7 @@ const PublishersPage = () => {
       whitelisted_blog_urls: '',
       custom_question_prompt: '',
       custom_summary_prompt: '',
-      widget_config: ''
+      widget_config: '{}'
     }
   });
   const questionsModel = watch('questions_model');
@@ -813,8 +814,109 @@ const PublishersPage = () => {
             <textarea
               {...register('widget_config', { required: 'Widget config is required' })}
               className="min-h-[200px] rounded-md border border-slate-300 px-3 py-2 font-mono text-xs"
-              placeholder={`{\n  "theme": "light",\n  "useDummyData": false,\n  "gaTrackingId": "G-XXXXXXXXXX",\n  "gaEnabled": true,\n  "adsenseForSearch": {\n    "enabled": true,\n    "pubId": "partner-pub-XXXXX"\n  }\n}`}
+              placeholder='Enter widget config JSON or click "Copy example" below'
             />
+            <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-700">Example widget config (all fields):</span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const example = `{
+  "theme": "light",
+  "useDummyData": false,
+  "currentStructure": "",
+  "gaTrackingId": "G-XXXXXXXXXX",
+  "gaEnabled": true,
+  "adVariation": "adsenseForSearch",
+  "adsenseForSearch": {
+    "enabled": true,
+    "pubId": "partner-pub-XXXXX",
+    "styleId": "7395764353"
+  },
+  "adsenseDisplay": {
+    "enabled": false,
+    "adClient": "ca-pub-XXXXX",
+    "adSlot": "1234567890"
+  },
+  "googleAdManager": {
+    "enabled": false,
+    "networkCode": "123456789",
+    "adUnitPath": "/123456789/example"
+  }
+}`;
+                      navigator.clipboard.writeText(example).then(() => {
+                        notify({ title: 'Example copied', description: 'Paste it into the widget config field above', type: 'success' });
+                      }).catch(() => {
+                        notify({ title: 'Failed to copy', description: 'Please copy manually from the example below', type: 'error' });
+                      });
+                    }}
+                    className="rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-slate-700"
+                  >
+                    Copy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const example = `{
+  "theme": "light",
+  "useDummyData": false,
+  "currentStructure": "",
+  "gaTrackingId": "G-XXXXXXXXXX",
+  "gaEnabled": true,
+  "adVariation": "adsenseForSearch",
+  "adsenseForSearch": {
+    "enabled": true,
+    "pubId": "partner-pub-XXXXX",
+    "styleId": "7395764353"
+  },
+  "adsenseDisplay": {
+    "enabled": false,
+    "adClient": "ca-pub-XXXXX",
+    "adSlot": "1234567890"
+  },
+  "googleAdManager": {
+    "enabled": false,
+    "networkCode": "123456789",
+    "adUnitPath": "/123456789/example"
+  }
+}`;
+                      setValue('widget_config', example, { shouldValidate: true, shouldDirty: true });
+                      notify({ title: 'Example loaded', description: 'Example widget config has been filled in. You can edit it as needed.', type: 'success' });
+                    }}
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                  >
+                    Use example
+                  </button>
+                </div>
+              </div>
+              <pre className="max-h-64 overflow-auto rounded bg-white p-2 text-xs text-slate-700 select-all">
+{`{
+  "theme": "light",
+  "useDummyData": false,
+  "currentStructure": "",
+  "gaTrackingId": "G-XXXXXXXXXX",
+  "gaEnabled": true,
+  "adVariation": "adsenseForSearch",
+  "adsenseForSearch": {
+    "enabled": true,
+    "pubId": "partner-pub-XXXXX",
+    "styleId": "7395764353"
+  },
+  "adsenseDisplay": {
+    "enabled": false,
+    "adClient": "ca-pub-XXXXX",
+    "adSlot": "1234567890"
+  },
+  "googleAdManager": {
+    "enabled": false,
+    "networkCode": "123456789",
+    "adUnitPath": "/123456789/example"
+  }
+}`}
+              </pre>
+            </div>
             <span className="mt-1 text-xs text-slate-500">
               JSON configuration for widget settings (theme, GA, ads, etc.). Required field.
             </span>

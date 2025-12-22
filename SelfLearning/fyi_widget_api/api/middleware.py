@@ -57,6 +57,23 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
             f"- Client: {request.client.host if request.client else 'unknown'}"
         )
         
+        # Capture raw body for PUT/PATCH requests to publisher endpoints
+        # This is needed because FastAPI/Pydantic consumes the request body,
+        # making it unavailable for subsequent reads without special handling
+        if request.method in ["PUT", "PATCH"] and request.url.path.startswith("/api/v1/publishers/"):
+            try:
+                body = await request.body()
+                raw_body_str = body.decode('utf-8')
+                request.state.raw_body = raw_body_str
+                logger.info(f"[{request_id}] 📦 Captured raw body ({len(raw_body_str)} bytes) for {request.method} {request.url.path}")
+                
+                # Recreate the request body stream so FastAPI/Pydantic can still process it
+                async def receive():
+                    return {"type": "http.request", "body": body}
+                request._receive = receive
+            except Exception as e:
+                logger.warning(f"[{request_id}] ⚠️ Failed to capture raw body: {e}", exc_info=True)
+        
         # Process request
         try:
             response = await call_next(request)
