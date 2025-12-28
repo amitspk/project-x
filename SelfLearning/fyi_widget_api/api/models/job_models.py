@@ -1,10 +1,9 @@
 """Job models for API service."""
 
-import uuid
 from datetime import datetime
 from enum import Enum
 from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class JobStatus(str, Enum):

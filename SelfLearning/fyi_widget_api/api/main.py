@@ -154,7 +154,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         return response
     
     # Otherwise, create a simple error response
-    from fyi_widget_api.api.utils import error_json_response, error_response
+    from fyi_widget_api.api.utils import error_response
     response_data = error_response(
         message=str(exc.detail),
         error_code="HTTP_ERROR",

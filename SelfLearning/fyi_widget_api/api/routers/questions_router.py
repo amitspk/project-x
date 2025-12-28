@@ -11,8 +11,7 @@ from fyi_widget_api.api.utils import (
     success_response,
     handle_http_exception,
     handle_generic_exception,
-    generate_request_id,
-    extract_domain
+    generate_request_id
 )
 
 # Import auth/deps
@@ -156,13 +155,9 @@ async def get_questions_by_url(
     # Get request_id from middleware (fallback to generating one if not available)
     request_id = getattr(request.state, 'request_id', None) or generate_request_id()
     
-    publisher_name = publisher.name.lower()
-    blog_domain = None
-    
     try:
         # Normalize the URL for consistent lookups
         normalized_url = normalize_url(blog_url)
-        blog_domain = extract_domain(normalized_url).lower()
         
         logger.info(f"[{request_id}] 📖 Getting questions for URL: {normalized_url}")
         

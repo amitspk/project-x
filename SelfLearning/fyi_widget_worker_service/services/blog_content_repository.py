@@ -20,7 +20,6 @@ if TYPE_CHECKING:
 # This is acceptable - Worker can import from API for these data structures
 from fyi_widget_api.api.models.schema_models import (
     QuestionAnswerPair,
-    BlogSummary,
     SimilarBlog
 )
 

@@ -2,9 +2,9 @@
 
 import logging
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
-from pymongo import ASCENDING, IndexModel, ReturnDocument
+from pymongo import ASCENDING, IndexModel
 
 from fyi_widget_api.api.models.job_models import JobStatus
 

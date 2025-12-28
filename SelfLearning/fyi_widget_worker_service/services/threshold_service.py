@@ -1,7 +1,6 @@
 """Service for checking processing thresholds."""
 
 import logging
-from typing import Optional
 
 from fyi_widget_worker_service.repositories import JobRepository
 from fyi_widget_worker_service.models.publisher_models import PublisherConfig

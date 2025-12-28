@@ -10,10 +10,9 @@ import uuid
 import secrets
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from sqlalchemy import create_engine, Column, String, Integer, Float, Boolean, DateTime, JSON, Enum as SQLEnum, update, case
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker, AsyncEngine
+from sqlalchemy import Column, String, Integer, DateTime, JSON, Enum as SQLEnum, update, case
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy.future import select
 from sqlalchemy import func
 
@@ -233,7 +232,6 @@ class PublisherRepository:
                 # Match publishers where: input_domain = publisher_domain OR input_domain ends with '.' + publisher_domain
                 # Example: input_domain="info.contentretina.com" matches publisher_domain="contentretina.com"
                 # This is more efficient than loading all publishers and filtering in Python
-                from sqlalchemy import or_, func, literal
                 
                 # Use SQL string functions to match subdomains
                 # Check if input domain matches or is a subdomain of any publisher domain

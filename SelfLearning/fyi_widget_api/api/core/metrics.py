@@ -4,7 +4,7 @@ Prometheus metrics for API service.
 This module defines all metrics exposed by the API service for monitoring.
 """
 
-from prometheus_client import Counter, Histogram, Gauge, Summary
+from prometheus_client import Counter, Histogram, Gauge
 from prometheus_client import generate_latest, REGISTRY
 
 # ============================================================================

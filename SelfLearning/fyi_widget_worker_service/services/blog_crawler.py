@@ -6,7 +6,6 @@ Business logic name: BlogCrawler (not CrawlerService).
 
 import logging
 import asyncio
-from typing import Optional, Dict, Any
 import httpx
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse

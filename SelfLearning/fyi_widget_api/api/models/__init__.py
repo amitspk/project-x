@@ -44,7 +44,7 @@ from .swagger_models import (
     CheckAndLoadResponse,
     # Jobs
     ProcessJobResponse,
-    JobStatusResponse,
+    JobStatusResponse as SwaggerJobStatusResponse,
     JobStatsResponse,
     # QA
     QAResponse,
@@ -98,7 +98,7 @@ __all__ = [
     "QuestionByIdResponse",
     "CheckAndLoadResponse",
     "ProcessJobResponse",
-    "JobStatusResponse",
+    "SwaggerJobStatusResponse",
     "JobStatsResponse",
     "QAResponse",
     "SearchResponse",

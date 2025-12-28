@@ -4,9 +4,8 @@ Internal schema models for Worker service.
 These models are used for internal service communication and data processing.
 """
 
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-from pydantic import BaseModel, Field
+from typing import List, Dict, Any
+from pydantic import BaseModel
 
 
 # ============================================================================

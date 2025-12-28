@@ -4,7 +4,7 @@ Standardized API Response Models.
 Provides consistent response format across all API endpoints.
 """
 
-from typing import Optional, Any, Dict, List, Literal
+from typing import Optional, Any, List, Literal
 from datetime import datetime
 from pydantic import BaseModel, Field
 

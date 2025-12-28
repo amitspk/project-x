@@ -71,10 +71,6 @@ class DatabaseManager:
         try:
             if self._database is not None:
                 await self.client.admin.command('ping')
-                
-                # Try to count collections
-                collections = await self._database.list_collection_names()
-                
                 return True
             return False
         except Exception as e:

@@ -8,7 +8,7 @@ import uuid
 import logging
 from typing import Any, Optional, List, Dict
 from datetime import datetime
-from fastapi import HTTPException, Request
+from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
 from fyi_widget_api.api.models.response_models import (

@@ -2,7 +2,7 @@
 
 import logging
 import random
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from bson import ObjectId
 from fastapi import HTTPException
 
@@ -99,8 +99,6 @@ class QuestionService:
             }
 
         # STEP 3: No active job - create new processing job
-        from fyi_widget_api.api.models.job_models import JobStatus
-
         logger.info(f"[{request_id}] 🚀 Creating new processing job")
 
         publisher_config = publisher.config.dict() if publisher.config else {}

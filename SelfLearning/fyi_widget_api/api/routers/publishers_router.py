@@ -7,11 +7,10 @@ All endpoints require admin authentication via X-Admin-Key header.
 
 import logging
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, HTTPException, Depends, Query, Header, Request
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 
 # Import auth/deps
 from fyi_widget_api.api.auth import verify_admin_key, get_current_publisher
-from fyi_widget_api.api.services.auth_service import validate_blog_url_domain
 from fyi_widget_api.api.deps import get_publisher_repo
 from fyi_widget_api.api.services.publisher_service import PublisherService
 
@@ -19,8 +18,6 @@ from fyi_widget_api.api.models.publisher_models import (
     Publisher,
     PublisherCreateRequest,
     PublisherUpdateRequest,
-    PublisherResponse,
-    PublisherListResponse,
     PublisherStatus
 )
 from fyi_widget_api.api.models import (
@@ -39,8 +36,7 @@ from fyi_widget_api.api.utils import (
     success_response,
     handle_http_exception,
     handle_generic_exception,
-    generate_request_id,
-    extract_domain
+    generate_request_id
 )
 
 logger = logging.getLogger(__name__)

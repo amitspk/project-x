@@ -4,7 +4,7 @@ import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
-from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from fyi_widget_api.api.models.schema_models import QuestionAnswerPair
 
@@ -242,7 +242,6 @@ class QuestionRepository:
         publisher_domain: Optional[str] = None
     ) -> List:
         """Fallback: Python cosine similarity with optional domain filtering."""
-        import numpy as np
         import re
         from fyi_widget_api.api.models.schema_models import SimilarBlog
         

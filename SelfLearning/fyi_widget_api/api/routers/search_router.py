@@ -5,7 +5,7 @@ import time
 from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, Request, Depends
 from fyi_widget_api.api.repositories import QuestionRepository
-from fyi_widget_api.api.models.schema_models import SearchSimilarRequest, SearchSimilarResponse
+from fyi_widget_api.api.models.schema_models import SearchSimilarRequest
 from fyi_widget_api.api.models import SearchResponse as SwaggerSearchResponse, StandardErrorResponse
 from fyi_widget_api.api.models.publisher_models import Publisher
 from fyi_widget_api.api.utils import (

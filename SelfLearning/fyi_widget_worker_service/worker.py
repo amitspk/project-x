@@ -22,28 +22,11 @@ from fyi_widget_worker_service.services.blog_processing_service import BlogProce
 
 # Import metrics
 from fyi_widget_worker_service.core.metrics import (
-    jobs_polled_total,
-    jobs_processed_total,
-    job_processing_duration_seconds,
-    jobs_processing_active,
     job_queue_size,
-    crawl_operations_total,
-    crawl_duration_seconds,
-    crawl_content_size_bytes,
-    crawl_word_count,
-    llm_operations_total,
-    llm_operation_duration_seconds,
-    llm_tokens_used_total,
-    questions_generated_total,
-    questions_per_blog,
-    embeddings_generated_total,
-    blogs_processed_total,
-    worker_uptime_seconds,
     poll_iterations_total,
     poll_errors_total,
-    processing_errors_total,
-    db_operations_total,
-    db_operation_duration_seconds
+    worker_uptime_seconds,
+    jobs_polled_total,
 )
 from fyi_widget_worker_service.core.metrics_server import start_metrics_server
 

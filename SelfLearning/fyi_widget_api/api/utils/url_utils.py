@@ -9,7 +9,6 @@ Ensures consistent URL handling across the application by:
 """
 
 from urllib.parse import urlparse, urlunparse
-import re
 
 # Maximum number of sanitized query entries to preserve (currently zero because we drop all)
 ALLOWED_QUERY_PARAMS: tuple[str, ...] = ()

@@ -7,7 +7,7 @@ for multi-tenant blog processing.
 
 import json
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, List
 from pydantic import BaseModel, Field, validator, field_serializer
 from enum import Enum
 # TODO: Update this import when LLM services are moved to worker service
