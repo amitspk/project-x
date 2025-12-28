@@ -1,31 +1,28 @@
 """Search router - handles similarity search."""
 
 import logging
-import sys
 import time
-from pathlib import Path
 from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, Request, Depends
-
-# Add shared to path
-sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-from fyi_widget_shared_library.services import StorageService
-from fyi_widget_shared_library.models.schemas import SearchSimilarRequest, SearchSimilarResponse
-from fyi_widget_shared_library.models import SearchResponse as SwaggerSearchResponse, StandardErrorResponse
-from fyi_widget_shared_library.models.publisher import Publisher
-from fyi_widget_shared_library.utils import (
+from fyi_widget_api.api.repositories import QuestionRepository
+from fyi_widget_api.api.models.schema_models import SearchSimilarRequest, SearchSimilarResponse
+from fyi_widget_api.api.models import SearchResponse as SwaggerSearchResponse, StandardErrorResponse
+from fyi_widget_api.api.models.publisher_models import Publisher
+from fyi_widget_api.api.utils import (
     success_response,
     handle_http_exception,
     handle_generic_exception,
-    generate_request_id
+    generate_request_id,
+    extract_domain
 )
-from fyi_widget_shared_library.utils.url_utils import extract_domain
 
 # Import auth
-from fyi_widget_api.api.auth import get_current_publisher, validate_blog_url_domain
+from fyi_widget_api.api.auth import get_current_publisher
+from fyi_widget_api.api.services.auth_service import validate_blog_url_domain
+from fyi_widget_api.api.deps import get_question_repository
 
 # Import metrics
-from fyi_widget_api.api.metrics import (
+from fyi_widget_api.api.core.metrics import (
     similarity_searches_total,
     similarity_search_duration_seconds,
     similar_blogs_found,
@@ -36,12 +33,6 @@ from fyi_widget_api.api.metrics import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# Storage service will be initialized per-request with database
-def get_storage():
-    from fyi_widget_api.api.main import db_manager
-    return StorageService(database=db_manager.database)
-
 
 @router.post(
     "/similar",
@@ -56,7 +47,8 @@ def get_storage():
 async def search_similar_blogs(
     http_request: Request,
     request: SearchSimilarRequest,
-    publisher: Publisher = Depends(get_current_publisher)
+    publisher: Publisher = Depends(get_current_publisher),
+    question_repo: QuestionRepository = Depends(get_question_repository)
 ) -> Dict[str, Any]:
     """
     Search for similar blogs based on a question.
@@ -87,9 +79,8 @@ async def search_similar_blogs(
     try:
         logger.info(f"[{request_id}] 🔍 Searching similar blogs for publisher {publisher.name}, question: {request.question_id}")
         
-        storage = get_storage()
         # Get the question
-        question = await storage.get_question_by_id(request.question_id)
+        question = await question_repo.get_question_by_id(request.question_id)
         
         if not question:
             similarity_searches_total.labels(
@@ -121,7 +112,7 @@ async def search_similar_blogs(
         question_domain = extract_domain(question_blog_url).lower()
         
         # Track question click (when question is clicked to find similar blogs)
-        click_count = await storage.increment_question_click_count(request.question_id)
+        click_count = await question_repo.increment_question_click_count(request.question_id)
         if click_count is not None:
             # Record click metrics
             question_clicks_total.labels(
@@ -152,7 +143,7 @@ async def search_similar_blogs(
             )
         
         # Search for similar blogs (filtered by domain from question's blog at database level)
-        similar_blogs = await storage.search_similar_blogs(
+        similar_blogs = await question_repo.search_similar_blogs(
             embedding=embedding,
             limit=request.limit,
             publisher_domain=question_domain  # Use domain from question's blog URL
@@ -165,7 +156,7 @@ async def search_similar_blogs(
         
         # Batch fetch all blogs in a single query
         blog_urls = [blog.url for blog in similar_blogs]
-        blogs_map = await storage.get_blogs_by_urls(blog_urls)
+        blogs_map = await question_repo._get_blogs_by_urls(blog_urls)
         
         # Enrich similar blogs with blog_id
         enriched_blogs = []

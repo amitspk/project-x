@@ -1,34 +1,24 @@
 """API Service - Fast read path and job enqueueing."""
 
 import logging
-import sys
-from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.openapi.utils import get_openapi
 
-# Add shared to path
-sys.path.append(str(Path(__file__).parent.parent.parent))
-
 # Import routers
-from fyi_widget_api.api.routers import questions_router, search_router, qa_router, jobs_router, publishers_router
+from fyi_widget_api.api.routers import questions_router, search_router, qa_router, blogs_router, publishers_router
 
-# Import middleware
-from fyi_widget_api.api.middleware import RequestIDMiddleware
-from fyi_widget_api.api.metrics_middleware import MetricsMiddleware
-from fyi_widget_api.api.metrics import get_metrics
+# Import middleware (via core package)
+from fyi_widget_api.api.core.middleware import RequestIDMiddleware
+from fyi_widget_api.api.core.metrics_middleware import MetricsMiddleware
+from fyi_widget_api.api.core.metrics import get_metrics
+from fyi_widget_api.config.config import get_config
 
-# Import auth
-from fyi_widget_api.api import auth
-
-# Import from fyi_widget_shared_library
-from fyi_widget_shared_library.data import DatabaseManager, JobRepository
-from fyi_widget_shared_library.data.postgres_database import PostgresPublisherRepository
-
-# Import config
-import os
+# Import local repositories and database manager
+from fyi_widget_api.api.core.database import DatabaseManager
+from fyi_widget_api.api.repositories import JobRepository, PublisherRepository
 
 # Configure logging
 logging.basicConfig(
@@ -37,49 +27,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Global database manager
+# Global database manager / config
 db_manager = DatabaseManager()
-publisher_repo_instance = None
-
-# Configuration from environment (required)
-try:
-    MONGODB_URL = os.environ["MONGODB_URL"]
-    MONGODB_USERNAME = os.environ["MONGODB_USERNAME"]
-    MONGODB_PASSWORD = os.environ["MONGODB_PASSWORD"]
-    DATABASE_NAME = os.environ["DATABASE_NAME"]
-    POSTGRES_URL = os.environ["POSTGRES_URL"]
-except KeyError as e:
-    missing = str(e).strip("'")
-    raise RuntimeError(
-        f"Missing required environment variable: {missing}. Ensure .env is set and loaded."
-    )
-
-SERVICE_PORT = int(os.getenv("API_SERVICE_PORT", "8005"))
-
-# CORS origins: expect JSON array; fallback to ["*"]
-raw_cors = os.getenv("CORS_ORIGINS", "[\"*\"]")
-try:
-    import json as _json
-    CORS_ORIGINS = _json.loads(raw_cors)
-    if not isinstance(CORS_ORIGINS, list):
-        raise ValueError
-except Exception:
-    CORS_ORIGINS = ["*"]
+config = get_config()
+SERVICE_PORT = config.service_port
+CORS_ORIGINS = config.cors_origins
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifecycle management for the application."""
-    global publisher_repo_instance
-    
     logger.info("🚀 Starting API Service...")
     
     # Connect to MongoDB
     await db_manager.connect(
-        mongodb_url=MONGODB_URL,
-        database_name=DATABASE_NAME,
-        username=MONGODB_USERNAME,
-        password=MONGODB_PASSWORD
+        mongodb_url=config.mongodb_url,
+        database_name=config.database_name,
+        username=config.mongodb_username,
+        password=config.mongodb_password
     )
     logger.info("✅ MongoDB connected")
     
@@ -89,21 +54,24 @@ async def lifespan(app: FastAPI):
     logger.info("✅ Job queue indexes created")
     
     # Connect to PostgreSQL for publisher configs
-    publisher_repo_instance = PostgresPublisherRepository(POSTGRES_URL)
+    publisher_repo_instance = PublisherRepository(config.postgres_url)
     await publisher_repo_instance.connect()
     logger.info("✅ PostgreSQL connected")
     
-    # Set global repository for router and auth
-    publishers_router.publisher_repo = publisher_repo_instance
-    auth.set_publisher_repo(publisher_repo_instance)
-    logger.info("✅ Authentication configured")
+    # Share instances via app state
+    app.state.mongo_db = db_manager.database
+    app.state.db_manager = db_manager
+    app.state.publisher_repo = publisher_repo_instance
+    app.state.config = config
     
     yield
     
     # Cleanup
     logger.info("👋 Shutting down API Service...")
-    if publisher_repo_instance:
-        await publisher_repo_instance.disconnect()
+    repo = getattr(app.state, "publisher_repo", None)
+    if repo:
+        await repo.disconnect()
+    await db_manager.close()
 
 
 # Create FastAPI app
@@ -186,7 +154,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         return response
     
     # Otherwise, create a simple error response
-    from fyi_widget_shared_library.utils import error_response
+    from fyi_widget_api.api.utils import error_json_response, error_response
     response_data = error_response(
         message=str(exc.detail),
         error_code="HTTP_ERROR",
@@ -244,7 +212,7 @@ app.openapi = custom_openapi
 app.include_router(questions_router.router, prefix="/api/v1/questions", tags=["Questions"])
 app.include_router(search_router.router, prefix="/api/v1/search", tags=["Search"])
 app.include_router(qa_router.router, prefix="/api/v1/qa", tags=["Q&A"])
-app.include_router(jobs_router.router, prefix="/api/v1/jobs", tags=["Jobs"])
+app.include_router(blogs_router.router, prefix="/api/v1/jobs", tags=["Jobs"])
 app.include_router(publishers_router.router, prefix="/api/v1/publishers", tags=["Publishers"])
 
 

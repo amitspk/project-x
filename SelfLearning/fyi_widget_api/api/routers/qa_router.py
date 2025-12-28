@@ -1,19 +1,15 @@
 """Q&A router - handles custom question answering."""
 
 import logging
-import sys
 import time
-from pathlib import Path
 from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
-
-# Add shared to path
-sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-from fyi_widget_shared_library.services import LLMService
-from fyi_widget_shared_library.models import QAResponse as SwaggerQAResponse, StandardErrorResponse
-from fyi_widget_shared_library.models.publisher import Publisher
-from fyi_widget_shared_library.utils import (
+from fyi_widget_api.api.models import QAResponse as SwaggerQAResponse, StandardErrorResponse
+from fyi_widget_api.api.models.publisher_models import Publisher
+# Use LLMContentGenerator which now uses the llm_providers_library internally
+from fyi_widget_worker_service.services.llm_content_generator import LLMContentGenerator as LLMService
+from fyi_widget_api.api.utils import (
     success_response,
     handle_http_exception,
     handle_generic_exception,
@@ -24,7 +20,7 @@ from fyi_widget_shared_library.utils import (
 from fyi_widget_api.api.auth import get_current_publisher
 
 # Import metrics
-from fyi_widget_api.api.metrics import (
+from fyi_widget_api.api.core.metrics import (
     qa_requests_total,
     qa_tokens_used_total,
     qa_processing_duration_seconds,

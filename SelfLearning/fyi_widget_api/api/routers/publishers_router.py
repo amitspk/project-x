@@ -6,18 +6,16 @@ All endpoints require admin authentication via X-Admin-Key header.
 """
 
 import logging
-import sys
-from pathlib import Path
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Query, Header, Request
 
-# Add shared to path
-sys.path.append(str(Path(__file__).parent.parent.parent.parent))
+# Import auth/deps
+from fyi_widget_api.api.auth import verify_admin_key, get_current_publisher
+from fyi_widget_api.api.services.auth_service import validate_blog_url_domain
+from fyi_widget_api.api.deps import get_publisher_repo
+from fyi_widget_api.api.services.publisher_service import PublisherService
 
-# Import auth
-from fyi_widget_api.api.auth import verify_admin_key, get_current_publisher, validate_blog_url_domain
-
-from fyi_widget_shared_library.models.publisher import (
+from fyi_widget_api.api.models.publisher_models import (
     Publisher,
     PublisherCreateRequest,
     PublisherUpdateRequest,
@@ -25,7 +23,7 @@ from fyi_widget_shared_library.models.publisher import (
     PublisherListResponse,
     PublisherStatus
 )
-from fyi_widget_shared_library.models import (
+from fyi_widget_api.api.models import (
     PublisherOnboardResponse,
     PublisherGetResponse,
     PublishersListResponse as SwaggerPublishersListResponse,
@@ -36,8 +34,8 @@ from fyi_widget_shared_library.models import (
     PublisherMetadataResponse,
     StandardErrorResponse
 )
-from fyi_widget_shared_library.data.postgres_database import PostgresPublisherRepository
-from fyi_widget_shared_library.utils import (
+from fyi_widget_api.api.repositories import PublisherRepository
+from fyi_widget_api.api.utils import (
     success_response,
     handle_http_exception,
     handle_generic_exception,
@@ -48,81 +46,6 @@ from fyi_widget_shared_library.utils import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# Global repository instance (will be initialized in main.py)
-publisher_repo: Optional[PostgresPublisherRepository] = None
-
-
-def get_publisher_repo() -> PostgresPublisherRepository:
-    """Dependency to get publisher repository."""
-    if publisher_repo is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Publisher repository not initialized"
-        )
-    return publisher_repo
-
-
-async def enrich_publisher_with_widget_config(
-    publisher: Publisher,
-    repo: PostgresPublisherRepository
-) -> Dict[str, Any]:
-    """
-    Enrich publisher response with widget config from database.
-    
-    The widget config is stored in config.widget in the database JSON,
-    but the PublisherConfig Pydantic model doesn't include it.
-    This function fetches the raw config and adds widget config to the response.
-    
-    Also excludes fields from GET responses:
-    - Temperature fields (summary_temperature, questions_temperature, chat_temperature) - always excluded
-    - generate_summary and generate_embeddings - always excluded
-    """
-    # Get raw config from database to access widget config
-    raw_config = await repo.get_publisher_raw_config_by_domain(
-        publisher.domain,
-        allow_subdomain=False
-    )
-    
-    # Convert publisher to dict
-    publisher_dict = publisher.model_dump()
-    
-    # Remove fields that should not appear in GET responses
-    if "config" in publisher_dict:
-        config = publisher_dict["config"]
-        
-        # Always remove temperature fields from GET responses
-        config.pop("summary_temperature", None)
-        config.pop("questions_temperature", None)
-        config.pop("chat_temperature", None)
-        
-        # Always remove generate_summary and generate_embeddings from GET responses
-        config.pop("generate_summary", None)
-        config.pop("generate_embeddings", None)
-    
-    # Add widget config if it exists
-    if raw_config and isinstance(raw_config, dict):
-        widget_config = raw_config.get("widget")
-        if widget_config:
-            # Ensure config dict exists
-            if "config" not in publisher_dict:
-                publisher_dict["config"] = {}
-            publisher_dict["config"]["widget"] = widget_config
-            logger.info(f"✅ Added widget config to response with keys: {list(widget_config.keys()) if isinstance(widget_config, dict) else 'N/A'}")
-        else:
-            logger.warning(f"⚠️ Widget config not found in raw_config for domain: {publisher.domain}")
-            # Ensure config dict exists and set widget to empty object instead of null
-            if "config" not in publisher_dict:
-                publisher_dict["config"] = {}
-            publisher_dict["config"]["widget"] = {}
-    else:
-        logger.warning(f"⚠️ Raw config not found or invalid for domain: {publisher.domain}, raw_config: {raw_config}")
-        # Ensure config dict exists and set widget to empty object instead of null
-        if "config" not in publisher_dict:
-            publisher_dict["config"] = {}
-        publisher_dict["config"]["widget"] = {}
-    
-    return publisher_dict
 
 
 @router.post(
@@ -190,51 +113,18 @@ async def onboard_publisher(
     try:
         logger.info(f"[{request_id}] 📝 Onboarding publisher: {request.name} ({request.domain})")
         
-        # Check if domain already exists
-        existing = await repo.get_publisher_by_domain(request.domain)
-        if existing:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Publisher with domain '{request.domain}' already exists"
-            )
+        # Instantiate service with injected dependencies
+        publisher_service = PublisherService(publisher_repo=repo)
         
-        # Create publisher object
-        publisher = Publisher(
-            name=request.name,
-            domain=request.domain,
-            email=request.email,
-            config=request.config,
-            subscription_tier=request.subscription_tier
+        response_dict, status_code, message = await publisher_service.onboard_publisher(
+            request=request,
+            request_id=request_id,
         )
-        
-        # Prepare config dict with widget_config (required)
-        config_dict = publisher.config.model_dump()
-        config_dict["widget"] = request.widget_config
-        logger.info(f"[{request_id}] 📦 Widget config provided: {list(request.widget_config.keys())}")
-        
-        # Save to database with widget_config merged into config
-        created_publisher = await repo.create_publisher(publisher, config_dict)
-        
-        logger.info(f"[{request_id}] ✅ Publisher onboarded: {created_publisher.id}")
-        
-        # Enrich with widget config from database (may be empty for new publisher)
-        enriched_publisher = await enrich_publisher_with_widget_config(created_publisher, repo)
-        
-        publisher_response = PublisherResponse(
-            success=True,
-            publisher=created_publisher,  # Use original for Pydantic validation
-            api_key=created_publisher.api_key,  # Only returned on creation
-            message="Publisher onboarded successfully"
-        )
-        
-        # Get the response dict and update it with enriched data
-        response_dict = publisher_response.model_dump()
-        response_dict["publisher"] = enriched_publisher
-        
+
         return success_response(
             result=response_dict,
-            message="Publisher onboarded successfully",
-            status_code=201,
+            message=message,
+            status_code=status_code,
             request_id=request_id
         )
         
@@ -297,86 +187,15 @@ async def get_publisher_metadata(
     request_id = getattr(http_request.state, 'request_id', None) or generate_request_id()
     
     try:
-        # Extract domain from blog_url
-        blog_domain = extract_domain(blog_url)
-        logger.info(f"[{request_id}] 📖 Getting publisher metadata for domain: {blog_domain}")
+        # Instantiate service with injected dependencies
+        publisher_service = PublisherService(publisher_repo=repo)
         
-        # Validate blog URL domain matches publisher's domain
-        await validate_blog_url_domain(blog_url, publisher)
-        
-        # Get publisher by domain (with subdomain support) to ensure we have the latest config
-        # This also handles subdomain matching (e.g., info.contentretina.com -> contentretina.com)
-        domain_publisher = await repo.get_publisher_by_domain(blog_domain, allow_subdomain=True)
-        
-        if not domain_publisher:
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "status": "error",
-                    "status_code": 404,
-                    "message": "Publisher not found for the provided blog URL",
-                    "error": {
-                        "code": "NOT_FOUND",
-                        "detail": f"No publisher found for domain: {blog_domain}"
-                    }
-                }
-            )
-        
-        # Get raw config JSON from database to access nested widget config
-        # The PublisherConfig Pydantic model doesn't include widget config, so we need raw JSON
-        raw_config = await repo.get_publisher_raw_config_by_domain(blog_domain, allow_subdomain=True)
-        
-        if not raw_config:
-            raw_config = {}
-        
-        # Extract widget config from config.widget (nested structure)
-        widget_config = raw_config.get("widget", {}) if isinstance(raw_config, dict) else {}
-        
-        # Get adVariation from widget config (defaults to None if not set)
-        ad_variation = widget_config.get("adVariation")
-        
-        # Validate adVariation if present
-        valid_ad_variations = ["adsenseForSearch", "adsenseDisplay", "googleAdManager"]
-        if ad_variation and ad_variation not in valid_ad_variations:
-            logger.warning(f"[{request_id}] ⚠️ Invalid adVariation '{ad_variation}' in widget config. Valid values: {', '.join(valid_ad_variations)}")
-            ad_variation = None
-        
-        logger.info(f"[{request_id}] 📖 Using adVariation from widget config: {ad_variation}")
-        
-        # Build result with widget config fields (return null if missing)
-        result_data = {
-            "domain": domain_publisher.domain,
-            "publisher_id": domain_publisher.id,
-            "publisher_name": domain_publisher.name,
-            "useDummyData": widget_config.get("useDummyData"),
-            "theme": widget_config.get("theme"),
-            "currentStructure": widget_config.get("currentStructure"),
-            "gaTrackingId": widget_config.get("gaTrackingId"),
-            "gaEnabled": widget_config.get("gaEnabled"),
-            "adVariation": ad_variation,
-            "adsenseForSearch": None,
-            "adsenseDisplay": None,
-            "googleAdManager": None
-        }
-        
-        # Set the ad variation config based on adVariation from widget config, others remain null
-        if ad_variation == "adsenseForSearch":
-            adsense_for_search = widget_config.get("adsenseForSearch")
-            if adsense_for_search:
-                result_data["adsenseForSearch"] = adsense_for_search
-        elif ad_variation == "adsenseDisplay":
-            adsense_display = widget_config.get("adsenseDisplay")
-            if adsense_display:
-                result_data["adsenseDisplay"] = adsense_display
-        elif ad_variation == "googleAdManager":
-            google_ad_manager = widget_config.get("googleAdManager")
-            if google_ad_manager:
-                result_data["googleAdManager"] = google_ad_manager
-        elif ad_variation is None:
-            logger.info(f"[{request_id}] ⚠️ No adVariation specified in widget config, all ad configs will be null")
-        
-        logger.info(f"[{request_id}] ✅ Publisher metadata retrieved for: {domain_publisher.domain}")
-        
+        result_data = await publisher_service.get_publisher_metadata(
+            blog_url=blog_url,
+            publisher=publisher,
+            request_id=request_id,
+        )
+
         return success_response(
             result=result_data,
             message="Publisher metadata retrieved successfully",
@@ -423,30 +242,13 @@ async def get_publisher(
     try:
         logger.info(f"[{request_id}] 📖 Getting publisher: {publisher_id}")
         
-        publisher = await repo.get_publisher_by_id(publisher_id)
+        # Instantiate service with injected dependencies
+        publisher_service = PublisherService(publisher_repo=repo)
         
-        if not publisher:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Publisher not found: {publisher_id}"
-            )
-        
-        # Don't return API key in GET requests
-        publisher.api_key = None
-        
-        # Enrich with widget config from database
-        enriched_publisher = await enrich_publisher_with_widget_config(publisher, repo)
-        
-        # Create response with enriched publisher dict (widget config included)
-        publisher_response = PublisherResponse(
-            success=True,
-            publisher=publisher  # Use original publisher for Pydantic validation
+        response_dict = await publisher_service.get_publisher(
+            publisher_id=publisher_id,
         )
-        
-        # Get the response dict and update it with enriched data
-        response_dict = publisher_response.model_dump()
-        response_dict["publisher"] = enriched_publisher
-        
+
         return success_response(
             result=response_dict,
             message="Publisher retrieved successfully",
@@ -501,31 +303,13 @@ async def get_publisher_by_domain(
     try:
         logger.info(f"[{request_id}] 📖 Getting publisher by domain: {domain}")
         
-        # Enable subdomain matching for admin lookups (e.g., info.contentretina.com -> contentretina.com)
-        publisher = await repo.get_publisher_by_domain(domain, allow_subdomain=True)
+        # Instantiate service with injected dependencies
+        publisher_service = PublisherService(publisher_repo=repo)
         
-        if not publisher:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Publisher not found for domain: {domain}"
-            )
-        
-        # Don't return API key
-        publisher.api_key = None
-        
-        # Enrich with widget config from database
-        enriched_publisher = await enrich_publisher_with_widget_config(publisher, repo)
-        
-        # Create response with enriched publisher dict (widget config included)
-        publisher_response = PublisherResponse(
-            success=True,
-            publisher=publisher  # Use original publisher for Pydantic validation
+        response_dict = await publisher_service.get_publisher_by_domain(
+            domain=domain,
         )
-        
-        # Get the response dict and update it with enriched data
-        response_dict = publisher_response.model_dump()
-        response_dict["publisher"] = enriched_publisher
-        
+
         return success_response(
             result=response_dict,
             message="Publisher retrieved successfully",
@@ -610,91 +394,19 @@ async def update_publisher(
     
     try:
         logger.info(f"[{request_id}] 📝 Updating publisher: {publisher_id}")
-        logger.info(f"[{request_id}] 🔍 Request check - config: {request.config is not None}, widget_config: {request.widget_config is not None}, widget_from_request: {widget_from_request is not None}")
-        
-        # Build updates dict (only include non-None values)
-        updates = {}
-        if request.name is not None:
-            updates['name'] = request.name
-        if request.email is not None:
-            updates['email'] = request.email
-        if request.status is not None:
-            updates['status'] = request.status
-        if request.subscription_tier is not None:
-            updates['subscription_tier'] = request.subscription_tier
-        
-        # Handle config update - merge widget_config if provided (same as create endpoint)
-        # Also check widget_from_request (widget nested in config in raw body)
-        if request.config is not None or request.widget_config is not None or widget_from_request is not None:
-            # Get current publisher to preserve existing config
-            current_publisher = await repo.get_publisher_by_id(publisher_id)
-            if not current_publisher:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Publisher not found: {publisher_id}"
-                )
-            
-            # Start with current config (same pattern as create endpoint)
-            if request.config is not None:
-                config_dict = request.config.model_dump()
-            else:
-                config_dict = current_publisher.config.model_dump()
-            
-            # Log what we received
-            logger.info(f"[{request_id}] 🔍 Widget config check - request.widget_config: {request.widget_config is not None}, widget_from_request: {widget_from_request is not None}, config_dict has widget: {'widget' in config_dict}")
-            
-            # Merge widget_config into config.widget if provided (same as create endpoint)
-            if request.widget_config is not None:
-                config_dict["widget"] = request.widget_config
-                logger.info(f"[{request_id}] ✅ Using request.widget_config with keys: {list(request.widget_config.keys())}")
-            elif widget_from_request is not None:
-                config_dict["widget"] = widget_from_request
-                logger.info(f"[{request_id}] ✅ Using widget_from_request (raw body) with keys: {list(widget_from_request.keys())}")
-            elif "widget" not in config_dict:
-                # Preserve existing widget if not being updated
-                existing_config = await repo.get_publisher_raw_config_by_domain(current_publisher.domain)
-                if existing_config and isinstance(existing_config, dict) and "widget" in existing_config:
-                    config_dict["widget"] = existing_config.get("widget", {})
-                    logger.info(f"[{request_id}] ✅ Preserved existing widget from DB with keys: {list(config_dict['widget'].keys())}")
-                else:
-                    logger.info(f"[{request_id}] ⚠️ No widget config found in request or DB")
-            
-            logger.info(f"[{request_id}] 💾 Final config_dict has widget: {'widget' in config_dict}, widget keys: {list(config_dict.get('widget', {}).keys()) if 'widget' in config_dict else 'N/A'}")
-            updates['config'] = config_dict
-        
-        if not updates:
-            raise HTTPException(
-                status_code=400,
-                detail="No fields to update"
-            )
-        
-        # Update publisher
-        updated_publisher = await repo.update_publisher(publisher_id, updates)
-        
-        if not updated_publisher:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Publisher not found: {publisher_id}"
-            )
-        
-        # Don't return API key
-        updated_publisher.api_key = None
-        
-        logger.info(f"[{request_id}] ✅ Publisher updated: {publisher_id}")
-        
-        # Enrich with widget config from database
-        enriched_publisher = await enrich_publisher_with_widget_config(updated_publisher, repo)
-        
-        publisher_response = PublisherResponse(
-            success=True,
-            publisher=updated_publisher,  # Use original for Pydantic validation
-            message="Publisher updated successfully"
+        logger.info(
+            f"[{request_id}] 🔍 Request check - config: {request.config is not None}, widget_config: {request.widget_config is not None}, widget_from_request: {widget_from_request is not None}"
         )
+
+        # Instantiate service with injected dependencies
+        publisher_service = PublisherService(publisher_repo=repo)
         
-        # Get the response dict and update it with enriched data
-        response_dict = publisher_response.model_dump()
-        response_dict["publisher"] = enriched_publisher
-        
+        response_dict = await publisher_service.update_publisher(
+            publisher_id=publisher_id,
+            request=request,
+            request_id=request_id,
+        )
+
         return success_response(
             result=response_dict,
             message="Publisher updated successfully",
@@ -750,23 +462,12 @@ async def delete_publisher(
     try:
         logger.info(f"[{request_id}] 🗑️ Deleting publisher: {publisher_id}")
         
-        # Check if publisher exists
-        publisher = await repo.get_publisher_by_id(publisher_id)
-        if not publisher:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Publisher not found: {publisher_id}"
-            )
+        # Instantiate service with injected dependencies
+        publisher_service = PublisherService(publisher_repo=repo)
         
-        # Soft delete - mark as inactive
-        await repo.update_publisher(publisher_id, {"status": PublisherStatus.INACTIVE})
-        
-        logger.info(f"[{request_id}] ✅ Publisher deleted: {publisher_id}")
-        
-        result_data = {
-            "success": True,
-            "message": "Publisher deleted successfully"
-        }
+        result_data = await publisher_service.delete_publisher(
+            publisher_id=publisher_id,
+        )
         
         return success_response(
             result=result_data,
@@ -825,44 +526,14 @@ async def reactivate_publisher(
     try:
         logger.info(f"[{request_id}] 🔄 Reactivating publisher: {publisher_id}")
         
-        # Check if publisher exists
-        publisher = await repo.get_publisher_by_id(publisher_id)
-        if not publisher:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Publisher not found: {publisher_id}"
-            )
+        # Instantiate service with injected dependencies
+        publisher_service = PublisherService(publisher_repo=repo)
         
-        # Check if already active
-        if publisher.status == PublisherStatus.ACTIVE:
-            logger.warning(f"[{request_id}] ⚠️ Publisher already active: {publisher_id}")
-            raise HTTPException(
-                status_code=400,
-                detail="Publisher is already active"
-            )
-        
-        # Reactivate - mark as active
-        await repo.update_publisher(publisher_id, {"status": PublisherStatus.ACTIVE})
-        
-        # Get updated publisher
-        updated_publisher = await repo.get_publisher_by_id(publisher_id)
-        updated_publisher.api_key = None  # Don't return API key
-        
-        logger.info(f"[{request_id}] ✅ Publisher reactivated: {publisher_id}")
-        
-        # Enrich with widget config from database
-        enriched_publisher = await enrich_publisher_with_widget_config(updated_publisher, repo)
-        
-        publisher_response = PublisherResponse(
-            success=True,
-            publisher=updated_publisher,  # Use original for Pydantic validation
-            message="Publisher reactivated successfully"
+        response_dict = await publisher_service.reactivate_publisher(
+            publisher_id=publisher_id,
+            request_id=request_id,
         )
-        
-        # Get the response dict and update it with enriched data
-        response_dict = publisher_response.model_dump()
-        response_dict["publisher"] = enriched_publisher
-        
+
         return success_response(
             result=response_dict,
             message="Publisher reactivated successfully",
@@ -917,34 +588,24 @@ async def list_publishers(
     try:
         logger.info(f"[{request_id}] 📋 Listing publishers (status={status}, page={page})")
         
-        publishers, total = await repo.list_publishers(status, page, page_size)
+        # Instantiate service with injected dependencies
+        publisher_service = PublisherService(publisher_repo=repo)
         
-        # Don't return API keys
-        for pub in publishers:
-            pub.api_key = None
-        
-        # Create list response first (for Pydantic validation)
-        list_response = PublisherListResponse(
-            success=True,
-            publishers=publishers,
-            total=total,
+        response_dict = await publisher_service.list_publishers(
+            status=status,
             page=page,
-            page_size=page_size
+            page_size=page_size,
         )
-        
-        # Enrich each publisher with widget config
-        response_dict = list_response.model_dump()
-        enriched_publishers = []
-        for pub in publishers:
-            enriched = await enrich_publisher_with_widget_config(pub, repo)
-            enriched_publishers.append(enriched)
-        response_dict["publishers"] = enriched_publishers
         
         return success_response(
             result=response_dict,
-            message=f"Retrieved {len(enriched_publishers)} publishers",
+            message=f"Retrieved {len(response_dict.get('publishers', []))} publishers",
             status_code=200,
-            metadata={"total": total, "page": page, "page_size": page_size},
+            metadata={
+                "total": response_dict.get("total"),
+                "page": page,
+                "page_size": page_size,
+            },
             request_id=request_id
         )
         
@@ -987,47 +648,12 @@ async def get_publisher_config(
     try:
         logger.info(f"[{request_id}] ⚙️ Getting config for publisher: {publisher_id}")
         
-        publisher = await repo.get_publisher_by_id(publisher_id)
+        # Instantiate service with injected dependencies
+        publisher_service = PublisherService(publisher_repo=repo)
         
-        if not publisher:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Publisher not found: {publisher_id}"
-            )
-        
-        # Get raw config from database to include widget config
-        raw_config = await repo.get_publisher_raw_config_by_domain(
-            publisher.domain,
-            allow_subdomain=False
+        config_data = await publisher_service.get_publisher_config(
+            publisher_id=publisher_id,
         )
-        
-        # Start with the Pydantic model config
-        config_dict = publisher.config.model_dump()
-        
-        # Always remove fields that should not appear in GET responses
-        # Always remove temperature fields from GET responses
-        config_dict.pop("summary_temperature", None)
-        config_dict.pop("questions_temperature", None)
-        config_dict.pop("chat_temperature", None)
-        
-        # Always remove generate_summary and generate_embeddings from GET responses
-        config_dict.pop("generate_summary", None)
-        config_dict.pop("generate_embeddings", None)
-        
-        # Add widget config if it exists in raw config, otherwise set to empty object
-        if raw_config and isinstance(raw_config, dict):
-            widget_config = raw_config.get("widget")
-            if widget_config:
-                config_dict["widget"] = widget_config
-            else:
-                config_dict["widget"] = {}
-        else:
-            config_dict["widget"] = {}
-        
-        config_data = {
-            "success": True,
-            "config": config_dict
-        }
         
         return success_response(
             result=config_data,
@@ -1093,58 +719,17 @@ async def regenerate_publisher_api_key(
     
     try:
         logger.info(f"[{request_id}] 🔄 Regenerating API key for publisher: {publisher_id}")
+
+        # Instantiate service with injected dependencies
+        publisher_service = PublisherService(publisher_repo=repo)
         
-        # Regenerate API key
-        publisher, new_api_key = await repo.regenerate_api_key(publisher_id)
-        
-        logger.info(f"[{request_id}] ✅ API key regenerated for: {publisher.name}")
-        
-        # Create response
-        response_data = success_response(
-            message="API key regenerated successfully",
-            result={
-                "publisher": {
-                    "id": publisher.id,
-                    "name": publisher.name,
-                    "domain": publisher.domain,
-                    "email": publisher.email,
-                    "status": publisher.status,
-                    "config": {
-                        "questions_per_blog": publisher.config.questions_per_blog,
-                        "summary_model": publisher.config.summary_model.value if hasattr(publisher.config.summary_model, 'value') else str(publisher.config.summary_model),
-                        "questions_model": publisher.config.questions_model.value if hasattr(publisher.config.questions_model, 'value') else str(publisher.config.questions_model),
-                        "chat_model": publisher.config.chat_model.value if hasattr(publisher.config.chat_model, 'value') else str(publisher.config.chat_model),
-                        # Temperature fields always excluded from GET responses
-                        "summary_max_tokens": publisher.config.summary_max_tokens,
-                        "questions_max_tokens": publisher.config.questions_max_tokens,
-                        "chat_max_tokens": publisher.config.chat_max_tokens,
-                        # generate_summary and generate_embeddings always excluded from GET responses
-                        "use_grounding": publisher.config.use_grounding,
-                        "daily_blog_limit": publisher.config.daily_blog_limit
-                    },
-                    "created_at": publisher.created_at.isoformat() if publisher.created_at else None,
-                    "subscription_tier": publisher.subscription_tier
-                },
-                "api_key": new_api_key,
-                "message": "⚠️ IMPORTANT: Save this API key now - it won't be shown again! The old key has been invalidated."
-            },
-            status_code=200,
-            request_id=request_id
+        response_data = await publisher_service.regenerate_api_key(
+            publisher_id=publisher_id,
+            request_id=request_id,
         )
-        
+
         return response_data
-        
-    except ValueError as e:
-        logger.warning(f"[{request_id}] ⚠️ Publisher not found: {publisher_id}")
-        response_data = handle_http_exception(
-            status_code=404,
-            message=str(e),
-            request_id=request_id
-        )
-        raise HTTPException(
-            status_code=response_data["status_code"],
-            detail=response_data
-        )
+
     except Exception as e:
         logger.error(f"[{request_id}] ❌ Failed to regenerate API key: {e}", exc_info=True)
         response_data = handle_generic_exception(
