@@ -104,8 +104,7 @@ graph TD
 ```mermaid
 graph TD
     A[HTTP GET Request<br/>job_id path param] --> B[Router: get_job_status]
-    B --> C[Verify Admin Key<br/>X-Admin-Key
-(auth.py)]
+    B --> C[Verify Admin Key<br/>X-Admin-Key<br/>(auth.py)]
     C -->|Invalid| D[HTTPException 401]
     C -->|Valid| E[Dependency Injection<br/>Get JobRepository]
     E --> F[Instantiate BlogService]
@@ -131,12 +130,11 @@ graph TD
 
 ```mermaid
 graph TD
-    A[HTTP GET Request] --> B[Router: get_queue_stats\n(blogs_router.py)]
-    B --> C[Verify Admin Key
-(auth.py)]
+    A[HTTP GET Request] --> B[Router: get_queue_stats<br/>(blogs_router.py)]
+    B --> C[Verify Admin Key<br/>(auth.py)]
     C --> D[Instantiate BlogService]
-    D --> E[Service: get_queue_stats\n(blog_service.py)]
-    E --> F[Repository: get_job_stats\n(job_repository.py)]
+    D --> E[Service: get_queue_stats<br/>(blog_service.py)]
+    E --> F[Repository: get_job_stats<br/>(job_repository.py)]
     F --> G[MongoDB Aggregation<br/>$group by status]
     G --> H[Count per Status]
     H --> I[Calculate Total]
@@ -155,17 +153,17 @@ graph TD
 
 ```mermaid
 graph TD
-    A[HTTP POST Request<br/>job_id path param] --> B[Router: cancel_job\n(blogs_router.py)]
-    B --> C[Verify Admin Key\n(auth.py)]
-    C --> D[Instantiate BlogService\n(blogs_router.py)]
-    D --> E[Service: cancel_job\n(blog_service.py)]
-    E --> F[Repository: cancel_job\n(job_repository.py)]
-    F --> G{Find Job<br/>status=queued?\n(job_repository.py)}
-    G -->|Not Found| H[Return False\n(job_repository.py)]
-    G -->|Found| I[MongoDB Update<br/>status: cancelled\n(job_repository.py)]
-    I --> J{Updated?\n(blog_service.py)}
-    J -->|No| K[HTTPException 400\n(blog_service.py)]
-    J -->|Yes| L[Return Status 200<br/>Cancelled\n(blogs_router.py)]
+    A[HTTP POST Request<br/>job_id path param] --> B[Router: cancel_job<br/>(blogs_router.py)]
+    B --> C[Verify Admin Key<br/>(auth.py)]
+    C --> D[Instantiate BlogService<br/>(blogs_router.py)]
+    D --> E[Service: cancel_job<br/>(blog_service.py)]
+    E --> F[Repository: cancel_job<br/>(job_repository.py)]
+    F --> G{Find Job<br/>status=queued?<br/>(job_repository.py)}
+    G -->|Not Found| H[Return False<br/>(job_repository.py)]
+    G -->|Found| I[MongoDB Update<br/>status: cancelled<br/>(job_repository.py)]
+    I --> J{Updated?<br/>(blog_service.py)}
+    J -->|No| K[HTTPException 400<br/>(blog_service.py)]
+    J -->|Yes| L[Return Status 200<br/>Cancelled<br/>(blogs_router.py)]
     
     style A fill:#cce5ff
     style B fill:#cce5ff
@@ -189,26 +187,26 @@ graph TD
 
 ```mermaid
 graph TD
-    A[HTTP GET Request<br/>blog_url query] --> B[Router: check_and_load_questions\n(questions_router.py)]
-    B --> C[Authenticate Publisher\n(auth.py)]
-    C --> D[Normalize URL\n(questions_router.py)]
-    D --> E[Validate Domain\n(auth_service.py)]
-    E --> F[Instantiate QuestionService\n(questions_router.py)]
-    F --> G[Service: check_and_load_questions\n(question_service.py)]
+    A[HTTP GET Request<br/>blog_url query] --> B[Router: check_and_load_questions<br/>(questions_router.py)]
+    B --> C[Authenticate Publisher<br/>(auth.py)]
+    C --> D[Normalize URL<br/>(questions_router.py)]
+    D --> E[Validate Domain<br/>(auth_service.py)]
+    E --> F[Instantiate QuestionService<br/>(questions_router.py)]
+    F --> G[Service: check_and_load_questions<br/>(question_service.py)]
     
-    G --> H[Repository: get_questions_by_url\n(question_repository.py)]
-    H --> I{Questions<br/>Exist?\n(question_service.py)}
-    I -->|Yes| J[Return Status: ready<br/>Questions Array\n(question_service.py)]
-    I -->|No| K[Repository: get_job_by_url\n(job_repository.py)]
-    K --> L{Job Exists?\n(question_service.py)}
-    L -->|No| M[Reserve Slot\n(publisher_repository.py)]
-    M --> N[Repository: create_job\n(job_repository.py)]
-    N --> O[Return Status: not_started<br/>job_id\n(question_service.py)]
-    L -->|Yes| P{Job Status?\n(question_service.py)}
-    P -->|completed| Q[Get Questions\n(question_service.py)]
+    G --> H[Repository: get_questions_by_url<br/>(question_repository.py)]
+    H --> I{Questions<br/>Exist?<br/>(question_service.py)}
+    I -->|Yes| J[Return Status: ready<br/>Questions Array<br/>(question_service.py)]
+    I -->|No| K[Repository: get_job_by_url<br/>(job_repository.py)]
+    K --> L{Job Exists?<br/>(question_service.py)}
+    L -->|No| M[Reserve Slot<br/>(publisher_repository.py)]
+    M --> N[Repository: create_job<br/>(job_repository.py)]
+    N --> O[Return Status: not_started<br/>job_id<br/>(question_service.py)]
+    L -->|Yes| P{Job Status?<br/>(question_service.py)}
+    P -->|completed| Q[Get Questions<br/>(question_service.py)]
     Q --> J
-    P -->|processing| R[Return Status: processing<br/>job_id\n(question_service.py)]
-    P -->|failed| S[Return Status: failed<br/>job_id\n(question_service.py)]
+    P -->|processing| R[Return Status: processing<br/>job_id<br/>(question_service.py)]
+    P -->|failed| S[Return Status: failed<br/>job_id<br/>(question_service.py)]
     
     style A fill:#cce5ff
     style B fill:#cce5ff
@@ -235,18 +233,17 @@ graph TD
 
 ```mermaid
 graph TD
-    A[HTTP GET Request<br/>blog_url query] --> B[Router: get_questions_by_url\n(questions_router.py)]
-    B --> C[Authenticate Publisher
-(auth.py)]
+    A[HTTP GET Request<br/>blog_url query] --> B[Router: get_questions_by_url<br/>(questions_router.py)]
+    B --> C[Authenticate Publisher<br/>(auth.py)]
     C --> D[Validate Domain]
     D --> E[Instantiate QuestionService]
-    E --> F[Service: get_questions_by_url\n(question_service.py)]
-    F --> G[Repository: get_questions_by_url\n(question_repository.py)]
+    E --> F[Service: get_questions_by_url<br/>(question_service.py)]
+    F --> G[Repository: get_questions_by_url<br/>(question_repository.py)]
     G --> H[MongoDB Query<br/>Find by blog_url]
     H --> I{Questions<br/>Found?}
     I -->|No| J[HTTPException 404]
     I -->|Yes| K[Randomize Questions]
-    K --> L[Repository: get_blog_by_url\n(question_repository.py)]
+    K --> L[Repository: get_blog_by_url<br/>(question_repository.py)]
     L --> M[Get Blog Info]
     M --> N[Build Response<br/>Questions + Blog]
     N --> O[Return Status 200]
@@ -264,19 +261,13 @@ graph TD
 
 ```mermaid
 graph TD
-    A[HTTP GET Request<br/>question_id path] --> B[Router: get_question_by_id\n(questions_router.py)]
-    B --> C[Verify Admin Key
-(auth.py)]
-    C --> D[Repository: get_question_by_id
-(question_repository.py)]
-    D --> E[MongoDB Query<br/>Find by _id
-(question_repository.py)]
-    E --> F{Question<br/>Found?
-(questions_router.py)}
-    F -->|No| G[HTTPException 404
-(questions_router.py)]
-    F -->|Yes| H[Return Status 200<br/>Question Object
-(questions_router.py)]
+    A[HTTP GET Request<br/>question_id path] --> B[Router: get_question_by_id<br/>(questions_router.py)]
+    B --> C[Verify Admin Key<br/>(auth.py)]
+    C --> D[Repository: get_question_by_id<br/>(question_repository.py)]
+    D --> E[MongoDB Query<br/>Find by _id<br/>(question_repository.py)]
+    E --> F{Question<br/>Found?<br/>(questions_router.py)}
+    F -->|No| G[HTTPException 404<br/>(questions_router.py)]
+    F -->|Yes| H[Return Status 200<br/>Question Object<br/>(questions_router.py)]
     
     style A fill:#cce5ff
     style D fill:#e6d5ff
@@ -290,22 +281,15 @@ graph TD
 
 ```mermaid
 graph TD
-    A[HTTP DELETE Request<br/>blog_id path] --> B[Router: delete_blog_by_id\n(questions_router.py)]
-    B --> C[Verify Admin Key
-(auth.py)]
-    C --> D[Validate ObjectId
-(questions_router.py)]
-    D --> E[Repository: delete_blog\n(question_repository.py)]
-    E --> F[Get Blog from MongoDB
-(question_repository.py)]
-    F --> G[Extract blog_url
-(question_repository.py)]
-    G --> H[Delete All Questions<br/>delete_many blog_url
-(question_repository.py)]
-    H --> I[Delete Blog<br/>delete_one _id
-(question_repository.py)]
-    I --> J[Return Status 200<br/>Deletion Counts
-(questions_router.py)]
+    A[HTTP DELETE Request<br/>blog_id path] --> B[Router: delete_blog_by_id<br/>(questions_router.py)]
+    B --> C[Verify Admin Key<br/>(auth.py)]
+    C --> D[Validate ObjectId<br/>(questions_router.py)]
+    D --> E[Repository: delete_blog<br/>(question_repository.py)]
+    E --> F[Get Blog from MongoDB<br/>(question_repository.py)]
+    F --> G[Extract blog_url<br/>(question_repository.py)]
+    G --> H[Delete All Questions<br/>delete_many blog_url<br/>(question_repository.py)]
+    H --> I[Delete Blog<br/>delete_one _id<br/>(question_repository.py)]
+    I --> J[Return Status 200<br/>Deletion Counts<br/>(questions_router.py)]
     
     style A fill:#cce5ff
     style E fill:#e6d5ff
@@ -323,35 +307,28 @@ graph TD
 
 ```mermaid
 graph TD
-    A[HTTP POST Request<br/>SearchSimilarRequest<br/>question_id + limit] --> B[Router: search_similar_blogs\n(search_router.py)]
-    B --> C[Authenticate Publisher
-(auth.py)]
-    C --> D[Repository: get_question_by_id
-(question_repository.py)]
-    D --> E[MongoDB Query<br/>Find Question
-(question_repository.py)]
-    E --> F{Question<br/>Found?
-(questions_router.py)}
-    F -->|No| G[HTTPException 404
-(questions_router.py)]
-    F -->|Yes| H[Get blog_url from Question
-(search_router.py)]
-    H --> I[Validate Domain
-(auth_service.py)]
-    I --> J[Repository: increment_question_click_count\n(question_repository.py)]
+    A[HTTP POST Request<br/>SearchSimilarRequest<br/>question_id + limit] --> B[Router: search_similar_blogs<br/>(search_router.py)]
+    B --> C[Authenticate Publisher<br/>(auth.py)]
+    C --> D[Repository: get_question_by_id<br/>(question_repository.py)]
+    D --> E[MongoDB Query<br/>Find Question<br/>(question_repository.py)]
+    E --> F{Question<br/>Found?<br/>(questions_router.py)}
+    F -->|No| G[HTTPException 404<br/>(questions_router.py)]
+    F -->|Yes| H[Get blog_url from Question<br/>(search_router.py)]
+    H --> I[Validate Domain<br/>(auth_service.py)]
+    I --> J[Repository: increment_question_click_count<br/>(question_repository.py)]
     J --> K[MongoDB Atomic Update<br/>$inc click_count]
-    K --> L[Get Embedding from Question\n(search_router.py)]
+    K --> L[Get Embedding from Question<br/>(search_router.py)]
     L --> M{Embedding<br/>Exists?}
     M -->|No| N[HTTPException 400]
-    M -->|Yes| O[Repository: search_similar_blogs\n(question_repository.py)]
+    M -->|Yes| O[Repository: search_similar_blogs<br/>(question_repository.py)]
     O --> P[MongoDB Vector Search<br/>Cosine Similarity]
-    P --> Q[Filter by Domain\n(question_repository.py)]
-    Q --> R[Sort by Similarity Score\n(question_repository.py)]
-    R --> S[Limit Results\n(question_repository.py)]
-    S --> T[Repository: _get_blogs_by_urls\n(question_repository.py)]
-    T --> U[Batch Fetch Blog Docs\n(question_repository.py)]
-    U --> V[Enrich with Blog IDs\n(search_router.py)]
-    V --> W[Return Status 200<br/>Similar Blogs Array\n(search_router.py)]
+    P --> Q[Filter by Domain<br/>(question_repository.py)]
+    Q --> R[Sort by Similarity Score<br/>(question_repository.py)]
+    R --> S[Limit Results<br/>(question_repository.py)]
+    S --> T[Repository: _get_blogs_by_urls<br/>(question_repository.py)]
+    T --> U[Batch Fetch Blog Docs<br/>(question_repository.py)]
+    U --> V[Enrich with Blog IDs<br/>(search_router.py)]
+    V --> W[Return Status 200<br/>Similar Blogs Array<br/>(search_router.py)]
     
     style A fill:#cce5ff
     style D fill:#e6d5ff
@@ -370,15 +347,14 @@ graph TD
 
 ```mermaid
 graph TD
-    A[HTTP POST Request<br/>QARequest question] --> B[Router: ask_question\n(qa_router.py)]
-    B --> C[Authenticate Publisher
-(auth.py)]
+    A[HTTP POST Request<br/>QARequest question] --> B[Router: ask_question<br/>(qa_router.py)]
+    B --> C[Authenticate Publisher<br/>(auth.py)]
     C --> D{Question<br/>Empty?}
     D -->|Yes| E[HTTPException 400]
     D -->|No| F[Get LLM Service]
     F --> G[Extract chat_model<br/>from publisher.config]
     G --> H[Instantiate LLMContentGenerator<br/>Worker Service]
-    H --> I[Service: answer_question\n(llm_content_generator.py)]
+    H --> I[Service: answer_question<br/>(llm_content_generator.py)]
     I --> J[Build User Prompt<br/>Question + Context]
     J --> K[LLM Library: generate_text]
     K --> L{Model<br/>Provider?}
@@ -413,19 +389,18 @@ graph TD
 
 ```mermaid
 graph TD
-    A[HTTP POST Request<br/>PublisherCreateRequest] --> B[Router: onboard_publisher\n(publishers_router.py)]
-    B --> C[Verify Admin Key
-(auth.py)]
+    A[HTTP POST Request<br/>PublisherCreateRequest] --> B[Router: onboard_publisher<br/>(publishers_router.py)]
+    B --> C[Verify Admin Key<br/>(auth.py)]
     C --> D[Instantiate PublisherService]
-    D --> E[Service: onboard_publisher\n(publisher_service.py)]
-    E --> F[Repository: get_publisher_by_domain\n(publisher_repository.py)]
+    D --> E[Service: onboard_publisher<br/>(publisher_service.py)]
+    E --> F[Repository: get_publisher_by_domain<br/>(publisher_repository.py)]
     F --> G[PostgreSQL Query<br/>SELECT by domain]
     G --> H{Publisher<br/>Exists?}
     H -->|Yes| I[HTTPException 409]
     H -->|No| J[Build Publisher Model]
     J --> K[Extract Config Dict]
     K --> L[Add Widget Config]
-    L --> M[Repository: create_publisher\n(publisher_repository.py)]
+    L --> M[Repository: create_publisher<br/>(publisher_repository.py)]
     M --> N[Generate API Key<br/>pub_token]
     N --> O[Create PublisherTable Object]
     O --> P[PostgreSQL INSERT]
@@ -451,12 +426,11 @@ graph TD
 
 ```mermaid
 graph TD
-    A[HTTP GET Request<br/>blog_url query<br/>NO AUTH] --> B[Router: get_publisher_metadata\n(publishers_router.py)]
-    B --> C[Extract Domain
-(publishers_router.py)]
+    A[HTTP GET Request<br/>blog_url query<br/>NO AUTH] --> B[Router: get_publisher_metadata<br/>(publishers_router.py)]
+    B --> C[Extract Domain<br/>(publishers_router.py)]
     C --> D[Instantiate PublisherService]
-    D --> E[Service: get_publisher_metadata\n(publisher_service.py)]
-    E --> F[Repository: get_publisher_by_domain\n(publisher_repository.py)<br/>allow_subdomain=true]
+    D --> E[Service: get_publisher_metadata<br/>(publisher_service.py)]
+    E --> F[Repository: get_publisher_by_domain<br/>(publisher_repository.py)<br/>allow_subdomain=true]
     F --> G[PostgreSQL Query<br/>Exact or Subdomain Match]
     G --> H{Publisher<br/>Found?}
     H -->|No| I[HTTPException 404]
