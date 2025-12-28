@@ -62,7 +62,7 @@ router = APIRouter()
 async def onboard_publisher(
     http_request: Request,
     request: PublisherCreateRequest,
-    repo: PostgresPublisherRepository = Depends(get_publisher_repo)
+    repo: PublisherRepository = Depends(get_publisher_repo)
 ) -> Dict[str, Any]:
     """
     Onboard a new publisher.
@@ -163,7 +163,7 @@ async def get_publisher_metadata(
     http_request: Request,
     blog_url: str = Query(..., description="The full blog URL (e.g., https://example.com/blog/post)"),
     publisher: Publisher = Depends(get_current_publisher),
-    repo: PostgresPublisherRepository = Depends(get_publisher_repo)
+    repo: PublisherRepository = Depends(get_publisher_repo)
 ) -> Dict[str, Any]:
     """
     Get publisher metadata including widget configuration and ad settings.
@@ -233,7 +233,7 @@ async def get_publisher_metadata(
 async def get_publisher(
     http_request: Request,
     publisher_id: str,
-    repo: PostgresPublisherRepository = Depends(get_publisher_repo)
+    repo: PublisherRepository = Depends(get_publisher_repo)
 ) -> Dict[str, Any]:
     """Get publisher by ID."""
     # Get request_id from middleware (fallback to generating one if not available)
@@ -289,7 +289,7 @@ async def get_publisher(
 async def get_publisher_by_domain(
     http_request: Request,
     domain: str,
-    repo: PostgresPublisherRepository = Depends(get_publisher_repo)
+    repo: PublisherRepository = Depends(get_publisher_repo)
 ) -> Dict[str, Any]:
     """
     Get publisher by domain.
@@ -351,7 +351,7 @@ async def update_publisher(
     http_request: Request,
     publisher_id: str,
     request: PublisherUpdateRequest,
-    repo: PostgresPublisherRepository = Depends(get_publisher_repo)
+    repo: PublisherRepository = Depends(get_publisher_repo)
 ) -> Dict[str, Any]:
     """
     Update publisher configuration.
@@ -447,7 +447,7 @@ async def update_publisher(
 async def delete_publisher(
     http_request: Request,
     publisher_id: str,
-    repo: PostgresPublisherRepository = Depends(get_publisher_repo)
+    repo: PublisherRepository = Depends(get_publisher_repo)
 ) -> Dict[str, Any]:
     """
     Delete a publisher.
@@ -510,7 +510,7 @@ async def delete_publisher(
 async def reactivate_publisher(
     http_request: Request,
     publisher_id: str,
-    repo: PostgresPublisherRepository = Depends(get_publisher_repo)
+    repo: PublisherRepository = Depends(get_publisher_repo)
 ) -> Dict[str, Any]:
     """
     Reactivate a deleted/inactive publisher.
@@ -575,7 +575,7 @@ async def list_publishers(
     status: Optional[PublisherStatus] = Query(None, description="Filter by status"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
-    repo: PostgresPublisherRepository = Depends(get_publisher_repo)
+    repo: PublisherRepository = Depends(get_publisher_repo)
 ) -> Dict[str, Any]:
     """
     List all publishers with pagination.
@@ -635,7 +635,7 @@ async def list_publishers(
 async def get_publisher_config(
     http_request: Request,
     publisher_id: str,
-    repo: PostgresPublisherRepository = Depends(get_publisher_repo)
+    repo: PublisherRepository = Depends(get_publisher_repo)
 ) -> Dict[str, Any]:
     """
     Get publisher configuration.
@@ -695,7 +695,7 @@ async def get_publisher_config(
 async def regenerate_publisher_api_key(
     http_request: Request,
     publisher_id: str,
-    repo: PostgresPublisherRepository = Depends(get_publisher_repo)
+    repo: PublisherRepository = Depends(get_publisher_repo)
 ) -> Dict[str, Any]:
     """
     Regenerate API key for a publisher.

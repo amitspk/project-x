@@ -38,13 +38,13 @@ class QuestionService:
         # STEP 1: Check if questions already exist
         questions = await self.question_repo.get_questions_by_url(normalized_url, limit=None)
 
-    if questions:
-        logger.info(f"[{request_id}] ⚡ Fast path: {len(questions)} questions found, returning immediately")
+        if questions:
+            logger.info(f"[{request_id}] ⚡ Fast path: {len(questions)} questions found, returning immediately")
 
-        questions_copy = list(questions)
-        random.shuffle(questions_copy)
+            questions_copy = list(questions)
+            random.shuffle(questions_copy)
 
-        blog_info = await self.question_repo.get_blog_by_url(normalized_url)
+            blog_info = await self.question_repo.get_blog_by_url(normalized_url)
         blog_id = questions_copy[0].blog_id
 
         questions_response = []
@@ -78,25 +78,25 @@ class QuestionService:
         logger.info(f"[{request_id}] 🔄 No questions found, checking for existing job")
 
         existing_job = await self.job_repo.collection.find_one(
-        {"blog_url": normalized_url, "status": {"$in": ["pending", "processing"]}},
-        sort=[("created_at", -1)],
-    )
+            {"blog_url": normalized_url, "status": {"$in": ["pending", "processing"]}},
+            sort=[("created_at", -1)],
+        )
 
-    if existing_job:
-        job_status = existing_job.get("status")
-        job_id = str(existing_job.get("_id"))
+        if existing_job:
+            job_status = existing_job.get("status")
+            job_id = str(existing_job.get("_id"))
 
-        processing_status = "processing"
-        message = "Blog is currently being processed" if job_status == "processing" else "Blog processing is queued"
+            processing_status = "processing"
+            message = "Blog is currently being processed" if job_status == "processing" else "Blog processing is queued"
 
-        return {
-            "processing_status": processing_status,
-            "blog_url": normalized_url,
-            "questions": None,
-            "blog_info": None,
-            "job_id": job_id,
-            "message": message,
-        }
+            return {
+                "processing_status": processing_status,
+                "blog_url": normalized_url,
+                "questions": None,
+                "blog_info": None,
+                "job_id": job_id,
+                "message": message,
+            }
 
         # STEP 3: No active job - create new processing job
         from fyi_widget_api.api.models.job_models import JobStatus
@@ -161,41 +161,40 @@ class QuestionService:
         """Fetch all questions for a blog."""
         questions = await self.question_repo.get_questions_by_url(normalized_url, limit=None)
 
-    if not questions:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No questions found for URL: {original_blog_url}",
-        )
+        if not questions:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No questions found for URL: {original_blog_url}",
+            )
 
         questions_copy = list(questions)
         random.shuffle(questions_copy)
 
         blog_info = await self.question_repo.get_blog_by_url(normalized_url)
-    blog_id = questions_copy[0].blog_id
+        blog_id = questions_copy[0].blog_id
 
-    questions_response = []
-    for q in questions_copy:
-        q_dict = q.model_dump() if hasattr(q, "model_dump") else q.dict()
-        questions_response.append(
-            {
-                "id": q_dict.get("id"),
-                "question": q_dict.get("question"),
-                "answer": q_dict.get("answer"),
-            }
-        )
+        questions_response = []
+        for q in questions_copy:
+            q_dict = q.model_dump() if hasattr(q, "model_dump") else q.dict()
+            questions_response.append(
+                {
+                    "id": q_dict.get("id"),
+                    "question": q_dict.get("question"),
+                    "answer": q_dict.get("answer"),
+                }
+            )
 
-    return {
-        "questions": questions_response,
-        "blog_info": {
-            "id": blog_id,
-            "title": blog_info.get("title", "") if blog_info else "",
-            "url": original_blog_url,
-            "author": blog_info.get("author", "") if blog_info else "",
-            "published_date": blog_info.get("published_date", "") if blog_info else "",
-            "question_count": len(questions),
-        },
-    }
-
+        return {
+            "questions": questions_response,
+            "blog_info": {
+                "id": blog_id,
+                "title": blog_info.get("title", "") if blog_info else "",
+                "url": original_blog_url,
+                "author": blog_info.get("author", "") if blog_info else "",
+                "published_date": blog_info.get("published_date", "") if blog_info else "",
+                "question_count": len(questions),
+            },
+        }
 
     async def get_question_by_id(
         self,
@@ -206,18 +205,18 @@ class QuestionService:
         """Return a single question by id."""
         question = await self.question_repo.get_question_by_id(question_id)
 
-    if not question:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Question not found: {question_id}",
-        )
+        if not question:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Question not found: {question_id}",
+            )
 
-    question["id"] = str(question["_id"])
-    question.pop("_id", None)
-    question.pop("embedding", None)
-    question.pop("click_count", None)
-    question.pop("last_clicked_at", None)
-    question.pop("icon", None)
+        question["id"] = str(question["_id"])
+        question.pop("_id", None)
+        question.pop("embedding", None)
+        question.pop("click_count", None)
+        question.pop("last_clicked_at", None)
+        question.pop("icon", None)
 
         if "created_at" in question and question["created_at"] and hasattr(question["created_at"], "isoformat"):
             question["created_at"] = question["created_at"].isoformat()
@@ -246,6 +245,5 @@ class QuestionService:
             "blog_deleted": deleted.get("blog", 0) > 0,
             "questions_deleted": deleted.get("questions", 0),
             "summary_deleted": deleted.get("summary", 0) > 0,
-            "blog_id": blog_id
+            "blog_id": blog_id,
         }
-

@@ -7,8 +7,7 @@ from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
 from fyi_widget_api.api.models import QAResponse as SwaggerQAResponse, StandardErrorResponse
 from fyi_widget_api.api.models.publisher_models import Publisher
-# Use LLMContentGenerator which now uses the llm_providers_library internally
-from fyi_widget_worker_service.services.llm_content_generator import LLMContentGenerator as LLMService
+from fyi_widget_api.api.services.qa_service import QAService
 from fyi_widget_api.api.utils import (
     success_response,
     handle_http_exception,
@@ -31,13 +30,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# LLM service will be initialized per-request with publisher's configured model
-def get_llm_service(publisher: Publisher):
-    """Get LLM service configured with publisher's model."""
-    # Use chat_model for the Q&A endpoint
-    model_name = publisher.config.chat_model.value if hasattr(publisher.config.chat_model, 'value') else str(publisher.config.chat_model)
-    logger.info(f"🤖 Using publisher's configured model: {model_name} for {publisher.name}")
-    return LLMService(api_key=None, model=model_name)
+# QAService is a static service - no need for initialization function
 
 
 class QARequest(BaseModel):
@@ -106,23 +99,21 @@ async def ask_question(
                 detail="Question cannot be empty"
             )
         
-        # Use publisher's configured chat model
-        llm_service = get_llm_service(publisher)
-        
         # Get chat model from config
         chat_model = publisher.config.chat_model.value if hasattr(publisher.config.chat_model, 'value') else str(publisher.config.chat_model)
         
         logger.info(f"[{request_id}] 💬 Using chat model: {chat_model}, temp: {publisher.config.chat_temperature}, max_tokens: {publisher.config.chat_max_tokens} for publisher {publisher.name}")
         
-        # Generate answer using LLM with publisher's chat model and parameters
+        # Generate answer using QAService with publisher's chat model and parameters
         # Note: Grounding is disabled for Q&A endpoint to control costs (only used in worker question generation)
-        result = await llm_service.answer_question(
+        result = await QAService.answer_question(
             question=request.question,
             context="",  # No context, general Q&A
             model=chat_model,  # Use per-operation model
             temperature=publisher.config.chat_temperature,  # Use per-operation temperature
             max_tokens=publisher.config.chat_max_tokens,  # Use per-operation max_tokens
-            use_grounding=False  # Always disabled for Q&A endpoint (cost control)
+            use_grounding=False,  # Always disabled for Q&A endpoint (cost control)
+            api_key=None  # Uses env vars
         )
         
         answer = result.text

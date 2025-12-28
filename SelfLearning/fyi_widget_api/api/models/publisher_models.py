@@ -10,8 +10,8 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field, validator, field_serializer
 from enum import Enum
-# Import LLMModelConfig from worker service (acceptable internal dependency)
-from fyi_widget_worker_service.services.llm_providers.model_config import LLMModelConfig
+# Import LLMModelConfig from llm_providers_library
+from llm_providers_library.model_config import LLMModelConfig
 
 class LLMModel(str, Enum):
     """Supported LLM models."""
@@ -30,12 +30,8 @@ class LLMModel(str, Enum):
 
 
 # Helper function to get default model enum (defined after LLMModel to avoid NameError)
-    def _get_default_model_enum():
+def _get_default_model_enum():
     """Get the LLMModel enum that corresponds to DEFAULT_MODEL from model_config."""
-    # TODO: Update this import when LLM services are moved to worker service
-    # Import LLMModelConfig from worker service (acceptable internal dependency)
-from fyi_widget_worker_service.services.llm_providers.model_config import LLMModelConfig
-    
     # Map DEFAULT_MODEL string to enum value
     default_model_str = LLMModelConfig.DEFAULT_MODEL
     for model_enum in LLMModel:
@@ -49,34 +45,22 @@ from fyi_widget_worker_service.services.llm_providers.model_config import LLMMod
 # Helper function to get default temperature from model_config
 def _get_default_temperature():
     """Get the default temperature from model_config."""
-    # TODO: Update this import when LLM services are moved to worker service
-    # Import LLMModelConfig from worker service (acceptable internal dependency)
-from fyi_widget_worker_service.services.llm_providers.model_config import LLMModelConfig
     return LLMModelConfig.DEFAULT_TEMPERATURE
 
 
 # Helper functions to get default max_tokens from model_config
 def _get_default_max_tokens_summary():
     """Get the default max_tokens for summary from model_config."""
-    # TODO: Update this import when LLM services are moved to worker service
-    # Import LLMModelConfig from worker service (acceptable internal dependency)
-from fyi_widget_worker_service.services.llm_providers.model_config import LLMModelConfig
     return LLMModelConfig.DEFAULT_MAX_TOKENS_SUMMARY
 
 
 def _get_default_max_tokens_questions():
     """Get the default max_tokens for questions from model_config."""
-    # TODO: Update this import when LLM services are moved to worker service
-    # Import LLMModelConfig from worker service (acceptable internal dependency)
-from fyi_widget_worker_service.services.llm_providers.model_config import LLMModelConfig
     return LLMModelConfig.DEFAULT_MAX_TOKENS_QUESTIONS
 
 
 def _get_default_max_tokens_chat():
     """Get the default max_tokens for chat from model_config."""
-    # TODO: Update this import when LLM services are moved to worker service
-    # Import LLMModelConfig from worker service (acceptable internal dependency)
-from fyi_widget_worker_service.services.llm_providers.model_config import LLMModelConfig
     return LLMModelConfig.DEFAULT_MAX_TOKENS_CHAT
 
 

@@ -116,8 +116,11 @@ class BlogProcessingWorker:
         # We'll create LLMContentGenerator instances per job with the correct model
         self.storage = BlogContentRepository(database=self.db_manager.database)
         # LLM service will be created per-job with publisher's model
-        # Create a base LLMContentGenerator instance (model will be set per-job)
-        self.llm_service = LLMContentGenerator(api_key=None, model=None)
+        # Create a base LLMContentGenerator instance with default model from config
+        self.llm_service = LLMContentGenerator(
+            api_key=self.config.openai_api_key,
+            model=self.config.openai_model or None
+        )
         logger.info("✅ Services initialized")
         
         # Initialize job repository

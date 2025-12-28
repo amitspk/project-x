@@ -5,7 +5,7 @@ from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, Query, Request, Depends
 from fyi_widget_api.api.models import QuestionsByUrlResponse, QuestionByIdResponse, CheckAndLoadResponse, StandardErrorResponse
 from fyi_widget_api.api.models.publisher_models import Publisher
-from fyi_widget_api.api.repositories import JobRepository
+from fyi_widget_api.api.repositories import JobRepository, QuestionRepository
 from fyi_widget_api.api.utils import (
     normalize_url,
     success_response,

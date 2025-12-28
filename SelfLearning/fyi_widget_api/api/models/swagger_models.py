@@ -8,7 +8,7 @@ with proper response schemas for UI developers.
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
-from fyi_widget_worker_service.services.llm_providers.model_config import LLMModelConfig
+from llm_providers_library.model_config import LLMModelConfig
 
 
 # ============================================================================

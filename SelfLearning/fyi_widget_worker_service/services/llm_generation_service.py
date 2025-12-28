@@ -24,12 +24,12 @@ logger = logging.getLogger(__name__)
 class LLMGenerationService:
     """Service for generating LLM content (summaries, questions, embeddings)."""
     
-    def __init__(self, llm_service: LLMService):
+    def __init__(self, llm_service: LLMContentGenerator):
         """
         Initialize LLM generation service.
         
         Args:
-            llm_service: LLMService instance
+            llm_service: LLMContentGenerator instance
         """
         self.llm_service = llm_service
     

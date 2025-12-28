@@ -13,7 +13,8 @@ import logging
 from typing import Optional
 
 # Import from the new library (generic LLM interactions)
-from llm_providers_library import LLMClient, LLMConfig
+from llm_providers_library.client import LLMClient
+from llm_providers_library.client_config import LLMConfig
 from llm_providers_library.models import LLMGenerationResult, EmbeddingResult
 from llm_providers_library.providers.base import LLMProvider
 from llm_providers_library.model_config import LLMModelConfig

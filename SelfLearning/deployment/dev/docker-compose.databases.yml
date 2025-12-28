@@ -14,6 +14,8 @@ services:
     volumes:
       - mongodb_data:/data/db
       - mongodb_backup:/backup
+    ports:
+      - "127.0.0.1:27017:27017"  # Expose MongoDB to localhost for local API access
     networks:
       - fyi-widget-network
     healthcheck:
@@ -42,6 +44,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - postgres_backup:/backup
+    ports:
+      - "127.0.0.1:5432:5432"  # Expose PostgreSQL to localhost for local API access
     networks:
       - fyi-widget-network
     healthcheck:
@@ -63,7 +67,15 @@ networks:
 
 volumes:
   mongodb_data:
+    external: true
+    name: fyi-widget-mongodb-data
   postgres_data:
+    external: true
+    name: fyi-widget-postgres-data
   mongodb_backup:
+    external: true
+    name: fyi-widget-mongodb-backup
   postgres_backup:
+    external: true
+    name: fyi-widget-postgres-backup
 

@@ -35,27 +35,27 @@ class PublisherService:
     ) -> Dict[str, any]:
         """Attach widget config from raw DB config; strip sensitive fields."""
         raw_config = await self.publisher_repo.get_publisher_raw_config_by_domain(
-        publisher.domain,
-        allow_subdomain=False,
-    )
+            publisher.domain,
+            allow_subdomain=False,
+        )
 
-    publisher_dict = publisher.model_dump()
-    if "config" in publisher_dict:
-        config = publisher_dict["config"]
-        config.pop("summary_temperature", None)
-        config.pop("questions_temperature", None)
-        config.pop("chat_temperature", None)
-        config.pop("generate_summary", None)
-        config.pop("generate_embeddings", None)
+        publisher_dict = publisher.model_dump()
+        if "config" in publisher_dict:
+            config = publisher_dict["config"]
+            config.pop("summary_temperature", None)
+            config.pop("questions_temperature", None)
+            config.pop("chat_temperature", None)
+            config.pop("generate_summary", None)
+            config.pop("generate_embeddings", None)
 
-    if raw_config and isinstance(raw_config, dict):
-        widget_config = raw_config.get("widget")
-        if widget_config:
-            publisher_dict.setdefault("config", {})["widget"] = widget_config
+        if raw_config and isinstance(raw_config, dict):
+            widget_config = raw_config.get("widget")
+            if widget_config:
+                publisher_dict.setdefault("config", {})["widget"] = widget_config
+            else:
+                publisher_dict.setdefault("config", {})["widget"] = {}
         else:
             publisher_dict.setdefault("config", {})["widget"] = {}
-    else:
-        publisher_dict.setdefault("config", {})["widget"] = {}
 
         return publisher_dict
 
@@ -66,19 +66,19 @@ class PublisherService:
         request_id: str,
     ) -> Tuple[Dict, int, str]:
         existing = await self.publisher_repo.get_publisher_by_domain(request.domain)
-    if existing:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Publisher with domain '{request.domain}' already exists",
-        )
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Publisher with domain '{request.domain}' already exists",
+            )
 
-    publisher = Publisher(
-        name=request.name,
-        domain=request.domain,
-        email=request.email,
-        config=request.config,
-        subscription_tier=request.subscription_tier,
-    )
+        publisher = Publisher(
+            name=request.name,
+            domain=request.domain,
+            email=request.email,
+            config=request.config,
+            subscription_tier=request.subscription_tier,
+        )
 
         config_dict = publisher.config.model_dump()
         config_dict["widget"] = request.widget_config
@@ -86,12 +86,12 @@ class PublisherService:
 
         enriched_publisher = await self._enrich_publisher_with_widget_config(created_publisher)
 
-    publisher_response = PublisherResponse(
-        success=True,
-        publisher=created_publisher,
-        api_key=created_publisher.api_key,
-        message="Publisher onboarded successfully",
-    )
+        publisher_response = PublisherResponse(
+            success=True,
+            publisher=created_publisher,
+            api_key=created_publisher.api_key,
+            message="Publisher onboarded successfully",
+        )
         response_dict = publisher_response.model_dump()
         response_dict["publisher"] = enriched_publisher
         return response_dict, 201, "Publisher onboarded successfully"
@@ -106,8 +106,8 @@ class PublisherService:
         blog_domain = extract_domain(blog_url)
 
         domain_publisher = await self.publisher_repo.get_publisher_by_domain(blog_domain, allow_subdomain=True)
-    if not domain_publisher:
-        raise HTTPException(
+        if not domain_publisher:
+            raise HTTPException(
             status_code=404,
             detail={
                 "status": "error",
@@ -121,35 +121,35 @@ class PublisherService:
         )
 
         raw_config = await self.publisher_repo.get_publisher_raw_config_by_domain(blog_domain, allow_subdomain=True) or {}
-    widget_config = raw_config.get("widget", {}) if isinstance(raw_config, dict) else {}
+        widget_config = raw_config.get("widget", {}) if isinstance(raw_config, dict) else {}
 
-    ad_variation = widget_config.get("adVariation")
-    valid_ad_variations = ["adsenseForSearch", "adsenseDisplay", "googleAdManager"]
-    if ad_variation and ad_variation not in valid_ad_variations:
-        logger.warning(
-            f"[{request_id}] ⚠️ Invalid adVariation '{ad_variation}' in widget config. Valid values: {', '.join(valid_ad_variations)}"
-        )
-        ad_variation = None
+        ad_variation = widget_config.get("adVariation")
+        valid_ad_variations = ["adsenseForSearch", "adsenseDisplay", "googleAdManager"]
+        if ad_variation and ad_variation not in valid_ad_variations:
+            logger.warning(
+                f"[{request_id}] ⚠️ Invalid adVariation '{ad_variation}' in widget config. Valid values: {', '.join(valid_ad_variations)}"
+            )
+            ad_variation = None
 
-    result_data = {
-        "domain": domain_publisher.domain,
-        "publisher_id": domain_publisher.id,
-        "publisher_name": domain_publisher.name,
-        "useDummyData": widget_config.get("useDummyData"),
-        "theme": widget_config.get("theme"),
-        "currentStructure": widget_config.get("currentStructure"),
-        "gaTrackingId": widget_config.get("gaTrackingId"),
-        "gaEnabled": widget_config.get("gaEnabled"),
-        "adVariation": ad_variation,
-        "adsenseForSearch": None,
-        "adsenseDisplay": None,
-        "googleAdManager": None,
-    }
+        result_data = {
+            "domain": domain_publisher.domain,
+            "publisher_id": domain_publisher.id,
+            "publisher_name": domain_publisher.name,
+            "useDummyData": widget_config.get("useDummyData"),
+            "theme": widget_config.get("theme"),
+            "currentStructure": widget_config.get("currentStructure"),
+            "gaTrackingId": widget_config.get("gaTrackingId"),
+            "gaEnabled": widget_config.get("gaEnabled"),
+            "adVariation": ad_variation,
+            "adsenseForSearch": None,
+            "adsenseDisplay": None,
+            "googleAdManager": None,
+        }
 
-    if ad_variation == "adsenseForSearch":
-        result_data["adsenseForSearch"] = widget_config.get("adsenseForSearch")
-    elif ad_variation == "adsenseDisplay":
-        result_data["adsenseDisplay"] = widget_config.get("adsenseDisplay")
+        if ad_variation == "adsenseForSearch":
+            result_data["adsenseForSearch"] = widget_config.get("adsenseForSearch")
+        elif ad_variation == "adsenseDisplay":
+            result_data["adsenseDisplay"] = widget_config.get("adsenseDisplay")
         elif ad_variation == "googleAdManager":
             result_data["googleAdManager"] = widget_config.get("googleAdManager")
 
@@ -165,7 +165,7 @@ class PublisherService:
             raise HTTPException(status_code=404, detail=f"Publisher not found: {publisher_id}")
         publisher.api_key = None
         enriched = await self._enrich_publisher_with_widget_config(publisher)
-    response = PublisherResponse(success=True, publisher=publisher)
+        response = PublisherResponse(success=True, publisher=publisher)
         response_dict = response.model_dump()
         response_dict["publisher"] = enriched
         return response_dict
@@ -180,7 +180,7 @@ class PublisherService:
             raise HTTPException(status_code=404, detail=f"Publisher not found for domain: {domain}")
         publisher.api_key = None
         enriched = await self._enrich_publisher_with_widget_config(publisher)
-    response = PublisherResponse(success=True, publisher=publisher)
+        response = PublisherResponse(success=True, publisher=publisher)
         response_dict = response.model_dump()
         response_dict["publisher"] = enriched
         return response_dict
@@ -192,17 +192,17 @@ class PublisherService:
         request: PublisherUpdateRequest,
         request_id: str,
     ) -> Dict:
-    updates = {}
-    if request.name is not None:
-        updates["name"] = request.name
-    if request.email is not None:
-        updates["email"] = request.email
-    if request.status is not None:
-        updates["status"] = request.status
-    if request.subscription_tier is not None:
-        updates["subscription_tier"] = request.subscription_tier
+        updates = {}
+        if request.name is not None:
+            updates["name"] = request.name
+        if request.email is not None:
+            updates["email"] = request.email
+        if request.status is not None:
+            updates["status"] = request.status
+        if request.subscription_tier is not None:
+            updates["subscription_tier"] = request.subscription_tier
 
-    widget_from_request = request.widget_config
+        widget_from_request = request.widget_config
 
         if request.config is not None or widget_from_request is not None:
             current_publisher = await self.publisher_repo.get_publisher_by_id(publisher_id)
@@ -231,7 +231,7 @@ class PublisherService:
         updated_publisher.api_key = None
 
         enriched_publisher = await self._enrich_publisher_with_widget_config(updated_publisher)
-    response = PublisherResponse(success=True, publisher=updated_publisher, message="Publisher updated successfully")
+        response = PublisherResponse(success=True, publisher=updated_publisher, message="Publisher updated successfully")
         response_dict = response.model_dump()
         response_dict["publisher"] = enriched_publisher
         return response_dict
@@ -265,7 +265,11 @@ class PublisherService:
         updated_publisher.api_key = None
         enriched = await self._enrich_publisher_with_widget_config(updated_publisher)
 
-    response = PublisherResponse(success=True, publisher=updated_publisher, message="Publisher reactivated successfully")
+        response = PublisherResponse(
+            success=True,
+            publisher=updated_publisher,
+            message="Publisher reactivated successfully",
+        )
         response_dict = response.model_dump()
         response_dict["publisher"] = enriched
         return response_dict
@@ -305,15 +309,15 @@ class PublisherService:
             raise HTTPException(status_code=404, detail=f"Publisher not found: {publisher_id}")
 
         raw_config = await self.publisher_repo.get_publisher_raw_config_by_domain(publisher.domain, allow_subdomain=False)
-    config_dict = publisher.config.model_dump()
-    config_dict.pop("summary_temperature", None)
-    config_dict.pop("questions_temperature", None)
-    config_dict.pop("chat_temperature", None)
-    config_dict.pop("generate_summary", None)
-    config_dict.pop("generate_embeddings", None)
-    if raw_config and isinstance(raw_config, dict):
-        config_dict["widget"] = raw_config.get("widget", {})
-    else:
+        config_dict = publisher.config.model_dump()
+        config_dict.pop("summary_temperature", None)
+        config_dict.pop("questions_temperature", None)
+        config_dict.pop("chat_temperature", None)
+        config_dict.pop("generate_summary", None)
+        config_dict.pop("generate_embeddings", None)
+        if raw_config and isinstance(raw_config, dict):
+            config_dict["widget"] = raw_config.get("widget", {})
+        else:
             config_dict["widget"] = {}
 
         return {
