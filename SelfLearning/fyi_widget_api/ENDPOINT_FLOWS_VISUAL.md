@@ -45,12 +45,12 @@ graph TD
     AF --> AG[Build JobStatusResponse]
     AG --> AH[Return Status 202]
     
-    style A fill:#e1f5ff
-    style M fill:#fff4e1
-    style W fill:#ffe1f5
-    style AA fill:#ffe1f5
-    style AE fill:#e1ffe1
-    style AH fill:#e1f5ff
+    style A fill:#cce5ff
+    style M fill:#ffe6cc
+    style W fill:#e6d5ff
+    style AA fill:#e6d5ff
+    style AE fill:#d5ffe6
+    style AH fill:#cce5ff
 ```
 
 #### Detailed Flow Steps:
@@ -96,11 +96,11 @@ graph TD
     L --> M[Convert Dates to ISO]
     M --> N[Return Status 200<br/>with Job Details]
     
-    style A fill:#e1f5ff
-    style G fill:#fff4e1
-    style H fill:#ffe1f5
-    style I fill:#e1ffe1
-    style N fill:#e1f5ff
+    style A fill:#cce5ff
+    style G fill:#ffe6cc
+    style H fill:#e6d5ff
+    style I fill:#d5ffe6
+    style N fill:#cce5ff
 ```
 
 ---
@@ -119,11 +119,11 @@ graph TD
     H --> I[Calculate Total]
     I --> J[Return Status 200<br/>Stats Object]
     
-    style A fill:#e1f5ff
-    style E fill:#fff4e1
-    style F fill:#ffe1f5
-    style G fill:#e1ffe1
-    style J fill:#e1f5ff
+    style A fill:#cce5ff
+    style E fill:#ffe6cc
+    style F fill:#e6d5ff
+    style G fill:#d5ffe6
+    style J fill:#cce5ff
 ```
 
 ---
@@ -144,11 +144,11 @@ graph TD
     J -->|No| K[HTTPException 400]
     J -->|Yes| L[Return Status 200<br/>Cancelled]
     
-    style A fill:#e1f5ff
-    style E fill:#fff4e1
-    style F fill:#ffe1f5
-    style I fill:#e1ffe1
-    style L fill:#e1f5ff
+    style A fill:#cce5ff
+    style E fill:#ffe6cc
+    style F fill:#e6d5ff
+    style I fill:#d5ffe6
+    style L fill:#cce5ff
 ```
 
 ---
@@ -180,12 +180,12 @@ graph TD
     P -->|processing| R[Return Status: processing<br/>job_id]
     P -->|failed| S[Return Status: failed<br/>job_id]
     
-    style A fill:#e1f5ff
-    style G fill:#fff4e1
-    style H fill:#ffe1f5
-    style K fill:#ffe1f5
-    style N fill:#ffe1f5
-    style J fill:#e1f5ff
+    style A fill:#cce5ff
+    style G fill:#ffe6cc
+    style H fill:#e6d5ff
+    style K fill:#e6d5ff
+    style N fill:#e6d5ff
+    style J fill:#cce5ff
 ```
 
 ---
@@ -209,11 +209,11 @@ graph TD
     M --> N[Build Response<br/>Questions + Blog]
     N --> O[Return Status 200]
     
-    style A fill:#e1f5ff
-    style F fill:#fff4e1
-    style G fill:#ffe1f5
-    style L fill:#ffe1f5
-    style O fill:#e1f5ff
+    style A fill:#cce5ff
+    style F fill:#ffe6cc
+    style G fill:#e6d5ff
+    style L fill:#e6d5ff
+    style O fill:#cce5ff
 ```
 
 ---
@@ -230,10 +230,10 @@ graph TD
     F -->|No| G[HTTPException 404]
     F -->|Yes| H[Return Status 200<br/>Question Object]
     
-    style A fill:#e1f5ff
-    style D fill:#ffe1f5
-    style E fill:#e1ffe1
-    style H fill:#e1f5ff
+    style A fill:#cce5ff
+    style D fill:#e6d5ff
+    style E fill:#d5ffe6
+    style H fill:#cce5ff
 ```
 
 ---
@@ -252,12 +252,12 @@ graph TD
     H --> I[Delete Blog<br/>delete_one _id]
     I --> J[Return Status 200<br/>Deletion Counts]
     
-    style A fill:#e1f5ff
-    style E fill:#ffe1f5
-    style F fill:#e1ffe1
-    style H fill:#e1ffe1
-    style I fill:#e1ffe1
-    style J fill:#e1f5ff
+    style A fill:#cce5ff
+    style E fill:#e6d5ff
+    style F fill:#d5ffe6
+    style H fill:#d5ffe6
+    style I fill:#d5ffe6
+    style J fill:#cce5ff
 ```
 
 ---
@@ -291,13 +291,13 @@ graph TD
     U --> V[Enrich with Blog IDs]
     V --> W[Return Status 200<br/>Similar Blogs Array]
     
-    style A fill:#e1f5ff
-    style D fill:#ffe1f5
-    style J fill:#ffe1f5
-    style O fill:#ffe1f5
-    style T fill:#ffe1f5
-    style P fill:#e1ffe1
-    style W fill:#e1f5ff
+    style A fill:#cce5ff
+    style D fill:#e6d5ff
+    style J fill:#e6d5ff
+    style O fill:#e6d5ff
+    style T fill:#e6d5ff
+    style P fill:#d5ffe6
+    style W fill:#cce5ff
 ```
 
 ---
@@ -331,13 +331,13 @@ graph TD
     S --> T[Build QAResponse]
     T --> U[Return Status 200<br/>Question + Answer]
     
-    style A fill:#e1f5ff
-    style I fill:#fff4e1
-    style K fill:#ffe1f5
-    style M fill:#e1ffe1
-    style N fill:#e1ffe1
-    style O fill:#e1ffe1
-    style U fill:#e1f5ff
+    style A fill:#cce5ff
+    style I fill:#ffe6cc
+    style K fill:#e6d5ff
+    style M fill:#d5ffe6
+    style N fill:#d5ffe6
+    style O fill:#d5ffe6
+    style U fill:#cce5ff
 ```
 
 **Note:** This endpoint has a dependency on Worker Service's `LLMContentGenerator`, which uses the standalone `llm_providers_library`.
@@ -373,12 +373,12 @@ graph TD
     U --> V[Build PublisherResponse]
     V --> W[Return Status 201<br/>Publisher + API Key]
     
-    style A fill:#e1f5ff
-    style E fill:#fff4e1
-    style F fill:#ffe1f5
-    style M fill:#ffe1f5
-    style P fill:#e1ffe1
-    style W fill:#e1f5ff
+    style A fill:#cce5ff
+    style E fill:#ffe6cc
+    style F fill:#e6d5ff
+    style M fill:#e6d5ff
+    style P fill:#d5ffe6
+    style W fill:#cce5ff
 ```
 
 ---
@@ -402,12 +402,12 @@ graph TD
     M --> N[Build Metadata Response]
     N --> O[Return Status 200<br/>Publisher Metadata]
     
-    style A fill:#e1f5ff
-    style E fill:#fff4e1
-    style F fill:#ffe1f5
-    style L fill:#ffe1f5
-    style G fill:#e1ffe1
-    style O fill:#e1f5ff
+    style A fill:#cce5ff
+    style E fill:#ffe6cc
+    style F fill:#e6d5ff
+    style L fill:#e6d5ff
+    style G fill:#d5ffe6
+    style O fill:#cce5ff
 ```
 
 ---
@@ -447,11 +447,36 @@ graph TD
 
 ---
 
-## Legend
+## Color Coding Legend
 
-- 🔵 **Blue boxes** - HTTP/Router layer
-- 🟡 **Yellow boxes** - Service layer (business logic)
-- 🟣 **Pink boxes** - Repository layer (data access)
-- 🟢 **Green boxes** - Database operations
-- ⬜ **White boxes** - Decision points or data transformations
+All boxes are colored based on the layer they belong to:
+
+- 🔵 **Light Blue (#cce5ff)** - **Router/HTTP Layer**
+  - HTTP request/response handling
+  - Authentication checks
+  - Response formatting
+  - Error handling
+
+- 🟠 **Orange (#ffe6cc)** - **Service Layer**
+  - Business logic
+  - Business rules enforcement
+  - Cross-repository coordination
+  - Transaction management
+  - Data transformation
+
+- 🟣 **Purple (#e6d5ff)** - **Repository Layer**
+  - Database operations (CRUD)
+  - Query execution
+  - Atomic operations
+  - Data persistence
+
+- 🟢 **Light Green (#d5ffe6)** - **Database Operations**
+  - MongoDB queries
+  - PostgreSQL queries
+  - Database inserts/updates
+
+- ⬜ **White/Gray** - **Decision Points**
+  - Conditional logic
+  - If/else checks
+  - Flow control
 
