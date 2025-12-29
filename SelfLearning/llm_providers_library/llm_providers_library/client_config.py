@@ -49,7 +49,7 @@ class LLMConfig(BaseModel):
     model: str = Field(..., description="Model identifier (e.g., 'gpt-4o-mini', 'claude-3-5-sonnet-20241022', 'gemini-1.5-pro')")
     temperature: float = Field(0.7, description="Sampling temperature (0.0 to 2.0)")
     max_tokens: int = Field(2000, description="Maximum tokens to generate")
-    embedding_model: Optional[str] = Field(None, description="Embedding model (for OpenAI, defaults to 'text-embedding-3-small')")
+    embedding_model: Optional[str] = Field(None, description="Embedding model (for OpenAI, defaults to 'text-embedding-3-large' with 3072 dimensions)")
     
     class Config:
         frozen = True

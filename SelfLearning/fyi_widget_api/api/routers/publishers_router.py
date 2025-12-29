@@ -725,11 +725,18 @@ async def regenerate_publisher_api_key(
         )
 
         return response_data
-
+        
+    except HTTPException as exc:
+        logger.error(f"[{request_id}] ❌ HTTP error: {exc.detail}")
+        response_data = handle_http_exception(exc, request_id=request_id)
+        raise HTTPException(
+            status_code=response_data["status_code"],
+            detail=response_data
+        )
     except Exception as e:
         logger.error(f"[{request_id}] ❌ Failed to regenerate API key: {e}", exc_info=True)
         response_data = handle_generic_exception(
-            error=e,
+            e,
             message="Failed to regenerate API key",
             request_id=request_id
         )

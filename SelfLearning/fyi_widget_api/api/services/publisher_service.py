@@ -14,8 +14,7 @@ from fyi_widget_api.api.models.publisher_models import (
     PublisherListResponse,
     PublisherStatus,
 )
-from fyi_widget_api.api.models import PublisherRegenerateApiKeyResponse
-from fyi_widget_api.api.utils import extract_domain, normalize_url
+from fyi_widget_api.api.utils import extract_domain, normalize_url, success_response
 
 logger = logging.getLogger(__name__)
 
@@ -336,16 +335,18 @@ class PublisherService:
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
 
-        response = PublisherRegenerateApiKeyResponse(
+        result = {
+            "publisher_id": publisher.id,
+            "api_key": new_api_key,
+            "message": "⚠️ IMPORTANT: Save this API key now - it won't be shown again! The old key has been invalidated."
+        }
+        
+        return success_response(
+            result=result,
             message="API key regenerated successfully",
-            publisher=publisher,
-            api_key=new_api_key,
+            status_code=200,
+            request_id=request_id
         )
-        response_dict = response.model_dump()
-        response_dict["result"]["message"] = (
-            "⚠️ IMPORTANT: Save this API key now - it won't be shown again! The old key has been invalidated."
-        )
-        return response_dict
 
     # ============================================================================
     # URL Whitelist Validation (Business Rules)

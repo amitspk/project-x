@@ -26,7 +26,7 @@ class LLMModelConfig:
     # ========================================================================
     # Default embedding model used for vector embeddings (OpenAI only)
     
-    DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+    DEFAULT_EMBEDDING_MODEL = "text-embedding-3-large"  # 3072 dimensions
     
     # Default embedding model for Gemini (Google Generative AI)
     DEFAULT_GEMINI_EMBEDDING_MODEL = "gemini-embedding-001"

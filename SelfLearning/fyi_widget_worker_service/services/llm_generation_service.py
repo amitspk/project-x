@@ -345,13 +345,17 @@ class LLMGenerationService:
         """
         logger.info("🔢 Generating embeddings...")
         
-        embedding_model_label = "text-embedding-3-small"  # Default embedding model
+        # Get embedding model from service (will use default if not specified)
+        embedding_model_label = self.llm_service.embedding_model
         
         # Summary embedding
         embedding_start = time.time()
         try:
             summary_embedding_result = await self.llm_service.generate_embedding(summary_text)
             embedding_duration = time.time() - embedding_start
+            
+            # Use the actual embedding model from the result (more accurate for metrics)
+            embedding_model_label = summary_embedding_result.model
             
             llm_operations_total.labels(
                 publisher_domain=publisher_domain,
@@ -376,7 +380,7 @@ class LLMGenerationService:
             processing_errors_total.labels(publisher_domain=publisher_domain, error_type="llm_error").inc()
             raise
         
-        # Question embeddings
+        # Question embeddings (use the same model label from summary embedding)
         question_embeddings = []
         for q_text, _, _, _ in questions:
             embedding_start = time.time()

@@ -4,7 +4,8 @@ import logging
 from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fyi_widget_api.api.models.job_models import JobCreateRequest
-from fyi_widget_api.api.models import ProcessJobResponse, JobStatusResponse as SwaggerJobStatusResponse, JobStatsResponse, StandardErrorResponse, StandardSuccessResponse
+from fyi_widget_api.api.models import ProcessJobResponse, JobStatsResponse, StandardErrorResponse, StandardSuccessResponse
+from fyi_widget_api.api.models.swagger_models import JobStatusResponse as SwaggerJobStatusResponse
 from fyi_widget_api.api.repositories import JobRepository, PublisherRepository
 from fyi_widget_api.api.models.publisher_models import Publisher
 from fyi_widget_api.api.utils import (
