@@ -25,8 +25,7 @@ class WorkerServiceConfig(BaseSettings):
         env="POSTGRES_URL"
     )
     
-    # OpenAI
-    openai_api_key: str = Field(default="", env="OPENAI_API_KEY")
+    # OpenAI model (API keys are read by LLM library from env vars)
     openai_model: str = Field(default="gpt-4o-mini", env="OPENAI_MODEL")
     
     class Config:

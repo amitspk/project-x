@@ -113,7 +113,7 @@ async def ask_question(
             temperature=publisher.config.chat_temperature,  # Use per-operation temperature
             max_tokens=publisher.config.chat_max_tokens,  # Use per-operation max_tokens
             use_grounding=False,  # Always disabled for Q&A endpoint (cost control)
-            api_key=None  # Uses env vars
+            # API keys are automatically read from env vars by the library
         )
         
         answer = result.text

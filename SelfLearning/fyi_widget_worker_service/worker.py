@@ -2,9 +2,11 @@
 
 import asyncio
 import logging
+import os
 import signal
 import time
-from typing import Optional
+from typing import Optional, Callable, Coroutine, Any
+from dotenv import load_dotenv
 
 from fyi_widget_worker_service.core.database import DatabaseManager
 from fyi_widget_worker_service.repositories import JobRepository, PublisherRepository
@@ -19,6 +21,9 @@ from fyi_widget_worker_service.core.config import get_config, WorkerServiceConfi
 
 # Import services
 from fyi_widget_worker_service.services.blog_processing_service import BlogProcessingService
+from fyi_widget_worker_service.services.content_retrieval_service import ContentRetrievalService
+from fyi_widget_worker_service.services.threshold_service import ThresholdService
+from fyi_widget_worker_service.services.llm_generation_service import LLMGenerationService
 
 # Import metrics
 from fyi_widget_worker_service.core.metrics import (
@@ -43,35 +48,64 @@ class BlogProcessingWorker:
     def __init__(
         self,
         config: WorkerServiceConfig,
-        db_manager: Optional[DatabaseManager] = None,
-        crawler: Optional[BlogCrawler] = None
+        db_manager: DatabaseManager,
+        crawler: BlogCrawler,
+        # Factory functions for lifecycle-dependent dependencies (called after DB connection)
+        publisher_repo_factory: Callable[[str], Coroutine[Any, Any, PublisherRepository]],
+        job_repo_factory: Callable[[], JobRepository],  # Will receive database via closure
+        storage_factory: Callable[[], BlogContentRepository],  # Will receive database via closure
+        llm_service_factory: Callable[[], LLMContentGenerator],
+        content_retrieval_service_factory: Callable[[BlogCrawler, BlogContentRepository], ContentRetrievalService],
+        threshold_service_factory: Callable[[BlogContentRepository, JobRepository], ThresholdService],
+        llm_generation_service_factory: Callable[[LLMContentGenerator], LLMGenerationService],
+        blog_processing_service_factory: Callable[[JobRepository, PublisherRepository, BlogContentRepository, ContentRetrievalService, ThresholdService, LLMGenerationService], BlogProcessingService],
     ):
         """
         Initialize worker with configuration and dependencies.
         
+        Pure Dependency Injection pattern - all dependencies are injected via constructor.
+        Lifecycle-dependent dependencies (requiring DB connection) are injected as factory functions
+        that will be called in start() after database connection is established.
+        
         Args:
             config: Worker service configuration
-            db_manager: DatabaseManager instance (optional, will create if not provided)
-                       Injected for better testability - can be mocked in tests
-            crawler: CrawlerService instance (optional, will create if not provided)
-                    Injected for better testability - can be mocked in tests
+            db_manager: DatabaseManager instance (required)
+                       Must be injected - the worker manages its lifecycle (connect/disconnect)
+                       but does not create it. This allows for better testability.
+            crawler: BlogCrawler instance (required)
+                    Must be injected for better testability - can be mocked in tests.
+            publisher_repo_factory: Async factory function that takes postgres_url and returns PublisherRepository
+            job_repo_factory: Factory function that takes no args (uses self.db_manager.database) and returns JobRepository
+            storage_factory: Factory function that takes no args (uses self.db_manager.database) and returns BlogContentRepository
+            llm_service_factory: Factory function that takes no args and returns LLMContentGenerator
+            content_retrieval_service_factory: Factory function that creates ContentRetrievalService
+            threshold_service_factory: Factory function that creates ThresholdService
+            llm_generation_service_factory: Factory function that creates LLMGenerationService
+            blog_processing_service_factory: Factory function that creates BlogProcessingService
         """
         self.config = config
-        self.db_manager = db_manager if db_manager is not None else DatabaseManager()
+        self.db_manager = db_manager
+        self.crawler = crawler
+        
+        # Store factory functions
+        self.publisher_repo_factory = publisher_repo_factory
+        self.job_repo_factory = job_repo_factory
+        self.storage_factory = storage_factory
+        self.llm_service_factory = llm_service_factory
+        self.content_retrieval_service_factory = content_retrieval_service_factory
+        self.threshold_service_factory = threshold_service_factory
+        self.llm_generation_service_factory = llm_generation_service_factory
+        self.blog_processing_service_factory = blog_processing_service_factory
+        
+        # Dependencies (initialized in start() using factory functions)
         self.job_repo: Optional[JobRepository] = None
         self.publisher_repo: Optional[PublisherRepository] = None
-        self.running = False
-        self.start_time = time.time()
-        
-        # Inject services that don't need DB (for better testability)
-        self.crawler = crawler if crawler is not None else BlogCrawler()
-        
-        # Services (initialized after DB connection in start() method)
-        # Note: These are created after DB connection because they require DB access.
-        # This is acceptable for lifecycle-dependent services.
         self.llm_service: Optional[LLMContentGenerator] = None
         self.storage: Optional[BlogContentRepository] = None
         self.blog_processing_service: Optional[BlogProcessingService] = None
+        
+        self.running = False
+        self.start_time = time.time()
         
         logger.info(f"🔧 Worker initialized (poll interval: {config.poll_interval_seconds}s)")
     
@@ -88,56 +122,37 @@ class BlogProcessingWorker:
         )
         logger.info("✅ MongoDB connected")
         
-        # Connect to PostgreSQL for publisher configs
-        self.publisher_repo = PublisherRepository(self.config.postgres_url)
+        # Initialize dependencies using factory functions (pure DI)
+        # These are called after DB connection to handle lifecycle-dependent dependencies
+        
+        # 1. Create PublisherRepository (requires DB connection)
+        self.publisher_repo = await self.publisher_repo_factory(self.config.postgres_url)
         await self.publisher_repo.connect()
         logger.info("✅ PostgreSQL connected")
         
-        # Initialize services now that we have database
-        # Note: BlogCrawler is already initialized via constructor injection
-        # Note: LLMContentGenerator model will be set per-job based on publisher config
-        # We'll create LLMContentGenerator instances per job with the correct model
-        self.storage = BlogContentRepository(database=self.db_manager.database)
-        # LLM service will be created per-job with publisher's model
-        # Create a base LLMContentGenerator instance with default model from config
-        self.llm_service = LLMContentGenerator(
-            api_key=self.config.openai_api_key,
-            model=self.config.openai_model or None
-        )
-        logger.info("✅ Services initialized")
-        
-        # Initialize job repository
-        self.job_repo = JobRepository(self.db_manager.database)
+        # 2. Create repositories that depend on MongoDB connection
+        self.storage = self.storage_factory()
+        self.job_repo = self.job_repo_factory()
         await self.job_repo.create_indexes()
         logger.info("✅ Job repository initialized")
         
-        # Initialize specialized services for blog processing (pure DI)
-        from fyi_widget_worker_service.services.content_retrieval_service import ContentRetrievalService
-        from fyi_widget_worker_service.services.threshold_service import ThresholdService
-        from fyi_widget_worker_service.services.llm_generation_service import LLMGenerationService
+        # 3. Create LLM service
+        self.llm_service = self.llm_service_factory()
+        logger.info("✅ LLM service initialized")
         
-        content_retrieval_service = ContentRetrievalService(
-            crawler=self.crawler,
-            storage=self.storage
-        )
+        # 4. Create specialized services using factories (pure DI)
+        content_retrieval_service = self.content_retrieval_service_factory(self.crawler, self.storage)
+        threshold_service = self.threshold_service_factory(self.storage, self.job_repo)
+        llm_generation_service = self.llm_generation_service_factory(self.llm_service)
         
-        threshold_service = ThresholdService(
-            storage=self.storage,
-            job_repo=self.job_repo
-        )
-        
-        llm_generation_service = LLMGenerationService(
-            llm_service=self.llm_service
-        )
-        
-        # Initialize blog processing service with injected services (pure DI)
-        self.blog_processing_service = BlogProcessingService(
-            job_repo=self.job_repo,
-            publisher_repo=self.publisher_repo,
-            storage=self.storage,  # Storage is needed by orchestrator
-            content_retrieval_service=content_retrieval_service,
-            threshold_service=threshold_service,
-            llm_generation_service=llm_generation_service
+        # 5. Create blog processing service using factory (pure DI)
+        self.blog_processing_service = self.blog_processing_service_factory(
+            self.job_repo,
+            self.publisher_repo,
+            self.storage,
+            content_retrieval_service,
+            threshold_service,
+            llm_generation_service
         )
         logger.info("✅ Blog processing service initialized")
         
@@ -153,6 +168,12 @@ class BlogProcessingWorker:
         """Stop the worker gracefully."""
         logger.info("🛑 Stopping worker...")
         self.running = False
+        
+        # Close database connections
+        if self.publisher_repo:
+            await self.publisher_repo.disconnect()
+        if self.db_manager:
+            await self.db_manager.close()
     
     async def poll_loop(self):
         """Main polling loop."""
@@ -263,6 +284,10 @@ async def main():
     """Main entry point."""
     global worker
     
+    # Load .env file into os.environ so LLM library can read API keys
+    # This is needed because the library reads from os.getenv() when api_key=None
+    load_dotenv()
+    
     # Load configuration
     config = get_config()
     
@@ -270,15 +295,85 @@ async def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
-    # Create and start worker
-    worker = BlogProcessingWorker(config=config)
+    # Create dependencies - pure DI pattern (all dependencies injected, nothing created in worker)
+    db_manager = DatabaseManager()
+    crawler = BlogCrawler()
+    
+    # Create factory functions for lifecycle-dependent dependencies
+    # These factories will be called in worker.start() after DB connection
+    
+    async def create_publisher_repo(postgres_url: str) -> PublisherRepository:
+        """Factory function for PublisherRepository."""
+        return PublisherRepository(postgres_url)
+    
+    def create_job_repo() -> JobRepository:
+        """Factory function for JobRepository (captures db_manager.database from closure)."""
+        # Closure captures db_manager reference; db_manager.database will be available when called in start()
+        return JobRepository(db_manager.database)
+    
+    def create_storage() -> BlogContentRepository:
+        """Factory function for BlogContentRepository (captures db_manager.database from closure)."""
+        # Closure captures db_manager reference; db_manager.database will be available when called in start()
+        return BlogContentRepository(database=db_manager.database)
+    
+    def create_llm_service() -> LLMContentGenerator:
+        """Factory function for LLMContentGenerator."""
+        # API keys are read from env vars by the LLM library itself (BaseSettings pattern)
+        return LLMContentGenerator(
+            model=config.openai_model or None
+        )
+    
+    def create_content_retrieval_service(crawler: BlogCrawler, storage: BlogContentRepository) -> ContentRetrievalService:
+        """Factory function for ContentRetrievalService."""
+        return ContentRetrievalService(crawler=crawler, storage=storage)
+    
+    def create_threshold_service(storage: BlogContentRepository, job_repo: JobRepository) -> ThresholdService:
+        """Factory function for ThresholdService."""
+        return ThresholdService(storage=storage, job_repo=job_repo)
+    
+    def create_llm_generation_service(llm_service: LLMContentGenerator) -> LLMGenerationService:
+        """Factory function for LLMGenerationService."""
+        return LLMGenerationService(llm_service=llm_service)
+    
+    def create_blog_processing_service(
+        job_repo: JobRepository,
+        publisher_repo: PublisherRepository,
+        storage: BlogContentRepository,
+        content_retrieval_service: ContentRetrievalService,
+        threshold_service: ThresholdService,
+        llm_generation_service: LLMGenerationService
+    ) -> BlogProcessingService:
+        """Factory function for BlogProcessingService."""
+        return BlogProcessingService(
+            job_repo=job_repo,
+            publisher_repo=publisher_repo,
+            storage=storage,
+            content_retrieval_service=content_retrieval_service,
+            threshold_service=threshold_service,
+            llm_generation_service=llm_generation_service
+        )
+    
+    # Create and start worker with injected dependencies and factories
+    worker = BlogProcessingWorker(
+        config=config,
+        db_manager=db_manager,
+        crawler=crawler,
+        publisher_repo_factory=create_publisher_repo,
+        job_repo_factory=create_job_repo,
+        storage_factory=create_storage,
+        llm_service_factory=create_llm_service,
+        content_retrieval_service_factory=create_content_retrieval_service,
+        threshold_service_factory=create_threshold_service,
+        llm_generation_service_factory=create_llm_generation_service,
+        blog_processing_service_factory=create_blog_processing_service
+    )
     
     try:
         await worker.start()
     except KeyboardInterrupt:
         logger.info("⌨️  Keyboard interrupt received")
     finally:
-        await worker.stop()
+        await worker.stop()  # stop() now handles database cleanup
         logger.info("👋 Worker shut down")
 
 

@@ -45,34 +45,34 @@ class QuestionService:
             random.shuffle(questions_copy)
 
             blog_info = await self.question_repo.get_blog_by_url(normalized_url)
-        blog_id = questions_copy[0].blog_id
+            blog_id = questions_copy[0].blog_id
 
-        questions_response = []
-        for q in questions_copy:
-            q_dict = q.model_dump() if hasattr(q, "model_dump") else q.dict()
-            questions_response.append(
-                {
-                    "id": q_dict.get("id"),
-                    "question": q_dict.get("question"),
-                    "answer": q_dict.get("answer"),
-                }
-            )
+            questions_response = []
+            for q in questions_copy:
+                q_dict = q.model_dump() if hasattr(q, "model_dump") else q.dict()
+                questions_response.append(
+                    {
+                        "id": q_dict.get("id"),
+                        "question": q_dict.get("question"),
+                        "answer": q_dict.get("answer"),
+                    }
+                )
 
-        return {
-            "processing_status": "ready",
-            "blog_url": normalized_url,
-            "questions": questions_response,
-            "blog_info": {
-                "id": blog_id,
-                "title": blog_info.get("title", "") if blog_info else "",
-                "url": normalized_url,
-                "author": blog_info.get("author", "") if blog_info else "",
-                "published_date": blog_info.get("published_date", "") if blog_info else "",
-                "question_count": len(questions_response),
-            },
-            "job_id": None,
-            "message": "Questions ready - loaded from cache",
-        }
+            return {
+                "processing_status": "ready",
+                "blog_url": normalized_url,
+                "questions": questions_response,
+                "blog_info": {
+                    "id": blog_id,
+                    "title": blog_info.get("title", "") if blog_info else "",
+                    "url": normalized_url,
+                    "author": blog_info.get("author", "") if blog_info else "",
+                    "published_date": blog_info.get("published_date", "") if blog_info else "",
+                    "question_count": len(questions_response),
+                },
+                "job_id": None,
+                "message": "Questions ready - loaded from cache",
+            }
 
         # STEP 2: No questions found - check for existing job
         logger.info(f"[{request_id}] 🔄 No questions found, checking for existing job")

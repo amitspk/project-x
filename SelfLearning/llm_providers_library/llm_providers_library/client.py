@@ -35,8 +35,8 @@ class LLMClient:
         ```python
         from llm_providers_library import LLMClient, LLMConfig
         
+        # API keys are automatically read from environment variables
         config = LLMConfig(
-            api_key="your-api-key",  # Optional, can use env vars
             model="gpt-4o-mini",
             temperature=0.7,
             max_tokens=2000
@@ -58,7 +58,7 @@ class LLMClient:
         Initialize LLM client with configuration.
         
         Args:
-            config: LLMConfig instance with model, API key, and other settings
+            config: LLMConfig instance with model and other settings (API keys read from env vars)
         """
         self.config = config
         self.model = config.model or LLMModelConfig.DEFAULT_MODEL
@@ -67,9 +67,9 @@ class LLMClient:
         self.embedding_model = config.embedding_model
         
         # Create provider instance using factory
+        # API keys are automatically read from env vars by the factory using BaseSettings
         self.provider: LLMProvider = LLMProviderFactory.create(
             model=self.model,
-            api_key=config.api_key,
             temperature=config.temperature,
             max_tokens=config.max_tokens,
             embedding_model=config.embedding_model

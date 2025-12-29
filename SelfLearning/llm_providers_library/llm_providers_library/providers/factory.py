@@ -1,13 +1,13 @@
 """Factory for creating LLM providers based on model name."""
 
 import logging
-import os
 from typing import Optional
 from llm_providers_library.providers.base import LLMProvider
 from llm_providers_library.providers.openai_provider import OpenAIProvider
 from llm_providers_library.providers.anthropic_provider import AnthropicProvider
 from llm_providers_library.providers.gemini_provider import GeminiProvider
 from llm_providers_library.model_config import LLMModelConfig
+from llm_providers_library.client_config import get_library_config
 
 logger = logging.getLogger(__name__)
 
@@ -137,11 +137,13 @@ def get_provider_for_model(model: str) -> str:
 
 def get_api_key_for_provider(provider: str, model: Optional[str] = None) -> str:
     """
-    Get API key for the specified provider.
+    Get API key for the specified provider from library config.
+    
+    Uses BaseSettings pattern to read from environment variables.
     
     Args:
         provider: Provider name ("openai", "anthropic", "gemini", etc.)
-        model: Optional model name for fallback logic
+        model: Optional model name for fallback logic (not used currently)
         
     Returns:
         API key string
@@ -149,8 +151,10 @@ def get_api_key_for_provider(provider: str, model: Optional[str] = None) -> str:
     Raises:
         ValueError: If API key is not found
     """
+    config = get_library_config()
+    
     if provider == "openai":
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = config.openai_api_key
         if not api_key:
             raise ValueError(
                 "OPENAI_API_KEY environment variable is required for OpenAI models"
@@ -158,7 +162,7 @@ def get_api_key_for_provider(provider: str, model: Optional[str] = None) -> str:
         return api_key
     
     elif provider == "anthropic":
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        api_key = config.anthropic_api_key
         if not api_key:
             raise ValueError(
                 "ANTHROPIC_API_KEY environment variable is required for Anthropic models"
@@ -166,7 +170,7 @@ def get_api_key_for_provider(provider: str, model: Optional[str] = None) -> str:
         return api_key
     
     elif provider == "gemini":
-        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        api_key = config.gemini_api_key or config.google_api_key
         if not api_key:
             raise ValueError(
                 "GEMINI_API_KEY (or GOOGLE_API_KEY) environment variable is required for Gemini models"
@@ -183,7 +187,6 @@ class LLMProviderFactory:
     @staticmethod
     def create(
         model: str,
-        api_key: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = LLMModelConfig.DEFAULT_MAX_TOKENS_QUESTIONS,
         embedding_model: Optional[str] = None
@@ -191,9 +194,10 @@ class LLMProviderFactory:
         """
         Create an LLM provider instance for the specified model.
         
+        API keys are automatically read from environment variables using BaseSettings.
+        
         Args:
             model: Model identifier (e.g., "gpt-4o-mini", "claude-3-5-sonnet-20241022")
-            api_key: Optional API key (if not provided, fetched from env vars)
             temperature: Sampling temperature
             max_tokens: Maximum tokens to generate
             embedding_model: Optional embedding model override. If None, a provider-specific default is used.
@@ -214,9 +218,8 @@ class LLMProviderFactory:
             elif provider == "gemini":
                 embedding_model = LLMModelConfig.DEFAULT_GEMINI_EMBEDDING_MODEL
         
-        # Get API key
-        if not api_key:
-            api_key = get_api_key_for_provider(provider, model)
+        # Get API key from library config (reads from env vars using BaseSettings)
+        api_key = get_api_key_for_provider(provider, model)
         
         # Create provider instance
         if provider == "openai":

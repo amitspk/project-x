@@ -49,7 +49,6 @@ class LLMContentGenerator:
     
     def __init__(
         self,
-        api_key: str = None,
         model: str = None,
         temperature: float = LLMModelConfig.DEFAULT_TEMPERATURE,
         max_tokens: int = LLMModelConfig.DEFAULT_MAX_TOKENS_QUESTIONS,
@@ -58,8 +57,10 @@ class LLMContentGenerator:
         """
         Initialize LLM Content Generator.
         
+        API keys are automatically read from environment variables by the LLM library
+        using BaseSettings pattern (consistent with other services).
+        
         Args:
-            api_key: Optional API key (if not provided, fetched from env vars based on provider)
             model: Model identifier (determines provider automatically). If None, uses DEFAULT_MODEL from LLMModelConfig
             temperature: Sampling temperature
             max_tokens: Maximum tokens to generate
@@ -72,8 +73,8 @@ class LLMContentGenerator:
         self.embedding_model = embedding_model if embedding_model is not None else LLMModelConfig.DEFAULT_EMBEDDING_MODEL
         
         # Create LLM client from the library (generic, no business logic)
+        # API keys are read from env vars by the library itself (no need to pass them)
         config = LLMConfig(
-            api_key=api_key,
             model=self.model,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -122,8 +123,8 @@ class LLMContentGenerator:
             f"temp={final_temperature}, max_tokens={final_max_tokens}"
         )
         
+        # API keys are automatically read from env vars by the library (BaseSettings pattern)
         config = LLMConfig(
-            api_key=None,  # Will use env vars
             model=final_model,
             temperature=final_temperature,
             max_tokens=final_max_tokens,

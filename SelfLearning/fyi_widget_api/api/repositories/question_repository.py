@@ -362,11 +362,27 @@ class QuestionRepository:
     
     @staticmethod
     def _cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
-        """Calculate cosine similarity between two vectors."""
+        """
+        Calculate cosine similarity between two vectors.
+        
+        Handles dimension mismatches by returning 0.0 if dimensions don't match.
+        This can happen when embeddings were created with different models.
+        """
         import numpy as np
+        import logging
+        
+        log = logging.getLogger(__name__)
         
         v1 = np.array(vec1)
         v2 = np.array(vec2)
+        
+        # Check dimension mismatch (common when different embedding models are used)
+        if v1.shape != v2.shape:
+            log.warning(
+                f"⚠️  Embedding dimension mismatch: {v1.shape} vs {v2.shape}. "
+                f"Skipping comparison (embeddings may have been created with different models)."
+            )
+            return 0.0
         
         dot_product = np.dot(v1, v2)
         norm1 = np.linalg.norm(v1)

@@ -173,6 +173,44 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     return response
 
 
+# Generic exception handler for all unhandled exceptions (500 errors)
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    """
+    Generic exception handler for all unhandled exceptions.
+    
+    This catches any exception that wasn't handled by HTTPException handler
+    and returns a standardized 500 error response.
+    """
+    # Get request_id from middleware (if available)
+    request_id = getattr(request.state, 'request_id', None)
+    
+    # Log the full exception with traceback
+    logger.error(
+        f"[{request_id}] ❌ Unhandled exception in {request.method} {request.url.path}: {exc}",
+        exc_info=True
+    )
+    
+    # Create standardized error response
+    from fyi_widget_api.api.utils import error_response
+    response_data = error_response(
+        message="Internal server error",
+        error_code="INTERNAL_SERVER_ERROR",
+        detail=str(exc) if logger.level <= logging.DEBUG else "An unexpected error occurred",
+        status_code=500,
+        request_id=request_id
+    )
+    
+    response = JSONResponse(
+        status_code=500,
+        content=response_data
+    )
+    # Add X-Request-ID header
+    if request_id:
+        response.headers["X-Request-ID"] = request_id
+    return response
+
+
 # Configure OpenAPI security schemes
 def custom_openapi():
     """Custom OpenAPI schema with security schemes."""

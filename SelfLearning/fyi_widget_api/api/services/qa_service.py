@@ -23,10 +23,11 @@ class QAService:
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
         use_grounding: bool = False,
-        api_key: Optional[str] = None,
     ) -> LLMGenerationResult:
         """
         Answer a question using LLM.
+        
+        API keys are automatically read from environment variables by the library using BaseSettings.
         
         Args:
             question: The question to answer
@@ -35,7 +36,6 @@ class QAService:
             temperature: Temperature setting (defaults to LLMModelConfig.DEFAULT_TEMPERATURE)
             max_tokens: Max tokens setting (defaults to LLMModelConfig.DEFAULT_MAX_TOKENS_CHAT)
             use_grounding: If True, enables Google Search grounding (Gemini only)
-            api_key: Optional API key (uses env vars if not provided)
             
         Returns:
             LLMGenerationResult with the answer
@@ -47,9 +47,8 @@ class QAService:
         
         logger.info(f"🤖 Answering question with model: {effective_model}, temp: {effective_temperature}, max_tokens: {effective_max_tokens}")
         
-        # Create config
+        # Create config (API keys are automatically read from env vars by the library)
         config = LLMConfig(
-            api_key=api_key,
             model=effective_model,
             temperature=effective_temperature,
             max_tokens=effective_max_tokens,

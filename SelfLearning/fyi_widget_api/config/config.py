@@ -1,6 +1,5 @@
 """Configuration for API Service."""
 
-import os
 from pydantic_settings import BaseSettings
 from pydantic import Field
 
@@ -21,8 +20,7 @@ class APIServiceConfig(BaseSettings):
     # PostgreSQL (required)
     postgres_url: str = Field(..., env="POSTGRES_URL")
     
-    # OpenAI
-    openai_api_key: str = Field(default="", env="OPENAI_API_KEY")
+    # OpenAI model (API keys are read by LLM library from env vars)
     openai_model: str = Field(default="gpt-4o-mini", env="OPENAI_MODEL")
     
     # Security (required)
