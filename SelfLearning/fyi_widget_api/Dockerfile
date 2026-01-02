@@ -6,8 +6,9 @@ WORKDIR /app
 COPY fyi_widget_api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy shared code
-COPY fyi_widget_shared_library/ /app/fyi_widget_shared_library/
+# Copy and install LLM providers library
+COPY llm_providers_library/ /app/llm_providers_library/
+RUN pip install --no-cache-dir -e /app/llm_providers_library
 
 # Copy API service code
 COPY fyi_widget_api/ /app/fyi_widget_api/

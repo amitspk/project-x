@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 # Note: QuestionAnswerPair, BlogSummary, SimilarBlog are in API models
 # Worker uses them for internal operations but they're defined in API
 # This is acceptable - Worker can import from API for these data structures
-from fyi_widget_api.api.models.schema_models import (
+from fyi_widget_worker_service.models.schema_models import (
     QuestionAnswerPair,
     SimilarBlog
 )
