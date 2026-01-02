@@ -13,6 +13,23 @@ class WorkerServiceConfig(BaseSettings):
     concurrent_jobs: int = Field(default=1, env="CONCURRENT_JOBS")
     metrics_port: int = Field(default=8006, env="METRICS_PORT")
     
+    # Batch Processing (V3 Optimization)
+    batch_size: int = Field(
+        default=10,
+        env="BATCH_SIZE",
+        description="Number of blogs to pick per batch (default: 10)"
+    )
+    concurrent_processing_limit: int = Field(
+        default=5,
+        env="CONCURRENT_PROCESSING_LIMIT",
+        description="Max number of blogs to process concurrently in a group (default: 5)"
+    )
+    llm_rate_limit: int = Field(
+        default=5,
+        env="LLM_RATE_LIMIT",
+        description="Max concurrent LLM API calls (default: 5)"
+    )
+    
     # MongoDB
     mongodb_url: str = Field(default="mongodb://localhost:27017", env="MONGODB_URL")
     mongodb_username: str = Field(default="admin", env="MONGODB_USERNAME")

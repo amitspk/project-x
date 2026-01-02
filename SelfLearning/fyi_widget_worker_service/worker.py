@@ -6,7 +6,7 @@ import os
 import signal
 import time
 from datetime import datetime
-from typing import Optional, Callable, Coroutine, Any, Dict
+from typing import Optional, Callable, Coroutine, Any, Dict, List
 from dotenv import load_dotenv
 
 from fyi_widget_worker_service.core.database import DatabaseManager
@@ -60,7 +60,7 @@ class BlogProcessingWorker:
         blog_audit_repo_factory: Callable[[], BlogProcessingAuditRepository],  # V2: blog_processing_audit
         llm_service_factory: Callable[[], LLMContentGenerator],
         content_retrieval_service_factory: Callable[[BlogCrawler, BlogContentRepository], ContentRetrievalService],
-        llm_generation_service_factory: Callable[[LLMContentGenerator], LLMGenerationService],
+        llm_generation_service_factory: Callable[[LLMContentGenerator, asyncio.Semaphore], LLMGenerationService],
     ):
         """
         Initialize worker with configuration and dependencies.
@@ -110,10 +110,17 @@ class BlogProcessingWorker:
         # Worker ID for tracking (used in heartbeats and audit)
         self.worker_id = f"worker_{os.getpid()}"
         
+        # LLM rate limiting semaphore (controls concurrent LLM API calls)
+        self.llm_semaphore = asyncio.Semaphore(self.config.llm_rate_limit)
+        
         self.running = False
         self.start_time = time.time()
         
-        logger.info(f"🔧 Worker initialized (poll interval: {config.poll_interval_seconds}s)")
+        logger.info(
+            f"🔧 Worker initialized (poll interval: {config.poll_interval_seconds}s, "
+            f"batch: {config.batch_size}, concurrent: {config.concurrent_processing_limit}, "
+            f"LLM limit: {config.llm_rate_limit})"
+        )
     
     async def start(self):
         """Start the worker."""
@@ -159,8 +166,8 @@ class BlogProcessingWorker:
         
         # 4. Create specialized services using factories (pure DI)
         content_retrieval_service = self.content_retrieval_service_factory(self.crawler, self.storage)
-        llm_generation_service = self.llm_generation_service_factory(self.llm_service)
-        logger.info("✅ Worker services initialized (V2 architecture - threshold check moved to API)")
+        llm_generation_service = self.llm_generation_service_factory(self.llm_service, self.llm_semaphore)
+        logger.info("✅ Worker services initialized (V3 architecture - batch + parallel processing with rate limiting)")
         
         # Start metrics server
         start_metrics_server(self.config.metrics_port)
@@ -259,41 +266,161 @@ class BlogProcessingWorker:
         logger.info(f"✅ Heartbeat updater started (worker_id: {self.worker_id})")
         
         # ========================================================================
-        # V2 POLLING LOGIC - Uses blog_processing_queue
+        # V3 POLLING LOGIC - Batch processing with parallel execution
         # ========================================================================
+        logger.info(
+            f"🔄 Starting batch polling loop "
+            f"(batch_size={self.config.batch_size}, "
+            f"concurrent_limit={self.config.concurrent_processing_limit})"
+        )
+        
         while self.running:
             try:
                 poll_iterations_total.inc()
                 
-                # V2: Atomically pick a job from blog_processing_queue
-                # This sets status to 'processing' and assigns worker_id
-                blog_entry = await self.blog_queue_repo.atomic_worker_pick_job(self.worker_id)
+                # ============================================================
+                # STEP 1: Pick batch of blogs atomically
+                # ============================================================
+                blogs = await self.blog_queue_repo.atomic_batch_pick_sequential(
+                    worker_id=self.worker_id,
+                    batch_size=self.config.batch_size
+                )
                 
-                if blog_entry:
-                    url = blog_entry.get("url")
-                    publisher_id = blog_entry.get("publisher_id")
-                    attempt = blog_entry.get("attempt_count", 1)
+                if blogs:
+                    batch_start_time = time.time()
                     
                     logger.info(
-                        f"📥 [V2] Picked blog: {url} "
-                        f"(attempt {attempt}/3, publisher: {publisher_id})"
+                        f"📥 [{self.worker_id}] Picked batch of {len(blogs)} blogs"
                     )
                     
-                    # Extract domain for metrics
-                    publisher_domain = extract_domain(url)
-                    jobs_polled_total.labels(publisher_domain=publisher_domain).inc()
+                    # ============================================================
+                    # STEP 2: Process batch in parallel (controlled groups)
+                    # ============================================================
+                    await self.process_batch_in_groups(
+                        blogs,
+                        group_size=self.config.concurrent_processing_limit
+                    )
                     
-                    # Process the blog with v2 architecture
-                    await self.process_blog_v2(blog_entry)
+                    batch_duration = time.time() - batch_start_time
+                    logger.info(
+                        f"✅ [{self.worker_id}] Completed batch of {len(blogs)} blogs "
+                        f"in {batch_duration:.2f}s "
+                        f"(avg: {batch_duration/len(blogs):.2f}s per blog)"
+                    )
+                    
                 else:
                     # No jobs, wait before next poll
-                    logger.debug(f"[{self.worker_id}] 😴 No jobs in queue, sleeping...")
+                    logger.debug(
+                        f"[{self.worker_id}] 😴 No jobs in queue, sleeping..."
+                    )
                     await asyncio.sleep(self.config.poll_interval_seconds)
                 
             except Exception as e:
                 poll_errors_total.inc()
-                logger.error(f"❌ Error in poll loop: {e}", exc_info=True)
+                logger.error(
+                    f"❌ Error in batch poll loop: {e}",
+                    exc_info=True
+                )
                 await asyncio.sleep(self.config.poll_interval_seconds)
+    
+    async def process_batch_in_groups(
+        self,
+        blogs: List[dict],
+        group_size: int = 5
+    ):
+        """
+        Process blogs in controlled groups for optimal resource usage.
+        
+        Why groups instead of all at once?
+        - Prevents overwhelming MongoDB connection pool
+        - Prevents overwhelming PostgreSQL connection pool
+        - Prevents overwhelming LLM API rate limits
+        - Better error isolation
+        - More predictable memory usage
+        
+        Example:
+            If batch_size=20 and group_size=5:
+            - Process blogs 0-4 in parallel
+            - Wait for all 5 to complete
+            - Process blogs 5-9 in parallel
+            - Wait for all 5 to complete
+            - Continue...
+        
+        Args:
+            blogs: List of blog entries to process
+            group_size: Number of blogs to process concurrently
+        """
+        total_blogs = len(blogs)
+        total_groups = (total_blogs + group_size - 1) // group_size
+        
+        logger.info(
+            f"[{self.worker_id}] 🔄 Processing {total_blogs} blogs "
+            f"in {total_groups} groups of {group_size}"
+        )
+        
+        for group_index in range(0, total_blogs, group_size):
+            group = blogs[group_index:group_index + group_size]
+            group_num = (group_index // group_size) + 1
+            
+            logger.info(
+                f"[{self.worker_id}] 📦 Processing group {group_num}/{total_groups} "
+                f"({len(group)} blogs)"
+            )
+            
+            # Create tasks for this group
+            tasks = []
+            for blog in group:
+                task = asyncio.create_task(self.process_blog_v2_safe(blog))
+                tasks.append(task)
+            
+            # Wait for all tasks in this group to complete
+            # return_exceptions=True ensures one failure doesn't stop others
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Analyze results
+            success_count = sum(
+                1 for r in results if not isinstance(r, Exception)
+            )
+            failure_count = len(group) - success_count
+            
+            logger.info(
+                f"[{self.worker_id}] ✅ Group {group_num}/{total_groups} complete: "
+                f"{success_count} succeeded, {failure_count} failed"
+            )
+            
+            # Brief pause between groups to prevent thundering herd
+            if group_index + group_size < total_blogs:
+                await asyncio.sleep(0.5)
+    
+    async def process_blog_v2_safe(self, blog_entry: dict):
+        """
+        Wrapper around process_blog_v2 with comprehensive error handling.
+        
+        This ensures one blog's failure doesn't affect others in the batch.
+        All errors are caught, logged, and handled gracefully.
+        
+        Args:
+            blog_entry: Blog entry from blog_processing_queue
+        """
+        url = blog_entry.get("url")
+        attempt = blog_entry.get("attempt_count", 1)
+        
+        try:
+            # Call existing process_blog_v2 logic
+            await self.process_blog_v2(blog_entry)
+            
+        except Exception as e:
+            # This is a safety net - process_blog_v2 already has error handling
+            # But we catch here to ensure the batch continues
+            logger.error(
+                f"❌ [{self.worker_id}] Unexpected error in process_blog_v2_safe "
+                f"for {url} (attempt {attempt}): {e}",
+                exc_info=True
+            )
+            
+            # The error is already handled in process_blog_v2
+            # (status updated to RETRY or FAILED, audit entry written)
+            # So we just log and continue
     
     async def process_job(self, job: ProcessingJob):
         """
@@ -345,7 +472,7 @@ class BlogProcessingWorker:
             )
             
             # Step 3: Generate LLM content
-            llm_generation_service = self.llm_generation_service_factory(self.llm_service)
+            llm_generation_service = self.llm_generation_service_factory(self.llm_service, self.llm_semaphore)
             
             summary_text, key_points, llm_generated_title = await llm_generation_service.generate_summary(
                 crawl_result=crawl_result,
@@ -584,9 +711,9 @@ async def main():
         """Factory function for ContentRetrievalService."""
         return ContentRetrievalService(crawler=crawler, storage=storage)
     
-    def create_llm_generation_service(llm_service: LLMContentGenerator) -> LLMGenerationService:
-        """Factory function for LLMGenerationService."""
-        return LLMGenerationService(llm_service=llm_service)
+    def create_llm_generation_service(llm_service: LLMContentGenerator, semaphore: asyncio.Semaphore) -> LLMGenerationService:
+        """Factory function for LLMGenerationService with rate limiting."""
+        return LLMGenerationService(llm_service=llm_service, semaphore=semaphore)
     
     # Create and start worker with injected dependencies and factories
     worker = BlogProcessingWorker(

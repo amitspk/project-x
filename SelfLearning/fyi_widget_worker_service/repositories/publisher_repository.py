@@ -81,9 +81,10 @@ class PublisherRepository:
             self.engine = create_async_engine(
                 self.database_url,
                 echo=False,
-                pool_size=10,
-                max_overflow=20,
-                pool_pre_ping=True
+                pool_size=20,          # Increased from 10 for parallel processing
+                max_overflow=30,        # Increased from 20 for burst capacity
+                pool_pre_ping=True,     # Health check before use
+                pool_recycle=3600       # Recycle connections after 1 hour
             )
             
             # Create session factory

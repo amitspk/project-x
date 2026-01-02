@@ -1,7 +1,7 @@
 """Repository for blog_processing_queue collection - State management for blog processing."""
 
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 from pymongo.errors import DuplicateKeyError
 from pymongo import ReturnDocument
@@ -300,6 +300,57 @@ class BlogProcessingQueueRepository:
             )
         
         return result
+
+    async def atomic_batch_pick_sequential(
+        self,
+        worker_id: str,
+        batch_size: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Pick multiple blogs atomically using sequential atomic operations.
+        
+        This is the SAFEST approach for batch picking:
+        - Each pick is atomic (no race conditions)
+        - Guaranteed fair distribution across workers
+        - No wasted database queries
+        - Predictable behavior under contention
+        
+        Why sequential instead of batch query?
+        - Batch queries have a gap between find() and update()
+        - Multiple workers can see same blogs during that gap
+        - Sequential atomics ensure each blog goes to ONE worker only
+        
+        Performance:
+        - ~10ms per pick × 10 picks = 100ms total
+        - Negligible compared to 60s processing time per blog
+        
+        Args:
+            worker_id: Worker instance identifier
+            batch_size: Number of blogs to pick (default: 10)
+            
+        Returns:
+            List of blog entries (may be less than batch_size if queue is small)
+        """
+        blogs = []
+        
+        for _ in range(batch_size):
+            # Each iteration is atomic - uses find_one_and_update
+            blog = await self.atomic_worker_pick_job(worker_id)
+            if blog:
+                blogs.append(blog)
+            else:
+                # No more blogs available
+                break
+        
+        if blogs:
+            logger.info(
+                f"📦 [{worker_id}] Picked batch of {len(blogs)} blogs "
+                f"(requested: {batch_size})"
+            )
+        else:
+            logger.debug(f"[{worker_id}] No blogs available in queue")
+        
+        return blogs
 
     async def update_heartbeat(
         self,

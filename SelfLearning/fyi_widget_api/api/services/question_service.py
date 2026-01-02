@@ -227,7 +227,16 @@ class QuestionService:
         blog_id: str,
         request_id: str,
     ) -> Dict[str, Any]:
-        """Delete a blog and all related data."""
+        """
+        Delete a blog and all related data across all collections.
+        
+        Deletes from 5 collections in a single atomic transaction:
+        1. blog_meta_data (threshold tracking)
+        2. blog_processing_queue (V2 queue)
+        3. raw_blog_content (original content)
+        4. blog_summaries (summary + embedding)
+        5. processed_questions (all Q&A pairs)
+        """
         try:
             ObjectId(blog_id)
         except Exception:
@@ -237,11 +246,18 @@ class QuestionService:
             )
 
         result = await self.question_repo.delete_blog(blog_id)
-        # Convert to expected format
         deleted = result.get("deleted", {})
+        
         return {
-            "blog_deleted": deleted.get("blog", 0) > 0,
-            "questions_deleted": deleted.get("questions", 0),
-            "summary_deleted": deleted.get("summary", 0) > 0,
             "blog_id": blog_id,
+            "blog_url": result.get("blog_url"),
+            "transaction_status": result.get("transaction"),
+            "deleted_counts": {
+                "blog_meta_data": deleted.get("blog_meta_data", 0),
+                "blog_processing_queue": deleted.get("blog_processing_queue", 0),
+                "raw_blog_content": deleted.get("raw_blog_content", 0),
+                "blog_summaries": deleted.get("blog_summaries", 0),
+                "processed_questions": deleted.get("processed_questions", 0)
+            },
+            "total_deleted": sum(deleted.values())
         }

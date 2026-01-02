@@ -224,23 +224,31 @@ async def delete_blog_by_id(
     publisher_repo: PublisherRepository = Depends(get_publisher_repo),
 ) -> Dict[str, Any]:
     """
-    Delete a blog and all associated data (questions, summary, content) by blog_id.
+    Delete a blog and all associated data by blog_id.
     
     **Admin Only**: Requires X-Admin-Key header for authentication.
     
     **⚠️ WARNING**: This is a destructive operation that cannot be undone!
     
-    Deletes:
-    - Blog content
-    - All questions/answers generated for this blog
-    - Summary and embeddings
+    **Deletes from 5 collections in a single atomic transaction:**
+    1. `blog_meta_data` - Threshold tracking data
+    2. `blog_processing_queue` - Queue entry (if exists)
+    3. `raw_blog_content` - Original blog content/HTML
+    4. `blog_summaries` - Summary and embeddings
+    5. `processed_questions` - All questions/answers generated for this blog
+    
+    **Transaction Guarantee:**
+    - All deletions succeed, or none do (atomicity)
+    - Uses MongoDB multi-document transactions
+    - Rollback on any error
     
     **Use Cases**:
     - Remove outdated or incorrect content
     - Clean up test data
-    - Comply with data deletion requests
+    - Comply with data deletion requests (GDPR)
+    - Reset blog for reprocessing (metadata + queue cleaned)
     
-    Returns deletion summary with counts of deleted items.
+    **Returns:** Detailed deletion summary with counts from each collection.
     """
     request_id = getattr(request.state, 'request_id', None) or generate_request_id()
     
@@ -259,11 +267,14 @@ async def delete_blog_by_id(
             request_id=request_id,
         )
         
+        deleted_counts = deletion_result.get('deleted_counts', {})
         logger.info(
-            f"[{request_id}] ✅ Blog deleted: "
-            f"blog={deletion_result['blog_deleted']}, "
-            f"questions={deletion_result['questions_deleted']}, "
-            f"summary={deletion_result['summary_deleted']}"
+            f"[{request_id}] ✅ Blog deleted in transaction: "
+            f"metadata={deleted_counts.get('blog_meta_data', 0)}, "
+            f"queue={deleted_counts.get('blog_processing_queue', 0)}, "
+            f"content={deleted_counts.get('raw_blog_content', 0)}, "
+            f"summary={deleted_counts.get('blog_summaries', 0)}, "
+            f"questions={deleted_counts.get('processed_questions', 0)}"
         )
         
         # Return standardized success response

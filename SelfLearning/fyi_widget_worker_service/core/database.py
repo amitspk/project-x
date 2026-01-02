@@ -47,7 +47,14 @@ class DatabaseManager:
             else:
                 connection_url = mongodb_url
             
-            self.client = AsyncIOMotorClient(connection_url)
+            # Create client with increased connection pool for parallel processing
+            self.client = AsyncIOMotorClient(
+                connection_url,
+                maxPoolSize=50,          # Increased from default (10) for parallel processing
+                minPoolSize=10,           # Keep connections warm
+                maxIdleTimeMS=45000,      # Close idle connections after 45s
+                serverSelectionTimeoutMS=5000
+            )
             self._database = self.client[database_name]
             
             # Test connection

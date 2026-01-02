@@ -1,5 +1,6 @@
 """Service for generating LLM content (summaries, questions, embeddings)."""
 
+import asyncio
 import json
 import logging
 import re
@@ -24,14 +25,20 @@ logger = logging.getLogger(__name__)
 class LLMGenerationService:
     """Service for generating LLM content (summaries, questions, embeddings)."""
     
-    def __init__(self, llm_service: LLMContentGenerator):
+    def __init__(
+        self, 
+        llm_service: LLMContentGenerator,
+        semaphore: Optional[asyncio.Semaphore] = None
+    ):
         """
         Initialize LLM generation service.
         
         Args:
             llm_service: LLMContentGenerator instance
+            semaphore: Optional semaphore for rate limiting LLM API calls
         """
         self.llm_service = llm_service
+        self.semaphore = semaphore or asyncio.Semaphore(10)  # Default: 10 concurrent
     
     def _get_model_value(self, model_field) -> Optional[str]:
         """Helper function to get model value from enum or string."""
@@ -73,7 +80,9 @@ class LLMGenerationService:
         
         summary_start = time.time()
         try:
-            summary_result = await self.llm_service.generate_summary(
+            # Use semaphore to limit concurrent LLM API calls
+            async with self.semaphore:
+                summary_result = await self.llm_service.generate_summary(
                 content=crawl_result.content,
                 title=crawl_result.title,
                 custom_prompt=config.custom_summary_prompt,
@@ -172,7 +181,9 @@ class LLMGenerationService:
         
         questions_start = time.time()
         try:
-            questions_result = await self.llm_service.generate_questions(
+            # Use semaphore to limit concurrent LLM API calls
+            async with self.semaphore:
+                questions_result = await self.llm_service.generate_questions(
                 content=crawl_result.content,
                 title=crawl_result.title,
                 num_questions=config.questions_per_blog,
@@ -351,7 +362,9 @@ class LLMGenerationService:
         # Summary embedding
         embedding_start = time.time()
         try:
-            summary_embedding_result = await self.llm_service.generate_embedding(summary_text)
+            # Use semaphore to limit concurrent LLM API calls
+            async with self.semaphore:
+                summary_embedding_result = await self.llm_service.generate_embedding(summary_text)
             embedding_duration = time.time() - embedding_start
             
             # Use the actual embedding model from the result (more accurate for metrics)
@@ -385,7 +398,9 @@ class LLMGenerationService:
         for q_text, _, _, _ in questions:
             embedding_start = time.time()
             try:
-                emb_result = await self.llm_service.generate_embedding(q_text)
+                # Use semaphore to limit concurrent LLM API calls
+                async with self.semaphore:
+                    emb_result = await self.llm_service.generate_embedding(q_text)
                 embedding_duration = time.time() - embedding_start
                 
                 llm_operations_total.labels(
