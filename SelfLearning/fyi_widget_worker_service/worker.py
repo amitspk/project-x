@@ -5,12 +5,16 @@ import logging
 import os
 import signal
 import time
-from typing import Optional, Callable, Coroutine, Any
+from datetime import datetime
+from typing import Optional, Callable, Coroutine, Any, Dict
 from dotenv import load_dotenv
 
 from fyi_widget_worker_service.core.database import DatabaseManager
 from fyi_widget_worker_service.repositories import JobRepository, PublisherRepository
+from fyi_widget_worker_service.repositories.blog_processing_queue_repository import BlogProcessingQueueRepository
+from fyi_widget_worker_service.repositories.blog_processing_audit_repository import BlogProcessingAuditRepository
 from fyi_widget_worker_service.models.job_models import ProcessingJob
+from fyi_widget_worker_service.models.blog_processing_models import BlogProcessingStatus, AuditStatus
 from fyi_widget_worker_service.services.blog_crawler import BlogCrawler
 from fyi_widget_worker_service.services.llm_content_generator import LLMContentGenerator
 from fyi_widget_worker_service.services.blog_content_repository import BlogContentRepository
@@ -54,6 +58,8 @@ class BlogProcessingWorker:
         publisher_repo_factory: Callable[[str], Coroutine[Any, Any, PublisherRepository]],
         job_repo_factory: Callable[[], JobRepository],  # Will receive database via closure
         storage_factory: Callable[[], BlogContentRepository],  # Will receive database via closure
+        blog_queue_repo_factory: Callable[[], BlogProcessingQueueRepository],  # V2: blog_processing_queue
+        blog_audit_repo_factory: Callable[[], BlogProcessingAuditRepository],  # V2: blog_processing_audit
         llm_service_factory: Callable[[], LLMContentGenerator],
         content_retrieval_service_factory: Callable[[BlogCrawler, BlogContentRepository], ContentRetrievalService],
         threshold_service_factory: Callable[[BlogContentRepository, JobRepository], ThresholdService],
@@ -75,8 +81,10 @@ class BlogProcessingWorker:
             crawler: BlogCrawler instance (required)
                     Must be injected for better testability - can be mocked in tests.
             publisher_repo_factory: Async factory function that takes postgres_url and returns PublisherRepository
-            job_repo_factory: Factory function that takes no args (uses self.db_manager.database) and returns JobRepository
+            job_repo_factory: Factory function that takes no args (uses self.db_manager.database) and returns JobRepository (V1)
             storage_factory: Factory function that takes no args (uses self.db_manager.database) and returns BlogContentRepository
+            blog_queue_repo_factory: Factory function that returns BlogProcessingQueueRepository (V2 architecture)
+            blog_audit_repo_factory: Factory function that returns BlogProcessingAuditRepository (V2 architecture)
             llm_service_factory: Factory function that takes no args and returns LLMContentGenerator
             content_retrieval_service_factory: Factory function that creates ContentRetrievalService
             threshold_service_factory: Factory function that creates ThresholdService
@@ -91,6 +99,8 @@ class BlogProcessingWorker:
         self.publisher_repo_factory = publisher_repo_factory
         self.job_repo_factory = job_repo_factory
         self.storage_factory = storage_factory
+        self.blog_queue_repo_factory = blog_queue_repo_factory
+        self.blog_audit_repo_factory = blog_audit_repo_factory
         self.llm_service_factory = llm_service_factory
         self.content_retrieval_service_factory = content_retrieval_service_factory
         self.threshold_service_factory = threshold_service_factory
@@ -98,11 +108,16 @@ class BlogProcessingWorker:
         self.blog_processing_service_factory = blog_processing_service_factory
         
         # Dependencies (initialized in start() using factory functions)
-        self.job_repo: Optional[JobRepository] = None
+        self.job_repo: Optional[JobRepository] = None  # V1 (legacy)
+        self.blog_queue_repo: Optional[BlogProcessingQueueRepository] = None  # V2
+        self.blog_audit_repo: Optional[BlogProcessingAuditRepository] = None  # V2
         self.publisher_repo: Optional[PublisherRepository] = None
         self.llm_service: Optional[LLMContentGenerator] = None
         self.storage: Optional[BlogContentRepository] = None
         self.blog_processing_service: Optional[BlogProcessingService] = None
+        
+        # Worker ID for tracking (used in heartbeats and audit)
+        self.worker_id = f"worker_{os.getpid()}"
         
         self.running = False
         self.start_time = time.time()
@@ -132,9 +147,20 @@ class BlogProcessingWorker:
         
         # 2. Create repositories that depend on MongoDB connection
         self.storage = self.storage_factory()
+        
+        # V1 repository (legacy)
         self.job_repo = self.job_repo_factory()
         await self.job_repo.create_indexes()
-        logger.info("✅ Job repository initialized")
+        logger.info("✅ Job repository initialized (V1)")
+        
+        # V2 repositories (new architecture)
+        self.blog_queue_repo = self.blog_queue_repo_factory()
+        await self.blog_queue_repo.create_indexes()
+        logger.info("✅ Blog queue repository initialized (V2)")
+        
+        self.blog_audit_repo = self.blog_audit_repo_factory()
+        await self.blog_audit_repo.create_indexes()
+        logger.info("✅ Blog audit repository initialized (V2)")
         
         # 3. Create LLM service
         self.llm_service = self.llm_service_factory()
@@ -234,24 +260,54 @@ class BlogProcessingWorker:
         # Start queue size updater
         asyncio.create_task(update_queue_size())
         
+        # ========================================================================
+        # V2: HEARTBEAT UPDATER
+        # ========================================================================
+        # Periodically update heartbeat for any blog being processed by this worker
+        async def update_heartbeat():
+            """Periodically update heartbeat for current job."""
+            while self.running:
+                try:
+                    # Update heartbeat for all blogs currently being processed by this worker
+                    await self.blog_queue_repo.update_heartbeat(self.worker_id)
+                except Exception as e:
+                    logger.debug(f"Error updating heartbeat: {e}")
+                await asyncio.sleep(15)  # Update every 15 seconds (half of 30s interval)
+        
+        # Start heartbeat updater
+        asyncio.create_task(update_heartbeat())
+        logger.info(f"✅ Heartbeat updater started (worker_id: {self.worker_id})")
+        
+        # ========================================================================
+        # V2 POLLING LOGIC - Uses blog_processing_queue
+        # ========================================================================
         while self.running:
             try:
                 poll_iterations_total.inc()
                 
-                # Get next job
-                job = await self.job_repo.get_next_queued_job()
+                # V2: Atomically pick a job from blog_processing_queue
+                # This sets status to 'processing' and assigns worker_id
+                blog_entry = await self.blog_queue_repo.atomic_worker_pick_job(self.worker_id)
                 
-                if job:
-                    logger.info(f"📥 Found job: {job.job_id} ({job.blog_url})")
-                    # Extract domain for metrics using shared utility
-                    publisher_domain = extract_domain(job.blog_url)
+                if blog_entry:
+                    url = blog_entry.get("url")
+                    publisher_id = blog_entry.get("publisher_id")
+                    attempt = blog_entry.get("attempt_count", 1)
                     
-                    # Record job polled
+                    logger.info(
+                        f"📥 [V2] Picked blog: {url} "
+                        f"(attempt {attempt}/3, publisher: {publisher_id})"
+                    )
+                    
+                    # Extract domain for metrics
+                    publisher_domain = extract_domain(url)
                     jobs_polled_total.labels(publisher_domain=publisher_domain).inc()
                     
-                    await self.process_job(job)
+                    # Process the blog with v2 architecture
+                    await self.process_blog_v2(blog_entry)
                 else:
                     # No jobs, wait before next poll
+                    logger.debug(f"[{self.worker_id}] 😴 No jobs in queue, sleeping...")
                     await asyncio.sleep(self.config.poll_interval_seconds)
                 
             except Exception as e:
@@ -261,12 +317,271 @@ class BlogProcessingWorker:
     
     async def process_job(self, job: ProcessingJob):
         """
-        Process a single job.
+        Process a single job (V1 - Legacy).
         
         Args:
             job: Job to process
         """
         await self.blog_processing_service.process_job(job)
+    
+    async def process_blog_v2(self, blog_entry: Dict[str, Any]):
+        """
+        Process a blog using V2 architecture (blog_processing_queue + audit trail).
+        
+        This method:
+        1. Fetches publisher config
+        2. Crawls/retrieves blog content
+        3. Generates summary, questions, and embeddings using LLM
+        4. Saves results to processed_questions collection
+        5. Updates blog_processing_queue status (completed/retry/failed)
+        6. Writes audit trail entry
+        
+        Args:
+            blog_entry: Dictionary from blog_processing_queue collection
+        """
+        url = blog_entry.get("url")
+        publisher_id = blog_entry.get("publisher_id")
+        attempt = blog_entry.get("attempt_count", 1)
+        was_previously_completed = blog_entry.get("was_previously_completed", False)
+        start_time = time.time()
+        publisher_domain = extract_domain(url)
+        
+        try:
+            logger.info(f"🔄 [{self.worker_id}] Processing blog: {url} (attempt {attempt}/3)")
+            
+            # Step 1: Get publisher config
+            publisher = await self.publisher_repo.get_publisher_by_id(publisher_id)
+            if not publisher:
+                raise ValueError(f"Publisher not found: {publisher_id}")
+            
+            config = publisher.config
+            logger.info(f"📋 Config: {config.questions_per_blog} questions")
+            
+            # Step 2: Get blog content (from cache or crawl)
+            content_retrieval_service = self.content_retrieval_service_factory(self.crawler, self.storage)
+            crawl_result, blog_id, blog_doc = await content_retrieval_service.get_blog_content(
+                url=url,
+                publisher_domain=publisher_domain
+            )
+            
+            # Step 3: Check threshold (reuse existing service)
+            threshold_service = self.threshold_service_factory(self.storage, self.job_repo)
+            should_process, _ = await threshold_service.should_process_blog(
+                blog_id=blog_id,
+                blog_doc=blog_doc,
+                config=config,
+                job_id=None  # V2: No job_id, using blog_processing_queue
+            )
+            
+            if not should_process:
+                logger.info(f"⏭️  [{self.worker_id}] Skipping blog due to threshold: {url}")
+                
+                # Mark as completed (but skipped)
+                await self.blog_queue_repo.atomic_update_status(
+                    url=url,
+                    from_status=BlogProcessingStatus.PROCESSING,
+                    to_status=BlogProcessingStatus.COMPLETED,
+                    updates={
+                        "completed_at": datetime.utcnow(),
+                        "last_error": "Skipped due to threshold limits"
+                    }
+                )
+                
+                # Release blog slot only if not a reprocess of completed blog
+                if not was_previously_completed:
+                    await self.publisher_repo.release_blog_slot(
+                        publisher_id=publisher_id,
+                        processed=False
+                    )
+                    logger.info(f"[{self.worker_id}] ✅ Released slot for skipped blog")
+                else:
+                    logger.info(f"[{self.worker_id}] ⏭️  Skipped slot release (reprocessing completed blog)")
+                
+                # Write audit entry
+                await self.blog_audit_repo.insert_audit_entry(
+                    url=url,
+                    publisher_id=publisher_id,
+                    job_id=None,  # V2: No job_id
+                    worker_id=self.worker_id,
+                    status=AuditStatus.COMPLETED,
+                    attempt_number=attempt,
+                    processing_time_seconds=time.time() - start_time,
+                    started_at=datetime.utcnow(),
+                    completed_at=datetime.utcnow(),
+                )
+                
+                return
+            
+            # Step 4: Generate LLM content
+            llm_generation_service = self.llm_generation_service_factory(self.llm_service)
+            
+            summary_text, key_points, llm_generated_title = await llm_generation_service.generate_summary(
+                crawl_result=crawl_result,
+                config=config,
+                publisher_domain=publisher_domain
+            )
+            
+            questions = await llm_generation_service.generate_questions(
+                crawl_result=crawl_result,
+                config=config,
+                publisher_domain=publisher_domain
+            )
+            
+            summary_embedding, question_embeddings = await llm_generation_service.generate_embeddings(
+                summary_text=summary_text,
+                questions=questions,
+                publisher_domain=publisher_domain
+            )
+            
+            # Step 5: Save results to database
+            final_title = llm_generated_title if llm_generated_title else crawl_result.title
+            
+            # Save summary
+            summary_id = await self.storage.save_summary(
+                blog_id=blog_id,
+                blog_url=url,
+                summary_text=summary_text,
+                key_points=key_points,
+                embedding=summary_embedding,
+                title=final_title
+            )
+            
+            # Prepare questions for bulk save
+            questions_to_save = []
+            embeddings_to_save = []
+            question_count = 0
+            for q_text, q_answer, q_category, q_confidence in questions:
+                if q_confidence is not None and q_confidence < 0.5:
+                    continue
+                
+                q_embedding = question_embeddings[question_count] if question_count < len(question_embeddings) else None
+                questions_to_save.append({
+                    "question": q_text,
+                    "answer": q_answer,
+                    "keyword_anchor": q_category or "general",  # Map category to keyword_anchor
+                    "probability": q_confidence  # Map confidence to probability
+                })
+                if q_embedding:
+                    embeddings_to_save.append(q_embedding)
+                question_count += 1
+            
+            # Save all questions
+            if questions_to_save:
+                await self.storage.save_questions(
+                    blog_id=blog_id,
+                    blog_url=url,
+                    questions=questions_to_save,
+                    embeddings=embeddings_to_save if embeddings_to_save else None
+                )
+            
+            processing_duration = time.time() - start_time
+            
+            # Step 6: Mark as completed in blog_processing_queue
+            await self.blog_queue_repo.atomic_update_status(
+                url=url,
+                from_status=BlogProcessingStatus.PROCESSING,
+                to_status=BlogProcessingStatus.COMPLETED,
+                updates={
+                    "completed_at": datetime.utcnow(),
+                    "last_error": None,
+                    "error_type": None,
+                }
+            )
+            
+            # Step 7: Release blog slot and record successful processing
+            # Skip if this is a reprocess of an already-completed blog (stats already counted)
+            if not was_previously_completed:
+                await self.publisher_repo.release_blog_slot(
+                    publisher_id=publisher_id,
+                    processed=True,
+                    questions_generated=question_count
+                )
+                logger.info(f"[{self.worker_id}] ✅ Released slot and recorded processing")
+            else:
+                logger.info(
+                    f"[{self.worker_id}] ♻️  Reprocessed completed blog - "
+                    f"questions updated but stats not recounted (already processed)"
+                )
+            
+            # Step 8: Write audit entry (success)
+            await self.blog_audit_repo.insert_audit_entry(
+                url=url,
+                publisher_id=publisher_id,
+                job_id=None,  # V2: No job_id
+                worker_id=self.worker_id,
+                status=AuditStatus.COMPLETED,
+                attempt_number=attempt,
+                processing_time_seconds=processing_duration,
+                started_at=datetime.utcnow(),
+                completed_at=datetime.utcnow(),
+                question_count=question_count,
+                summary_length=len(summary_text),
+            )
+            
+            logger.info(
+                f"✅ [{self.worker_id}] Successfully processed: {url} "
+                f"({question_count} questions, {processing_duration:.2f}s)"
+            )
+            
+        except Exception as e:
+            processing_duration = time.time() - start_time
+            error_message = str(e)
+            error_type = type(e).__name__
+            
+            logger.error(
+                f"❌ [{self.worker_id}] Failed to process {url}: {e} "
+                f"(duration: {processing_duration:.2f}s, attempt {attempt}/3)",
+                exc_info=True
+            )
+            
+            # Determine next status based on attempt count
+            if attempt < 3:
+                # Retry
+                next_status = BlogProcessingStatus.RETRY
+                logger.info(f"🔄 [{self.worker_id}] Will retry {url} (attempt {attempt + 1}/3)")
+            else:
+                # Failed permanently
+                next_status = BlogProcessingStatus.FAILED
+                logger.error(f"💀 [{self.worker_id}] Permanently failed {url} after 3 attempts")
+            
+            # Update blog_processing_queue
+            await self.blog_queue_repo.atomic_update_status(
+                url=url,
+                from_status=BlogProcessingStatus.PROCESSING,
+                to_status=next_status,
+                updates={
+                    "last_error": error_message[:500],  # Truncate to 500 chars
+                    "error_type": error_type,
+                    "worker_id": None if next_status == BlogProcessingStatus.FAILED else self.worker_id,
+                }
+            )
+            
+            # Release slot if permanently failed (not for retry)
+            # Skip if this is a reprocess of completed blog (no slot was reserved)
+            if next_status == BlogProcessingStatus.FAILED and not was_previously_completed:
+                await self.publisher_repo.release_blog_slot(
+                    publisher_id=publisher_id,
+                    processed=False
+                )
+                logger.info(f"[{self.worker_id}] ✅ Released slot for failed blog")
+            
+            # Write audit entry (failure)
+            await self.blog_audit_repo.insert_audit_entry(
+                url=url,
+                publisher_id=publisher_id,
+                job_id=None,  # V2: No job_id
+                worker_id=self.worker_id,
+                status=AuditStatus.FAILED,
+                attempt_number=attempt,
+                processing_time_seconds=processing_duration,
+                started_at=datetime.utcnow(),
+                completed_at=datetime.utcnow(),
+                error_message=error_message[:500],
+                error_type=error_type,
+            )
+            
+            # Don't re-raise - we've handled the error by updating status
+            # The worker should continue to the next job
 
 
 # Global worker instance
@@ -316,6 +631,16 @@ async def main():
         # Closure captures db_manager reference; db_manager.database will be available when called in start()
         return BlogContentRepository(database=db_manager.database)
     
+    def create_blog_queue_repo() -> BlogProcessingQueueRepository:
+        """Factory function for BlogProcessingQueueRepository (v2 architecture)."""
+        # Closure captures db_manager reference; db_manager.database will be available when called in start()
+        return BlogProcessingQueueRepository(database=db_manager.database)
+    
+    def create_blog_audit_repo() -> BlogProcessingAuditRepository:
+        """Factory function for BlogProcessingAuditRepository (v2 architecture)."""
+        # Closure captures db_manager reference; db_manager.database will be available when called in start()
+        return BlogProcessingAuditRepository(database=db_manager.database)
+    
     def create_llm_service() -> LLMContentGenerator:
         """Factory function for LLMContentGenerator."""
         # API keys are read from env vars by the LLM library itself (BaseSettings pattern)
@@ -361,6 +686,8 @@ async def main():
         publisher_repo_factory=create_publisher_repo,
         job_repo_factory=create_job_repo,
         storage_factory=create_storage,
+        blog_queue_repo_factory=create_blog_queue_repo,  # V2
+        blog_audit_repo_factory=create_blog_audit_repo,  # V2
         llm_service_factory=create_llm_service,
         content_retrieval_service_factory=create_content_retrieval_service,
         threshold_service_factory=create_threshold_service,

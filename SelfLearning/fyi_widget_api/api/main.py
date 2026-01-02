@@ -9,6 +9,7 @@ from fastapi.openapi.utils import get_openapi
 
 # Import routers
 from fyi_widget_api.api.routers import questions_router, search_router, qa_router, blogs_router, publishers_router
+from fyi_widget_api.api.routers.v2 import questions_router_v2, admin_router_v2
 
 # Import middleware (via core package)
 from fyi_widget_api.api.core.middleware import RequestIDMiddleware
@@ -19,6 +20,7 @@ from fyi_widget_api.config.config import get_config
 # Import local repositories and database manager
 from fyi_widget_api.api.core.database import DatabaseManager
 from fyi_widget_api.api.repositories import JobRepository, PublisherRepository
+from fyi_widget_api.api.repositories.blog_processing_queue_repository import BlogProcessingQueueRepository
 
 # Configure logging
 logging.basicConfig(
@@ -48,10 +50,15 @@ async def lifespan(app: FastAPI):
     )
     logger.info("✅ MongoDB connected")
     
-    # Create indexes for job queue
+    # Create indexes for job queue (v1)
     job_repo = JobRepository(db_manager.database)
     await job_repo.create_indexes()
     logger.info("✅ Job queue indexes created")
+    
+    # Create indexes for blog processing queue (v2)
+    blog_queue_repo = BlogProcessingQueueRepository(db_manager.database)
+    await blog_queue_repo.create_indexes()
+    logger.info("✅ Blog processing queue indexes created")
     
     # Connect to PostgreSQL for publisher configs
     publisher_repo_instance = PublisherRepository(config.postgres_url)
@@ -59,9 +66,11 @@ async def lifespan(app: FastAPI):
     logger.info("✅ PostgreSQL connected")
     
     # Share instances via app state
-    app.state.mongo_db = db_manager.database
+    app.state.mongo_db = db_manager.database  # Legacy name (v1)
+    app.state.mongodb_database = db_manager.database  # New name (v2)
     app.state.db_manager = db_manager
     app.state.publisher_repo = publisher_repo_instance
+    app.state.postgres_engine = publisher_repo_instance.engine  # For v2 DI
     app.state.config = config
     
     yield
@@ -110,13 +119,14 @@ app = FastAPI(
     }
 )
 
-# CORS
+# CORS - Allow requests from admin console and other frontends
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
+    allow_origins=CORS_ORIGINS if CORS_ORIGINS else ["*"],  # From config (default: allow all)
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Allow all HTTP methods (GET, POST, PUT, DELETE, OPTIONS, etc.)
+    allow_headers=["*"],  # Allow all headers (including X-API-Key, X-Admin-Key, Content-Type)
+    expose_headers=["X-Request-ID"],  # Expose custom headers to frontend
 )
 
 # Add Request ID middleware (runs after CORS)
@@ -247,11 +257,16 @@ app.openapi = custom_openapi
 
 
 # Register routers
-app.include_router(questions_router.router, prefix="/api/v1/questions", tags=["Questions"])
+# V1 Routers (Legacy)
+app.include_router(questions_router.router, prefix="/api/v1/questions", tags=["Questions (v1)"])
 app.include_router(search_router.router, prefix="/api/v1/search", tags=["Search"])
 app.include_router(qa_router.router, prefix="/api/v1/qa", tags=["Q&A"])
 app.include_router(blogs_router.router, prefix="/api/v1/jobs", tags=["Jobs"])
 app.include_router(publishers_router.router, prefix="/api/v1/publishers", tags=["Publishers"])
+
+# V2 Routers (New Architecture)
+app.include_router(questions_router_v2.router, prefix="/api/v2/questions", tags=["Questions (v2) - New Architecture"])
+app.include_router(admin_router_v2.router, prefix="/api/v2/admin", tags=["Admin (v2) - New Architecture"])
 
 
 @app.get("/health")

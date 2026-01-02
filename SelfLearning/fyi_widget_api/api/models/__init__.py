@@ -61,6 +61,20 @@ from .swagger_models import (
     PublisherMetadataResponse,
 )
 
+from .blog_processing_models import (
+    # Enums
+    BlogProcessingStatus,
+    AuditStatus,
+    # Queue models
+    BlogProcessingQueueEntry,
+    BlogProcessingQueueStats,
+    # Audit models
+    BlogProcessingAuditEntry,
+    BlogProcessingAuditStats,
+    ErrorTypeAnalysis,
+    FailureAnalysis,
+)
+
 __all__ = [
     # Response models
     "StandardResponse",
@@ -110,5 +124,14 @@ __all__ = [
     "PublisherConfigResponse",
     "PublisherRegenerateApiKeyResponse",
     "PublisherMetadataResponse",
+    # Blog processing models
+    "BlogProcessingStatus",
+    "AuditStatus",
+    "BlogProcessingQueueEntry",
+    "BlogProcessingQueueStats",
+    "BlogProcessingAuditEntry",
+    "BlogProcessingAuditStats",
+    "ErrorTypeAnalysis",
+    "FailureAnalysis",
 ]
 

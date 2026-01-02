@@ -8,7 +8,8 @@ Provides two types of authentication:
 
 import logging
 from typing import Optional
-from fastapi import Header, HTTPException, Request, Depends
+from fastapi import HTTPException, Request, Depends
+from fastapi.security import APIKeyHeader
 
 
 from fyi_widget_api.config.config import APIServiceConfig
@@ -24,6 +25,21 @@ from fyi_widget_api.api.services.auth_service import extract_domain
 
 logger = logging.getLogger(__name__)
 
+# Define API key security schemes
+# The scheme_name must match the names in main.py's custom_openapi()
+admin_key_header = APIKeyHeader(
+    name="X-Admin-Key", 
+    scheme_name="AdminKey",  # ← This must match the OpenAPI security scheme name
+    auto_error=False, 
+    description="Admin API key for managing publishers"
+)
+publisher_key_header = APIKeyHeader(
+    name="X-API-Key", 
+    scheme_name="PublisherKey",  # ← This must match the OpenAPI security scheme name
+    auto_error=False, 
+    description="Publisher API key for content access"
+)
+
 
 # ============================================================================
 # Admin Authentication
@@ -31,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 async def verify_admin_key(
     request: Request,
-    x_admin_key: Optional[str] = Header(None, description="Admin API key for managing publishers"),
+    x_admin_key: Optional[str] = Depends(admin_key_header),
     config: APIServiceConfig = Depends(get_app_config),
 ) -> bool:
     """
@@ -103,7 +119,7 @@ async def verify_admin_key(
 
 async def verify_publisher_key(
     request: Request,
-    x_api_key: Optional[str] = Header(None, description="Publisher API key for accessing content"),
+    x_api_key: Optional[str] = Depends(publisher_key_header),
     repo: PublisherRepository = Depends(get_publisher_repo),
 ) -> Publisher:
     """
@@ -257,7 +273,7 @@ async def get_current_publisher(
 
 async def require_admin(
     request: Request,
-    x_admin_key: Optional[str] = Header(None, description="Admin API key for managing publishers"),
+    x_admin_key: Optional[str] = Depends(admin_key_header),
     config: APIServiceConfig = Depends(get_app_config),
 ) -> bool:
     """
