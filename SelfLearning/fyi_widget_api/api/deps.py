@@ -4,6 +4,9 @@ from fastapi import Depends, HTTPException, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from fyi_widget_api.api.repositories import JobRepository, PublisherRepository, QuestionRepository
+from fyi_widget_api.api.repositories.blog_processing_queue_repository import BlogProcessingQueueRepository
+from fyi_widget_api.api.repositories.blog_processing_audit_repository import BlogProcessingAuditRepository
+from fyi_widget_api.api.repositories.blog_metadata_repository import BlogMetadataRepository
 
 
 def get_mongo_db(request: Request) -> AsyncIOMotorDatabase:
@@ -42,4 +45,25 @@ def get_app_config(request: Request):
     if cfg is None:
         raise HTTPException(status_code=500, detail="App config not initialized")
     return cfg
+
+
+def get_blog_processing_queue_repository(
+    db: AsyncIOMotorDatabase = Depends(get_mongo_db),
+) -> BlogProcessingQueueRepository:
+    """Provide a BlogProcessingQueueRepository bound to the current Mongo database."""
+    return BlogProcessingQueueRepository(database=db)
+
+
+def get_blog_processing_audit_repository(
+    db: AsyncIOMotorDatabase = Depends(get_mongo_db),
+) -> BlogProcessingAuditRepository:
+    """Provide a BlogProcessingAuditRepository bound to the current Mongo database."""
+    return BlogProcessingAuditRepository(database=db)
+
+
+def get_blog_metadata_repository(
+    db: AsyncIOMotorDatabase = Depends(get_mongo_db),
+) -> BlogMetadataRepository:
+    """Provide a BlogMetadataRepository bound to the current Mongo database."""
+    return BlogMetadataRepository(database=db)
 

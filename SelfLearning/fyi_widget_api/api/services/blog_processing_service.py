@@ -13,6 +13,7 @@ from fyi_widget_api.api.repositories import (
     QuestionRepository,
     PublisherRepository,
 )
+from fyi_widget_api.api.repositories.blog_metadata_repository import BlogMetadataRepository
 from fyi_widget_api.api.models.publisher_models import Publisher
 from fyi_widget_api.api.repositories.publisher_repository import UsageLimitExceededError
 from fyi_widget_api.api.services.publisher_service import PublisherService
@@ -39,6 +40,7 @@ class BlogProcessingService:
         queue_repo: BlogProcessingQueueRepository,
         question_repo: QuestionRepository,
         publisher_repo: PublisherRepository,
+        metadata_repo: BlogMetadataRepository,
     ):
         """
         Initialize service with injected repositories.
@@ -47,10 +49,12 @@ class BlogProcessingService:
             queue_repo: Blog processing queue repository
             question_repo: Question repository
             publisher_repo: Publisher repository
+            metadata_repo: Blog metadata repository (for threshold tracking)
         """
         self.queue_repo = queue_repo
         self.question_repo = question_repo
         self.publisher_repo = publisher_repo
+        self.metadata_repo = metadata_repo
 
     async def check_and_load_questions(
         self,
@@ -120,9 +124,58 @@ class BlogProcessingService:
             }
         
         # =====================================================================
-        # STEP 2: No questions - check blog_processing_queue state
+        # STEP 2: CHECK THRESHOLD - Increment counter and validate
         # =====================================================================
-        logger.info(f"[{request_id}] 🔄 No questions found, checking processing queue")
+        logger.info(f"[{request_id}] 🔍 No questions found, checking threshold")
+        
+        # Atomically increment request count
+        request_count = await self.metadata_repo.increment_and_get_count(
+            url=normalized_url,
+            publisher_id=publisher.id
+        )
+        
+        # Get threshold from publisher config
+        threshold = publisher.config.threshold_before_processing_blog
+        
+        # Check: request_count > threshold (e.g., if threshold=2, need 3 requests)
+        should_process = request_count > threshold
+        
+        if not should_process:
+            # Threshold not met - return early
+            remaining = threshold - request_count + 1
+            
+            logger.info(
+                f"[{request_id}] ⏭️  Threshold not met: "
+                f"Request {request_count}/{threshold + 1}. Need {remaining} more."
+            )
+            
+            return {
+                "processing_status": "threshold_not_met",
+                "blog_url": normalized_url,
+                "questions": None,
+                "blog_info": None,
+                "job_id": None,
+                "message": (
+                    f"This blog will be processed after {remaining} more request(s). "
+                    f"Progress: {request_count}/{threshold + 1}"
+                ),
+                "threshold_info": {
+                    "current_requests": request_count,
+                    "required_requests": threshold + 1,
+                    "remaining_requests": remaining,
+                    "threshold": threshold,
+                },
+            }
+        
+        logger.info(
+            f"[{request_id}] ✅ Threshold met ({request_count}/{threshold + 1}), "
+            f"proceeding with processing"
+        )
+        
+        # =====================================================================
+        # STEP 3: No questions - check blog_processing_queue state
+        # =====================================================================
+        logger.info(f"[{request_id}] 🔄 Checking processing queue")
         
         blog_entry, is_new = await self.queue_repo.atomic_get_or_create(
             url=normalized_url,
@@ -131,7 +184,7 @@ class BlogProcessingService:
         )
         
         # =====================================================================
-        # STEP 3: NEW ENTRY - Reserve slot and return "queued"
+        # STEP 4: NEW ENTRY - Reserve slot and return "queued"
         # =====================================================================
         if is_new:
             logger.info(f"[{request_id}] 🆕 New blog entry created")
@@ -164,7 +217,7 @@ class BlogProcessingService:
             }
         
         # =====================================================================
-        # STEP 4: EXISTING ENTRY - Check current status
+        # STEP 5: EXISTING ENTRY - Check current status
         # =====================================================================
         status = blog_entry["status"]
         logger.info(f"[{request_id}] 📊 Existing entry found: status={status}")

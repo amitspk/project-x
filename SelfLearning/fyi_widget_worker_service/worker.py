@@ -24,9 +24,7 @@ from fyi_widget_worker_service.utils import extract_domain
 from fyi_widget_worker_service.core.config import get_config, WorkerServiceConfig
 
 # Import services
-from fyi_widget_worker_service.services.blog_processing_service import BlogProcessingService
 from fyi_widget_worker_service.services.content_retrieval_service import ContentRetrievalService
-from fyi_widget_worker_service.services.threshold_service import ThresholdService
 from fyi_widget_worker_service.services.llm_generation_service import LLMGenerationService
 
 # Import metrics
@@ -62,9 +60,7 @@ class BlogProcessingWorker:
         blog_audit_repo_factory: Callable[[], BlogProcessingAuditRepository],  # V2: blog_processing_audit
         llm_service_factory: Callable[[], LLMContentGenerator],
         content_retrieval_service_factory: Callable[[BlogCrawler, BlogContentRepository], ContentRetrievalService],
-        threshold_service_factory: Callable[[BlogContentRepository, JobRepository], ThresholdService],
         llm_generation_service_factory: Callable[[LLMContentGenerator], LLMGenerationService],
-        blog_processing_service_factory: Callable[[JobRepository, PublisherRepository, BlogContentRepository, ContentRetrievalService, ThresholdService, LLMGenerationService], BlogProcessingService],
     ):
         """
         Initialize worker with configuration and dependencies.
@@ -87,9 +83,7 @@ class BlogProcessingWorker:
             blog_audit_repo_factory: Factory function that returns BlogProcessingAuditRepository (V2 architecture)
             llm_service_factory: Factory function that takes no args and returns LLMContentGenerator
             content_retrieval_service_factory: Factory function that creates ContentRetrievalService
-            threshold_service_factory: Factory function that creates ThresholdService
             llm_generation_service_factory: Factory function that creates LLMGenerationService
-            blog_processing_service_factory: Factory function that creates BlogProcessingService
         """
         self.config = config
         self.db_manager = db_manager
@@ -103,9 +97,7 @@ class BlogProcessingWorker:
         self.blog_audit_repo_factory = blog_audit_repo_factory
         self.llm_service_factory = llm_service_factory
         self.content_retrieval_service_factory = content_retrieval_service_factory
-        self.threshold_service_factory = threshold_service_factory
         self.llm_generation_service_factory = llm_generation_service_factory
-        self.blog_processing_service_factory = blog_processing_service_factory
         
         # Dependencies (initialized in start() using factory functions)
         self.job_repo: Optional[JobRepository] = None  # V1 (legacy)
@@ -114,7 +106,6 @@ class BlogProcessingWorker:
         self.publisher_repo: Optional[PublisherRepository] = None
         self.llm_service: Optional[LLMContentGenerator] = None
         self.storage: Optional[BlogContentRepository] = None
-        self.blog_processing_service: Optional[BlogProcessingService] = None
         
         # Worker ID for tracking (used in heartbeats and audit)
         self.worker_id = f"worker_{os.getpid()}"
@@ -168,19 +159,8 @@ class BlogProcessingWorker:
         
         # 4. Create specialized services using factories (pure DI)
         content_retrieval_service = self.content_retrieval_service_factory(self.crawler, self.storage)
-        threshold_service = self.threshold_service_factory(self.storage, self.job_repo)
         llm_generation_service = self.llm_generation_service_factory(self.llm_service)
-        
-        # 5. Create blog processing service using factory (pure DI)
-        self.blog_processing_service = self.blog_processing_service_factory(
-            self.job_repo,
-            self.publisher_repo,
-            self.storage,
-            content_retrieval_service,
-            threshold_service,
-            llm_generation_service
-        )
-        logger.info("✅ Blog processing service initialized")
+        logger.info("✅ Worker services initialized (V2 architecture - threshold check moved to API)")
         
         # Start metrics server
         start_metrics_server(self.config.metrics_port)
@@ -364,55 +344,7 @@ class BlogProcessingWorker:
                 publisher_domain=publisher_domain
             )
             
-            # Step 3: Check threshold (reuse existing service)
-            threshold_service = self.threshold_service_factory(self.storage, self.job_repo)
-            should_process, _ = await threshold_service.should_process_blog(
-                blog_id=blog_id,
-                blog_doc=blog_doc,
-                config=config,
-                job_id=None  # V2: No job_id, using blog_processing_queue
-            )
-            
-            if not should_process:
-                logger.info(f"⏭️  [{self.worker_id}] Skipping blog due to threshold: {url}")
-                
-                # Mark as completed (but skipped)
-                await self.blog_queue_repo.atomic_update_status(
-                    url=url,
-                    from_status=BlogProcessingStatus.PROCESSING,
-                    to_status=BlogProcessingStatus.COMPLETED,
-                    updates={
-                        "completed_at": datetime.utcnow(),
-                        "last_error": "Skipped due to threshold limits"
-                    }
-                )
-                
-                # Release blog slot only if not a reprocess of completed blog
-                if not was_previously_completed:
-                    await self.publisher_repo.release_blog_slot(
-                        publisher_id=publisher_id,
-                        processed=False
-                    )
-                    logger.info(f"[{self.worker_id}] ✅ Released slot for skipped blog")
-                else:
-                    logger.info(f"[{self.worker_id}] ⏭️  Skipped slot release (reprocessing completed blog)")
-                
-                # Write audit entry
-                await self.blog_audit_repo.insert_audit_entry(
-                    url=url,
-                    publisher_id=publisher_id,
-                    job_id=None,  # V2: No job_id
-                    worker_id=self.worker_id,
-                    status=AuditStatus.COMPLETED,
-                    attempt_number=attempt,
-                    processing_time_seconds=time.time() - start_time,
-                    started_at=datetime.utcnow(),
-                    completed_at=datetime.utcnow(),
-                )
-                
-                return
-            
-            # Step 4: Generate LLM content
+            # Step 3: Generate LLM content
             llm_generation_service = self.llm_generation_service_factory(self.llm_service)
             
             summary_text, key_points, llm_generated_title = await llm_generation_service.generate_summary(
@@ -433,7 +365,7 @@ class BlogProcessingWorker:
                 publisher_domain=publisher_domain
             )
             
-            # Step 5: Save results to database
+            # Step 4: Save results to database
             final_title = llm_generated_title if llm_generated_title else crawl_result.title
             
             # Save summary
@@ -476,7 +408,7 @@ class BlogProcessingWorker:
             
             processing_duration = time.time() - start_time
             
-            # Step 6: Mark as completed in blog_processing_queue
+            # Step 5: Mark as completed in blog_processing_queue
             await self.blog_queue_repo.atomic_update_status(
                 url=url,
                 from_status=BlogProcessingStatus.PROCESSING,
@@ -488,7 +420,7 @@ class BlogProcessingWorker:
                 }
             )
             
-            # Step 7: Release blog slot and record successful processing
+            # Step 6: Release blog slot and record successful processing
             # Skip if this is a reprocess of an already-completed blog (stats already counted)
             if not was_previously_completed:
                 await self.publisher_repo.release_blog_slot(
@@ -503,7 +435,7 @@ class BlogProcessingWorker:
                     f"questions updated but stats not recounted (already processed)"
                 )
             
-            # Step 8: Write audit entry (success)
+            # Step 7: Write audit entry (success)
             await self.blog_audit_repo.insert_audit_entry(
                 url=url,
                 publisher_id=publisher_id,
@@ -652,31 +584,9 @@ async def main():
         """Factory function for ContentRetrievalService."""
         return ContentRetrievalService(crawler=crawler, storage=storage)
     
-    def create_threshold_service(storage: BlogContentRepository, job_repo: JobRepository) -> ThresholdService:
-        """Factory function for ThresholdService."""
-        return ThresholdService(storage=storage, job_repo=job_repo)
-    
     def create_llm_generation_service(llm_service: LLMContentGenerator) -> LLMGenerationService:
         """Factory function for LLMGenerationService."""
         return LLMGenerationService(llm_service=llm_service)
-    
-    def create_blog_processing_service(
-        job_repo: JobRepository,
-        publisher_repo: PublisherRepository,
-        storage: BlogContentRepository,
-        content_retrieval_service: ContentRetrievalService,
-        threshold_service: ThresholdService,
-        llm_generation_service: LLMGenerationService
-    ) -> BlogProcessingService:
-        """Factory function for BlogProcessingService."""
-        return BlogProcessingService(
-            job_repo=job_repo,
-            publisher_repo=publisher_repo,
-            storage=storage,
-            content_retrieval_service=content_retrieval_service,
-            threshold_service=threshold_service,
-            llm_generation_service=llm_generation_service
-        )
     
     # Create and start worker with injected dependencies and factories
     worker = BlogProcessingWorker(
@@ -690,9 +600,7 @@ async def main():
         blog_audit_repo_factory=create_blog_audit_repo,  # V2
         llm_service_factory=create_llm_service,
         content_retrieval_service_factory=create_content_retrieval_service,
-        threshold_service_factory=create_threshold_service,
         llm_generation_service_factory=create_llm_generation_service,
-        blog_processing_service_factory=create_blog_processing_service
     )
     
     try:

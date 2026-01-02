@@ -8,6 +8,7 @@ from fyi_widget_api.api.models import CheckAndLoadResponse, StandardErrorRespons
 from fyi_widget_api.api.models.publisher_models import Publisher
 from fyi_widget_api.api.repositories import QuestionRepository, PublisherRepository
 from fyi_widget_api.api.repositories.blog_processing_queue_repository import BlogProcessingQueueRepository
+from fyi_widget_api.api.repositories.blog_metadata_repository import BlogMetadataRepository
 from fyi_widget_api.api.services.blog_processing_service import BlogProcessingService
 from fyi_widget_api.api.utils import (
     normalize_url,
@@ -43,11 +44,18 @@ def get_publisher_repository_v2(request: Request) -> PublisherRepository:
     return request.app.state.publisher_repo
 
 
+def get_blog_metadata_repository_v2(request: Request) -> BlogMetadataRepository:
+    """Get blog metadata repository from app state."""
+    db = request.app.state.mongodb_database
+    return BlogMetadataRepository(database=db)
+
+
 # Dependency injection for v2 service
 def get_blog_processing_service(
     queue_repo: BlogProcessingQueueRepository = Depends(get_blog_queue_repository),
     question_repo: QuestionRepository = Depends(get_question_repository_v2),
     publisher_repo: PublisherRepository = Depends(get_publisher_repository_v2),
+    metadata_repo: BlogMetadataRepository = Depends(get_blog_metadata_repository_v2),
 ) -> BlogProcessingService:
     """
     Get BlogProcessingService with all dependencies injected.
@@ -59,6 +67,7 @@ def get_blog_processing_service(
         queue_repo=queue_repo,
         question_repo=question_repo,
         publisher_repo=publisher_repo,
+        metadata_repo=metadata_repo,
     )
 
 

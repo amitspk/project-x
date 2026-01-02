@@ -21,6 +21,7 @@ from fyi_widget_api.config.config import get_config
 from fyi_widget_api.api.core.database import DatabaseManager
 from fyi_widget_api.api.repositories import JobRepository, PublisherRepository
 from fyi_widget_api.api.repositories.blog_processing_queue_repository import BlogProcessingQueueRepository
+from fyi_widget_api.api.repositories.blog_metadata_repository import BlogMetadataRepository
 
 # Configure logging
 logging.basicConfig(
@@ -59,6 +60,11 @@ async def lifespan(app: FastAPI):
     blog_queue_repo = BlogProcessingQueueRepository(db_manager.database)
     await blog_queue_repo.create_indexes()
     logger.info("✅ Blog processing queue indexes created")
+    
+    # Create indexes for blog metadata (threshold tracking)
+    blog_metadata_repo = BlogMetadataRepository(db_manager.database)
+    await blog_metadata_repo.create_indexes()
+    logger.info("✅ Blog metadata indexes created")
     
     # Connect to PostgreSQL for publisher configs
     publisher_repo_instance = PublisherRepository(config.postgres_url)
