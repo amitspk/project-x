@@ -13,7 +13,6 @@ from fyi_widget_worker_service.core.database import DatabaseManager
 from fyi_widget_worker_service.repositories import JobRepository, PublisherRepository
 from fyi_widget_worker_service.repositories.blog_processing_queue_repository import BlogProcessingQueueRepository
 from fyi_widget_worker_service.repositories.blog_processing_audit_repository import BlogProcessingAuditRepository
-from fyi_widget_worker_service.models.job_models import ProcessingJob
 from fyi_widget_worker_service.models.blog_processing_models import BlogProcessingStatus, AuditStatus
 from fyi_widget_worker_service.services.blog_crawler import BlogCrawler
 from fyi_widget_worker_service.services.llm_content_generator import LLMContentGenerator
@@ -33,7 +32,6 @@ from fyi_widget_worker_service.core.metrics import (
     poll_iterations_total,
     poll_errors_total,
     worker_uptime_seconds,
-    jobs_polled_total,
 )
 from fyi_widget_worker_service.core.metrics_server import start_metrics_server
 
@@ -421,15 +419,6 @@ class BlogProcessingWorker:
             # The error is already handled in process_blog_v2
             # (status updated to RETRY or FAILED, audit entry written)
             # So we just log and continue
-    
-    async def process_job(self, job: ProcessingJob):
-        """
-        Process a single job (V1 - Legacy).
-        
-        Args:
-            job: Job to process
-        """
-        await self.blog_processing_service.process_job(job)
     
     async def process_blog_v2(self, blog_entry: Dict[str, Any]):
         """

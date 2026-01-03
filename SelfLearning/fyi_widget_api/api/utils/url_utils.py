@@ -99,27 +99,6 @@ def normalize_url(url: str) -> str:
     return normalized
 
 
-def are_urls_equivalent(url1: str, url2: str) -> bool:
-    """
-    Check if two URLs are equivalent after normalization.
-    
-    Args:
-        url1: First URL
-        url2: Second URL
-        
-    Returns:
-        True if URLs are equivalent, False otherwise
-        
-    Examples:
-        >>> are_urls_equivalent("https://www.example.com", "https://example.com")
-        True
-        
-        >>> are_urls_equivalent("https://example.com/path/", "https://example.com/path")
-        True
-    """
-    return normalize_url(url1) == normalize_url(url2)
-
-
 def extract_domain(url: str) -> str:
     """
     Extract the normalized domain from a URL.

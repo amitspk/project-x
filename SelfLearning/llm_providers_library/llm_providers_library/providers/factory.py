@@ -64,57 +64,10 @@ class LLMProviderConfigManager:
             f"Supported models: {supported_models}. "
             f"Or use models starting with: {supported_prefixes}"
         )
-    
-    def add_model(self, model: str, provider: str) -> None:
-        """
-        Add a new model-to-provider mapping.
-        
-        Args:
-            model: Model identifier (will be lowercased)
-            provider: Provider name ("openai", "anthropic", "gemini", etc.)
-        """
-        self._model_to_provider[model.lower()] = provider.lower()
-        logger.info(f"✅ Added model mapping: {model} -> {provider}")
-    
-    def add_prefix(self, prefix: str, provider: str) -> None:
-        """
-        Add a new prefix-to-provider mapping.
-        
-        Args:
-            prefix: Model prefix (e.g., "gpt-", "claude-", "gemini-")
-            provider: Provider name ("openai", "anthropic", etc.)
-        """
-        self._prefix_to_provider[prefix.lower()] = provider.lower()
-        logger.info(f"✅ Added prefix mapping: {prefix} -> {provider}")
-    
-    def get_all_models(self) -> dict:
-        """Get all configured model mappings."""
-        return self._model_to_provider.copy()
-    
-    def get_all_prefixes(self) -> dict:
-        """Get all configured prefix mappings."""
-        return self._prefix_to_provider.copy()
 
 
 # Global configuration manager instance (singleton pattern)
 _provider_config = LLMProviderConfigManager()
-
-
-def get_provider_config() -> LLMProviderConfigManager:
-    """
-    Get the global LLM provider configuration manager instance.
-    
-    Use this to modify model-to-provider mappings at runtime:
-    
-    Example:
-        config = get_provider_config()
-        config.add_model("gpt-5", "openai")
-        config.add_prefix("gemini-", "gemini")
-    
-    Returns:
-        LLMProviderConfigManager instance
-    """
-    return _provider_config
 
 
 def get_provider_for_model(model: str) -> str:
@@ -135,7 +88,7 @@ def get_provider_for_model(model: str) -> str:
     return _provider_config.get_provider_for_model(model)
 
 
-def get_api_key_for_provider(provider: str, model: Optional[str] = None) -> str:
+def get_api_key_for_provider(provider: str) -> str:
     """
     Get API key for the specified provider from library config.
     
@@ -143,7 +96,6 @@ def get_api_key_for_provider(provider: str, model: Optional[str] = None) -> str:
     
     Args:
         provider: Provider name ("openai", "anthropic", "gemini", etc.)
-        model: Optional model name for fallback logic (not used currently)
         
     Returns:
         API key string
@@ -219,7 +171,7 @@ class LLMProviderFactory:
                 embedding_model = LLMModelConfig.DEFAULT_GEMINI_EMBEDDING_MODEL
         
         # Get API key from library config (reads from env vars using BaseSettings)
-        api_key = get_api_key_for_provider(provider, model)
+        api_key = get_api_key_for_provider(provider)
         
         # Create provider instance
         if provider == "openai":
