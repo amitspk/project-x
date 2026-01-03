@@ -8,7 +8,6 @@ from .response_models import (
     ResponseMetadata,
 )
 
-from .job_models import JobStatus, JobResult, JobCreateRequest, JobStatusResponse
 
 from .publisher_models import (
     Publisher,
@@ -39,13 +38,8 @@ from .swagger_models import (
     StandardSuccessResponse,
     StandardErrorResponse,
     # Questions
-    QuestionsByUrlResponse,
     QuestionByIdResponse,
     CheckAndLoadResponse,
-    # Jobs
-    ProcessJobResponse,
-    JobStatusResponse as SwaggerJobStatusResponse,
-    JobStatsResponse,
     # QA
     QAResponse,
     # Search
@@ -82,11 +76,6 @@ __all__ = [
     "ErrorResponse",
     "ErrorDetail",
     "ResponseMetadata",
-    # Job models
-    "JobStatus",
-    "JobResult",
-    "JobCreateRequest",
-    "JobStatusResponse",
     # Publisher models
     "Publisher",
     "PublisherConfig",
@@ -108,12 +97,8 @@ __all__ = [
     # Swagger models
     "StandardSuccessResponse",
     "StandardErrorResponse",
-    "QuestionsByUrlResponse",
     "QuestionByIdResponse",
     "CheckAndLoadResponse",
-    "ProcessJobResponse",
-    "SwaggerJobStatusResponse",
-    "JobStatsResponse",
     "QAResponse",
     "SearchResponse",
     "PublisherOnboardResponse",

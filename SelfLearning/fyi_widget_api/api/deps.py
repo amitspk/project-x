@@ -3,7 +3,7 @@
 from fastapi import Depends, HTTPException, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from fyi_widget_api.api.repositories import JobRepository, PublisherRepository, QuestionRepository
+from fyi_widget_api.api.repositories import PublisherRepository, QuestionRepository
 from fyi_widget_api.api.repositories.blog_processing_queue_repository import BlogProcessingQueueRepository
 from fyi_widget_api.api.repositories.blog_processing_audit_repository import BlogProcessingAuditRepository
 from fyi_widget_api.api.repositories.blog_metadata_repository import BlogMetadataRepository
@@ -15,13 +15,6 @@ def get_mongo_db(request: Request) -> AsyncIOMotorDatabase:
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
     return db
-
-
-def get_job_repository(
-    db: AsyncIOMotorDatabase = Depends(get_mongo_db),
-) -> JobRepository:
-    """Provide a JobRepository bound to the current Mongo database."""
-    return JobRepository(db)
 
 
 def get_question_repository(

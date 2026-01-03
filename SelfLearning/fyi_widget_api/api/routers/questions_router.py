@@ -2,10 +2,13 @@
 
 import logging
 from typing import Dict, Any
-from fastapi import APIRouter, HTTPException, Query, Request, Depends
-from fyi_widget_api.api.models import QuestionsByUrlResponse, QuestionByIdResponse, CheckAndLoadResponse, StandardErrorResponse
+from fastapi import APIRouter, HTTPException, Query, Request, Depends, Security
+from fyi_widget_api.api.models import QuestionByIdResponse, CheckAndLoadResponse, StandardErrorResponse
 from fyi_widget_api.api.models.publisher_models import Publisher
-from fyi_widget_api.api.repositories import JobRepository, QuestionRepository
+from fyi_widget_api.api.repositories import QuestionRepository, PublisherRepository
+from fyi_widget_api.api.repositories.blog_processing_queue_repository import BlogProcessingQueueRepository
+from fyi_widget_api.api.repositories.blog_metadata_repository import BlogMetadataRepository
+from fyi_widget_api.api.services.blog_processing_service import BlogProcessingService
 from fyi_widget_api.api.utils import (
     normalize_url,
     success_response,
@@ -15,15 +18,48 @@ from fyi_widget_api.api.utils import (
 )
 
 # Import auth/deps
-from fyi_widget_api.api.auth import get_current_publisher, verify_admin_key
+from fyi_widget_api.api.auth import get_current_publisher, verify_admin_key, publisher_key_header
 from fyi_widget_api.api.services.auth_service import validate_blog_url_domain
-from fyi_widget_api.api.deps import get_job_repository, get_question_repository, get_publisher_repo
-from fyi_widget_api.api.repositories import PublisherRepository
+from fyi_widget_api.api.deps import get_question_repository, get_publisher_repo
 from fyi_widget_api.api.services.question_service import QuestionService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# Dependency injection for BlogProcessingService (v2 architecture)
+def get_blog_queue_repository(request: Request) -> BlogProcessingQueueRepository:
+    """Get blog processing queue repository from app state."""
+    db = request.app.state.mongodb_database
+    return BlogProcessingQueueRepository(database=db)
+
+
+def get_blog_metadata_repository(request: Request) -> BlogMetadataRepository:
+    """Get blog metadata repository from app state."""
+    db = request.app.state.mongodb_database
+    return BlogMetadataRepository(database=db)
+
+
+def get_blog_processing_service(
+    request: Request,
+    queue_repo: BlogProcessingQueueRepository = Depends(get_blog_queue_repository),
+    question_repo: QuestionRepository = Depends(get_question_repository),
+    publisher_repo: PublisherRepository = Depends(get_publisher_repo),
+    metadata_repo: BlogMetadataRepository = Depends(get_blog_metadata_repository),
+) -> BlogProcessingService:
+    """
+    Get BlogProcessingService with all dependencies injected.
+    
+    This follows proper DI pattern - the service is created with its dependencies,
+    not manually instantiated in the endpoint.
+    """
+    return BlogProcessingService(
+        queue_repo=queue_repo,
+        question_repo=question_repo,
+        publisher_repo=publisher_repo,
+        metadata_repo=metadata_repo,
+    )
 
 
 @router.get(
@@ -33,39 +69,35 @@ router = APIRouter()
         200: {"description": "Questions ready or processing initiated"},
         401: {"model": StandardErrorResponse, "description": "Authentication required"},
         403: {"model": StandardErrorResponse, "description": "Publisher account not active or domain mismatch"}
-    }
+    },
+    dependencies=[Security(publisher_key_header)]
 )
 async def check_and_load_questions(
     request: Request,
     blog_url: str = Query(..., description="The blog URL to check and load questions for"),
     publisher: Publisher = Depends(get_current_publisher),
-    question_repo: QuestionRepository = Depends(get_question_repository),
-    job_repo: JobRepository = Depends(get_job_repository),
-    publisher_repo: PublisherRepository = Depends(get_publisher_repo),
+    blog_processing_service: BlogProcessingService = Depends(get_blog_processing_service),
 ) -> Dict[str, Any]:
     """
-    Intelligent endpoint that checks if questions exist and loads them, or initiates processing.
+    Smart question loading endpoint (uses v2 architecture).
     
     **Authentication**: Requires X-API-Key header with valid publisher API key.
     
     **Smart Loading Strategy**:
-    1. First checks if questions already exist for the URL
-    2. If YES → Returns questions immediately (fast path ⚡)
-    3. If NO → Checks if processing job exists
-    4. If job exists → Returns job status
-    5. If no job → Auto-creates processing job
+    1. First checks if questions already exist (fast path ⚡)
+    2. If YES → Returns questions immediately
+    3. If NO → Checks `blog_processing_queue` for current state
+    4. Creates entry + reserves slot if new blog
+    5. Returns current status if already queued/processing
+    6. Auto-requeues if previously failed
     
     **Response States**:
     - `ready`: Questions are available and returned
-    - `processing`: Job is currently processing (returns job_id)
-    - `not_started`: New job created (returns job_id)
-    - `failed`: Previous processing failed (can retry)
-    
-    **Benefits**:
-    - Single API call for UI
-    - Optimal performance (returns cached questions if available)
-    - Automatic job creation if needed
-    - No duplicate processing jobs
+    - `queued`: Job is queued for processing
+    - `processing`: Job is currently processing
+    - `retry`: Job is queued for retry after failure
+    - `failed`: Processing failed (will auto-requeue on next call)
+    - `threshold_not_met`: Request count hasn't reached threshold yet
     """
     request_id = getattr(request.state, 'request_id', None) or generate_request_id()
     
@@ -77,14 +109,8 @@ async def check_and_load_questions(
         # Validate blog URL domain matches publisher's domain
         await validate_blog_url_domain(normalized_url, publisher)
         
-        # Instantiate service with injected dependencies
-        question_service = QuestionService(
-            question_repo=question_repo,
-            job_repo=job_repo,
-            publisher_repo=publisher_repo,
-        )
-        
-        result_data = await question_service.check_and_load_questions(
+        # Service is already injected via DI - no need to create it manually
+        result_data = await blog_processing_service.check_and_load_questions(
             normalized_url=normalized_url,
             publisher=publisher,
             request_id=request_id,
@@ -117,95 +143,6 @@ async def check_and_load_questions(
         )
 
 
-@router.get(
-    "/by-url",
-    response_model=QuestionsByUrlResponse,
-    responses={
-        200: {"description": "Questions retrieved successfully"},
-        401: {"model": StandardErrorResponse, "description": "Authentication required - X-API-Key header missing"},
-        403: {"model": StandardErrorResponse, "description": "Publisher account not active or domain mismatch"},
-        404: {"model": StandardErrorResponse, "description": "No questions found for the given URL"}
-    }
-)
-async def get_questions_by_url(
-    request: Request,
-    blog_url: str = Query(..., description="The blog URL to get questions for"),
-    publisher: Publisher = Depends(get_current_publisher),
-    question_repo: QuestionRepository = Depends(get_question_repository),
-    job_repo: JobRepository = Depends(get_job_repository),
-    publisher_repo: PublisherRepository = Depends(get_publisher_repo),
-) -> Dict[str, Any]:
-    """
-    Get all questions for a specific blog URL.
-    
-    **Authentication**: Requires X-API-Key header with valid publisher API key.
-    
-    Questions are randomized on each request for better user experience.
-    
-    Returns standardized format:
-    {
-        "status": "success",
-        "status_code": 200,
-        "message": "Questions retrieved successfully",
-        "result": {...},
-        "request_id": "req_abc123",
-        "timestamp": "2025-10-18T14:30:00.123Z"
-    }
-    """
-    # Get request_id from middleware (fallback to generating one if not available)
-    request_id = getattr(request.state, 'request_id', None) or generate_request_id()
-    
-    try:
-        # Normalize the URL for consistent lookups
-        normalized_url = normalize_url(blog_url)
-        
-        logger.info(f"[{request_id}] 📖 Getting questions for URL: {normalized_url}")
-        
-        # Validate blog URL domain matches publisher's domain
-        await validate_blog_url_domain(normalized_url, publisher)
-        logger.info(f"[{request_id}] ✅ Publisher authenticated: {publisher.name} ({publisher.domain})")
-        
-        # Instantiate service with injected dependencies
-        question_service = QuestionService(
-            question_repo=question_repo,
-            job_repo=job_repo,
-            publisher_repo=publisher_repo,
-        )
-        
-        result_data = await question_service.get_questions_by_url(
-            normalized_url=normalized_url,
-            publisher=publisher,
-            request_id=request_id,
-            original_blog_url=blog_url,
-        )
-
-        return success_response(
-            result=result_data,
-            message="Questions retrieved successfully",
-            status_code=200,
-            request_id=request_id
-        )
-        
-    except HTTPException as exc:
-        logger.error(f"[{request_id}] ❌ HTTP error: {exc.detail}")
-        response_data = handle_http_exception(exc, request_id=request_id)
-        raise HTTPException(
-            status_code=response_data["status_code"],
-            detail=response_data
-        )
-    except Exception as e:
-        logger.error(f"[{request_id}] ❌ Failed to get questions by URL: {e}", exc_info=True)
-        response_data = handle_generic_exception(
-            e,
-            message="Failed to retrieve questions",
-            request_id=request_id
-        )
-        raise HTTPException(
-            status_code=response_data["status_code"],
-            detail=response_data
-        )
-
-
 @router.delete(
     "/{blog_id}",
     dependencies=[Depends(verify_admin_key)],
@@ -220,7 +157,6 @@ async def delete_blog_by_id(
     request: Request,
     blog_id: str,
     question_repo: QuestionRepository = Depends(get_question_repository),
-    job_repo: JobRepository = Depends(get_job_repository),
     publisher_repo: PublisherRepository = Depends(get_publisher_repo),
 ) -> Dict[str, Any]:
     """
@@ -258,7 +194,6 @@ async def delete_blog_by_id(
         # Instantiate service with injected dependencies
         question_service = QuestionService(
             question_repo=question_repo,
-            job_repo=job_repo,
             publisher_repo=publisher_repo,
         )
         
@@ -320,7 +255,6 @@ async def get_question_by_id(
     question_id: str,
     publisher: Publisher = Depends(get_current_publisher),
     question_repo: QuestionRepository = Depends(get_question_repository),
-    job_repo: JobRepository = Depends(get_job_repository),
     publisher_repo: PublisherRepository = Depends(get_publisher_repo),
 ) -> Dict[str, Any]:
     """
@@ -347,7 +281,6 @@ async def get_question_by_id(
         # Instantiate service with injected dependencies
         question_service = QuestionService(
             question_repo=question_repo,
-            job_repo=job_repo,
             publisher_repo=publisher_repo,
         )
         

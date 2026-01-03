@@ -8,8 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.openapi.utils import get_openapi
 
 # Import routers
-from fyi_widget_api.api.routers import questions_router, search_router, qa_router, blogs_router, publishers_router
-from fyi_widget_api.api.routers.v2 import questions_router_v2, admin_router_v2
+from fyi_widget_api.api.routers import questions_router, search_router, qa_router, publishers_router, admin_router
 
 # Import middleware (via core package)
 from fyi_widget_api.api.core.middleware import RequestIDMiddleware
@@ -19,7 +18,7 @@ from fyi_widget_api.config.config import get_config
 
 # Import local repositories and database manager
 from fyi_widget_api.api.core.database import DatabaseManager
-from fyi_widget_api.api.repositories import JobRepository, PublisherRepository
+from fyi_widget_api.api.repositories import PublisherRepository
 from fyi_widget_api.api.repositories.blog_processing_queue_repository import BlogProcessingQueueRepository
 from fyi_widget_api.api.repositories.blog_metadata_repository import BlogMetadataRepository
 
@@ -51,12 +50,7 @@ async def lifespan(app: FastAPI):
     )
     logger.info("✅ MongoDB connected")
     
-    # Create indexes for job queue (v1)
-    job_repo = JobRepository(db_manager.database)
-    await job_repo.create_indexes()
-    logger.info("✅ Job queue indexes created")
-    
-    # Create indexes for blog processing queue (v2)
+    # Create indexes for blog processing queue
     blog_queue_repo = BlogProcessingQueueRepository(db_manager.database)
     await blog_queue_repo.create_indexes()
     logger.info("✅ Blog processing queue indexes created")
@@ -105,7 +99,7 @@ app = FastAPI(
     - Header: `X-Admin-Key: admin_your-key-here`
     
     ### Publisher Authentication (X-API-Key)
-    - Required for content endpoints: `/api/v1/questions/by-url`, `/api/v1/jobs/process`
+    - Required for content endpoints: `/api/v1/questions/check-and-load`
     - Each publisher gets a unique API key upon onboarding
     - Validates domain ownership automatically
     - Header: `X-API-Key: pub_your-key-here`
@@ -267,12 +261,10 @@ app.openapi = custom_openapi
 app.include_router(questions_router.router, prefix="/api/v1/questions", tags=["Questions (v1)"])
 app.include_router(search_router.router, prefix="/api/v1/search", tags=["Search"])
 app.include_router(qa_router.router, prefix="/api/v1/qa", tags=["Q&A"])
-app.include_router(blogs_router.router, prefix="/api/v1/jobs", tags=["Jobs"])
 app.include_router(publishers_router.router, prefix="/api/v1/publishers", tags=["Publishers"])
 
-# V2 Routers (New Architecture)
-app.include_router(questions_router_v2.router, prefix="/api/v2/questions", tags=["Questions (v2) - New Architecture"])
-app.include_router(admin_router_v2.router, prefix="/api/v2/admin", tags=["Admin (v2) - New Architecture"])
+# Admin Router
+app.include_router(admin_router.router, prefix="/api/v1/admin", tags=["Admin"])
 
 
 @app.get("/health")
@@ -282,16 +274,11 @@ async def health_check():
         # Check database
         db_healthy = await db_manager.health_check()
         
-        # Get job stats
-        job_repo = JobRepository(db_manager.database)
-        job_stats = await job_repo.get_job_stats()
-        
         return {
             "status": "healthy" if db_healthy else "degraded",
             "service": "api-service",
             "version": "2.0.0",
-            "database": "connected" if db_healthy else "disconnected",
-            "job_queue": job_stats
+            "database": "connected" if db_healthy else "disconnected"
         }
     except Exception as e:
         logger.error(f"❌ Health check failed: {e}")
@@ -324,14 +311,9 @@ async def root():
         "version": "2.0.0",
         "description": "Fast read path and job enqueueing",
         "endpoints": {
-            "questions": "/api/v1/questions/by-url",
+            "questions": "/api/v1/questions/check-and-load",
             "search": "/api/v1/search/similar",
             "qa": "/api/v1/qa/ask",
-            "jobs": {
-                "enqueue": "/api/v1/jobs/process",
-                "status": "/api/v1/jobs/status/{job_id}",
-                "stats": "/api/v1/jobs/stats"
-            },
             "health": "/health",
             "metrics": "/metrics",
             "docs": "/docs"

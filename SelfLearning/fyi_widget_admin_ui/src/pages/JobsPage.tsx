@@ -9,7 +9,7 @@ const JobsPage = () => {
   const { notify } = useNotifications();
   const [loadingStats, setLoadingStats] = useState(false);
   const [stats, setStats] = useState<{ queue_stats: Record<string, number>; total_jobs: number } | null>(null);
-  const [jobId, setJobId] = useState('');
+  const [blogUrl, setBlogUrl] = useState('');
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   const [jobLoading, setJobLoading] = useState(false);
 
@@ -30,34 +30,19 @@ const JobsPage = () => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const lookupJob = async () => {
-    if (!jobId.trim()) {
-      notify({ title: 'Enter a job ID', type: 'info' });
+    if (!blogUrl.trim()) {
+      notify({ title: 'Enter a blog URL', type: 'info' });
       return;
     }
     setJobLoading(true);
     try {
-      const status = await api.getJobStatus(jobId.trim());
+      const status = await api.getJobStatus(blogUrl.trim());
       setJobStatus(status);
     } catch (error: any) {
       setJobStatus(null);
       notify({ title: 'Failed to fetch job status', description: error.message ?? String(error), type: 'error' });
     } finally {
       setJobLoading(false);
-    }
-  };
-
-  const cancelJob = async () => {
-    if (!jobId.trim()) {
-      notify({ title: 'Enter a job ID first', type: 'info' });
-      return;
-    }
-    try {
-      await api.cancelJob(jobId.trim());
-      notify({ title: `Job ${jobId.trim()} cancelled`, type: 'success' });
-      await refreshStats();
-      await lookupJob();
-    } catch (error: any) {
-      notify({ title: 'Failed to cancel job', description: error.message ?? String(error), type: 'error' });
     }
   };
 
@@ -101,63 +86,65 @@ const JobsPage = () => {
       </section>
 
       <section className="rounded-xl bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold">Inspect or cancel a job</h2>
+        <h2 className="text-xl font-semibold">Inspect a blog</h2>
         <p className="mt-2 max-w-2xl text-sm text-slate-500">
-          Provide a job ID to see its latest status, timestamps, and any failure reason. You can cancel pending jobs from
-          here.
+          Provide a blog URL to see its current processing status, timestamps, and any errors.
         </p>
         <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center">
           <input
             type="text"
-            value={jobId}
-            onChange={(event) => setJobId(event.target.value)}
-            placeholder="job-uuid"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 md:w-72"
+            value={blogUrl}
+            onChange={(event) => setBlogUrl(event.target.value)}
+            placeholder="https://example.com/article"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 md:flex-1"
           />
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void lookupJob()}
-              disabled={jobLoading}
-              className="inline-flex items-center rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40"
-            >
-              {jobLoading ? 'Fetching…' : 'Get status'}
-            </button>
-            <button
-              type="button"
-              onClick={() => void cancelJob()}
-              className="inline-flex items-center rounded-md bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500"
-            >
-              Cancel job
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => void lookupJob()}
+            disabled={jobLoading}
+            className="inline-flex items-center rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+          >
+            {jobLoading ? 'Fetching…' : 'Get status'}
+          </button>
         </div>
 
         {jobStatus && (
           <dl className="mt-6 grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs text-slate-700 md:grid-cols-2">
-            <div>
-              <dt className="text-slate-500">Job ID</dt>
-              <dd className="mt-1 break-words text-slate-900">{jobStatus.job_id}</dd>
+            <div className="md:col-span-2">
+              <dt className="text-slate-500">Blog URL</dt>
+              <dd className="mt-1 break-words text-slate-900">{jobStatus.url}</dd>
             </div>
             <div>
               <dt className="text-slate-500">Status</dt>
               <dd className="mt-1 uppercase tracking-wide text-slate-900">{jobStatus.status}</dd>
             </div>
-            {jobStatus.publisher_domain && (
+            <div>
+              <dt className="text-slate-500">Publisher ID</dt>
+              <dd className="mt-1 text-slate-900">{jobStatus.publisher_id}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Attempt Count</dt>
+              <dd className="mt-1 text-slate-900">{jobStatus.attempt_count}</dd>
+            </div>
+            {jobStatus.current_job_id && (
               <div>
-                <dt className="text-slate-500">Publisher domain</dt>
-                <dd className="mt-1 text-slate-900">{jobStatus.publisher_domain}</dd>
+                <dt className="text-slate-500">Current Job ID</dt>
+                <dd className="mt-1 break-words text-slate-900">{jobStatus.current_job_id}</dd>
               </div>
             )}
-            {jobStatus.blog_url && (
+            {jobStatus.worker_id && (
               <div>
-                <dt className="text-slate-500">Blog URL</dt>
-                <dd className="mt-1 break-words text-slate-900">{jobStatus.blog_url}</dd>
+                <dt className="text-slate-500">Worker ID</dt>
+                <dd className="mt-1 text-slate-900">{jobStatus.worker_id}</dd>
               </div>
             )}
             <div>
               <dt className="text-slate-500">Created</dt>
               <dd className="mt-1 text-slate-900">{formatDate(jobStatus.created_at)}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Updated</dt>
+              <dd className="mt-1 text-slate-900">{formatDate(jobStatus.updated_at)}</dd>
             </div>
             <div>
               <dt className="text-slate-500">Started</dt>
@@ -167,10 +154,28 @@ const JobsPage = () => {
               <dt className="text-slate-500">Completed</dt>
               <dd className="mt-1 text-slate-900">{formatDate(jobStatus.completed_at)}</dd>
             </div>
-            {jobStatus.failure_reason && (
+            {jobStatus.last_error && (
               <div className="md:col-span-2">
-                <dt className="text-slate-500">Failure reason</dt>
-                <dd className="mt-1 whitespace-pre-wrap break-words text-rose-700">{jobStatus.failure_reason}</dd>
+                <dt className="text-slate-500">Last Error</dt>
+                <dd className="mt-1 whitespace-pre-wrap break-words text-rose-700">{jobStatus.last_error}</dd>
+              </div>
+            )}
+            {jobStatus.error_type && (
+              <div>
+                <dt className="text-slate-500">Error Type</dt>
+                <dd className="mt-1 text-slate-900">{jobStatus.error_type}</dd>
+              </div>
+            )}
+            {jobStatus.reprocessed_count > 0 && (
+              <div>
+                <dt className="text-slate-500">Reprocessed Count</dt>
+                <dd className="mt-1 text-slate-900">{jobStatus.reprocessed_count}</dd>
+              </div>
+            )}
+            {jobStatus.heartbeat_at && (
+              <div>
+                <dt className="text-slate-500">Last Heartbeat</dt>
+                <dd className="mt-1 text-slate-900">{formatDate(jobStatus.heartbeat_at)}</dd>
               </div>
             )}
           </dl>

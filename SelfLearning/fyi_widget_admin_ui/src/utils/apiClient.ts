@@ -174,20 +174,14 @@ export function createApiClient(config: AdminConfig) {
 
     async getQueueStats(): Promise<{ queue_stats: QueueStats; total_jobs: number }> {
       try {
-        // Use v2 endpoint for blog processing queue stats
-        // Construct full URL to bypass baseURL (/api/v1) prefix
-        const baseUrl = config.baseUrl.replace(/\/$/, '');
-        const response = await axios.get<ApiSuccess<Record<string, number>>>(
-          `${baseUrl}/api/v2/admin/queue-stats`,
-          {
-            headers: config.adminKey ? { 'X-Admin-Key': config.adminKey } : {},
-            timeout: 15000
-          }
-        );
+        const response = await client.get<ApiSuccess<Record<string, number>>>('/admin/queue-stats', {
+          headers: config.adminKey ? { 'X-Admin-Key': config.adminKey } : {},
+          timeout: 15000
+        });
         const stats = response.data.result;
         
-        // Transform v2 response format to match expected format
-        // v2 returns: { QUEUED: 0, PROCESSING: 0, RETRY: 0, COMPLETED: 0, FAILED: 0, total: 0 }
+        // Transform response format to match expected format
+        // API returns: { QUEUED: 0, PROCESSING: 0, RETRY: 0, COMPLETED: 0, FAILED: 0, total: 0 }
         // Expected: { queue_stats: { ... }, total_jobs: number }
         const { total, ...queueStats } = stats;
         
@@ -200,17 +194,14 @@ export function createApiClient(config: AdminConfig) {
       }
     },
 
-    async cancelJob(jobId: string): Promise<void> {
+    async getJobStatus(url: string): Promise<JobStatus> {
       try {
-        await client.post(`/jobs/cancel/${jobId}`);
-      } catch (error) {
-        throw toApiError(error);
-      }
-    },
-
-    async getJobStatus(jobId: string): Promise<JobStatus> {
-      try {
-        const response = await client.get<ApiSuccess<JobStatus>>(`/jobs/status/${jobId}`);
+        const response = await client.get<ApiSuccess<JobStatus>>(
+          `/admin/jobs/status?url=${encodeURIComponent(url)}`,
+          {
+            headers: config.adminKey ? { 'X-Admin-Key': config.adminKey } : {}
+          }
+        );
         return response.data.result;
       } catch (error) {
         throw toApiError(error);

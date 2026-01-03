@@ -80,10 +80,6 @@ const DashboardPage = () => {
               <p className="text-slate-500">Open a publisher record and choose “Regenerate API key”.</p>
             </li>
             <li>
-              <span className="font-medium text-slate-800">Cancel a stuck job</span>
-              <p className="text-slate-500">Visit Jobs &amp; Queue, search for the job ID, and cancel it.</p>
-            </li>
-            <li>
               <span className="font-medium text-slate-800">Delete test content</span>
               <p className="text-slate-500">Use the Content Cleanup screen to remove blogs safely.</p>
             </li>

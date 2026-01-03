@@ -1,4 +1,4 @@
-"""V2 Admin router - administrative operations for blog processing."""
+"""Admin router - administrative operations for blog processing."""
 
 import logging
 from typing import Dict, Any
@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from fyi_widget_api.api.models import StandardErrorResponse, StandardSuccessResponse
 from fyi_widget_api.api.models.publisher_models import Publisher
+from fyi_widget_api.api.models.blog_processing_models import BlogProcessingQueueEntry
 from fyi_widget_api.api.repositories import QuestionRepository, PublisherRepository
 from fyi_widget_api.api.repositories.blog_processing_queue_repository import BlogProcessingQueueRepository
 from fyi_widget_api.api.repositories.blog_metadata_repository import BlogMetadataRepository
@@ -126,7 +127,7 @@ async def reprocess_blog(
         # Normalize the URL
         normalized_url = normalize_url(body.blog_url)
         logger.info(
-            f"[{request_id}] 🔧 [V2 ADMIN] Reprocess request: {normalized_url} "
+            f"[{request_id}] 🔧 [ADMIN] Reprocess request: {normalized_url} "
             f"(publisher: {body.publisher_id}, reason: {body.reason or 'N/A'})"
         )
         
@@ -155,14 +156,14 @@ async def reprocess_blog(
         )
         
     except HTTPException as exc:
-        logger.error(f"[{request_id}] ❌ [V2 ADMIN] HTTP error: {exc.detail}")
+        logger.error(f"[{request_id}] ❌ [ADMIN] HTTP error: {exc.detail}")
         response_data = handle_http_exception(exc, request_id=request_id)
         raise HTTPException(
             status_code=response_data["status_code"],
             detail=response_data
         )
     except Exception as e:
-        logger.error(f"[{request_id}] ❌ [V2 ADMIN] Reprocess failed: {e}", exc_info=True)
+        logger.error(f"[{request_id}] ❌ [ADMIN] Reprocess failed: {e}", exc_info=True)
         response_data = handle_generic_exception(
             e,
             message="Failed to reprocess blog",
@@ -202,7 +203,7 @@ async def get_queue_stats(
     request_id = getattr(request.state, 'request_id', None) or generate_request_id()
     
     try:
-        logger.info(f"[{request_id}] 📊 [V2 ADMIN] Get queue stats")
+        logger.info(f"[{request_id}] 📊 [ADMIN] Get queue stats")
         
         # Access queue_repo through the service since it's already injected
         stats = await blog_processing_service.queue_repo.get_stats()
@@ -215,10 +216,95 @@ async def get_queue_stats(
         )
         
     except Exception as e:
-        logger.error(f"[{request_id}] ❌ [V2 ADMIN] Failed to get stats: {e}", exc_info=True)
+        logger.error(f"[{request_id}] ❌ [ADMIN] Failed to get stats: {e}", exc_info=True)
         response_data = handle_generic_exception(
             e,
             message="Failed to retrieve queue statistics",
+            request_id=request_id
+        )
+        raise HTTPException(
+            status_code=response_data["status_code"],
+            detail=response_data
+        )
+
+
+@router.get(
+    "/jobs/status",
+    dependencies=[Depends(verify_admin_key), Security(admin_key_header)],
+    response_model=StandardSuccessResponse,
+    responses={
+        200: {"description": "Blog processing status retrieved"},
+        401: {"model": StandardErrorResponse, "description": "Admin authentication required"},
+        404: {"model": StandardErrorResponse, "description": "Blog not found in processing queue"}
+    }
+)
+async def get_blog_status(
+    request: Request,
+    url: str,
+    queue_repo: BlogProcessingQueueRepository = Depends(get_blog_queue_repository),
+) -> Dict[str, Any]:
+    """
+    **Admin Only** - Get blog processing status by URL.
+    
+    **Authentication**: Requires X-Admin-Key header.
+    
+    Returns the current processing state of a blog from the blog_processing_queue collection.
+    
+    **Query Parameters:**
+    - `url`: Blog URL (will be normalized before lookup)
+    
+    **Example:**
+    ```
+    GET /api/v1/admin/jobs/status?url=https://example.com/article
+    ```
+    
+    **Response Fields:**
+    - `url`: Blog URL
+    - `publisher_id`: Publisher ID
+    - `status`: Current status (queued, processing, retry, completed, failed)
+    - `attempt_count`: Number of processing attempts
+    - `worker_id`: Worker instance processing this (if any)
+    - `last_error`: Last error message (if any)
+    - `created_at`: When entry was created
+    - `updated_at`: Last update timestamp
+    - `started_at`: When current attempt started (if processing)
+    - `completed_at`: When processing completed (if completed)
+    - And other metadata fields
+    """
+    request_id = getattr(request.state, 'request_id', None) or generate_request_id()
+    
+    try:
+        # Normalize the URL
+        normalized_url = normalize_url(url)
+        logger.info(f"[{request_id}] 📊 [ADMIN] Get blog status: {normalized_url}")
+        
+        # Get entry from queue
+        entry = await queue_repo.get_by_url(normalized_url)
+        if not entry:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Blog not found in processing queue: {normalized_url}"
+            )
+        
+        # Convert to Pydantic model for validation and serialization
+        # Remove MongoDB _id field if present
+        entry_dict = {k: v for k, v in entry.items() if k != "_id"}
+        queue_entry = BlogProcessingQueueEntry(**entry_dict)
+        
+        return success_response(
+            result=queue_entry.model_dump(),
+            message="Blog processing status retrieved",
+            status_code=200,
+            request_id=request_id
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[{request_id}] ❌ [ADMIN] Failed to get blog status: {e}", exc_info=True)
+        response_data = handle_generic_exception(
+            e,
+            message="Failed to retrieve blog processing status",
             request_id=request_id
         )
         raise HTTPException(

@@ -64,35 +64,6 @@ class QuestionSchema(BaseModel):
     created_at: str = Field(..., example="2025-10-18T14:30:00.123456")
 
 
-class QuestionsByUrlResponse(BaseModel):
-    """Response for getting questions by URL."""
-    status: str = Field("success", example="success")
-    status_code: int = Field(200, example=200)
-    message: str = Field(..., example="Questions retrieved successfully")
-    result: Dict[str, Any] = Field(
-        ...,
-        example={
-            "blog_url": "https://example.com/article",
-            "questions": [
-                {
-                    "id": "507f1f77bcf86cd799439011",
-                    "question": "What is the main topic?",
-                    "answer": "The article discusses...",
-                    "blog_url": "https://example.com/article",
-                    "created_at": "2025-10-18T14:30:00.123456"
-                }
-            ],
-            "blog_info": {
-                "title": "Example Article",
-                "url": "https://example.com/article",
-                "word_count": 1000
-            }
-        }
-    )
-    request_id: str = Field(..., example="req_abc123def456")
-    timestamp: str = Field(..., example="2025-10-18T14:30:00.123456")
-
-
 class QuestionByIdResponse(BaseModel):
     """Response for getting a single question by ID."""
     status: str = Field("success", example="success")
@@ -126,74 +97,6 @@ class CheckAndLoadResponse(BaseModel):
             "blog_info": None,
             "job_id": "job_abc123",
             "message": "Processing started - check back in 30-60 seconds"
-        }
-    )
-    request_id: str = Field(..., example="req_abc123def456")
-    timestamp: str = Field(..., example="2025-10-18T14:30:00.123456")
-
-
-# ============================================================================
-# Jobs Endpoints
-# ============================================================================
-
-class ProcessJobResponse(BaseModel):
-    """Response for processing a blog job."""
-    status: str = Field("success", example="success")
-    status_code: int = Field(202, example=202)
-    message: str = Field(..., example="Blog processing job enqueued successfully")
-    result: Dict[str, Any] = Field(
-        ...,
-        example={
-            "job_id": "job_abc123",
-            "blog_url": "https://example.com/article",
-            "status": "queued",
-            "created_at": "2025-10-18T14:30:00.123456"
-        }
-    )
-    request_id: str = Field(..., example="req_abc123def456")
-    timestamp: str = Field(..., example="2025-10-18T14:30:00.123456")
-
-
-class JobStatusResponse(BaseModel):
-    """Response for job status."""
-    status: str = Field("success", example="success")
-    status_code: int = Field(200, example=200)
-    message: str = Field(..., example="Job status retrieved successfully")
-    result: Dict[str, Any] = Field(
-        ...,
-        example={
-            "job_id": "job_abc123",
-            "blog_url": "https://example.com/article",
-            "status": "completed",
-            "failure_count": 0,
-            "created_at": "2025-10-18T14:30:00.123456",
-            "started_at": "2025-10-18T14:30:05.123456",
-            "completed_at": "2025-10-18T14:30:30.123456",
-            "processing_time_seconds": 25.0,
-            "result": {
-                "summary_id": "summary_abc123",
-                "question_count": 20,
-                "embedding_count": 21
-            }
-        }
-    )
-    request_id: str = Field(..., example="req_abc123def456")
-    timestamp: str = Field(..., example="2025-10-18T14:30:00.123456")
-
-
-class JobStatsResponse(BaseModel):
-    """Response for job statistics."""
-    status: str = Field("success", example="success")
-    status_code: int = Field(200, example=200)
-    message: str = Field(..., example="Job statistics retrieved successfully")
-    result: Dict[str, Any] = Field(
-        ...,
-        example={
-            "queued": 10,
-            "processing": 2,
-            "completed": 100,
-            "failed": 5,
-            "skipped": 3
         }
     )
     request_id: str = Field(..., example="req_abc123def456")
