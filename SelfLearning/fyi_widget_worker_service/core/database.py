@@ -3,6 +3,7 @@
 import logging
 from typing import Optional
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from fyi_widget_worker_service.core.config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,7 @@ class DatabaseManager:
         """Initialize database manager."""
         self.client: Optional[AsyncIOMotorClient] = None
         self._database: Optional[AsyncIOMotorDatabase] = None
+        self.config = get_config()
         logger.info("🔧 DatabaseManager initialized")
     
     async def connect(
@@ -25,6 +27,8 @@ class DatabaseManager:
     ):
         """
         Connect to MongoDB.
+        
+        Reads connection pool settings from config (environment variables).
         
         Args:
             mongodb_url: MongoDB connection URL
@@ -47,20 +51,23 @@ class DatabaseManager:
             else:
                 connection_url = mongodb_url
             
-            # Create client with increased connection pool for parallel processing
+            # Create client with connection pool settings from config
             self.client = AsyncIOMotorClient(
                 connection_url,
-                maxPoolSize=50,          # Increased from default (10) for parallel processing
-                minPoolSize=10,           # Keep connections warm
-                maxIdleTimeMS=45000,      # Close idle connections after 45s
-                serverSelectionTimeoutMS=5000
+                maxPoolSize=self.config.mongodb_max_pool_size,
+                minPoolSize=self.config.mongodb_min_pool_size,
+                maxIdleTimeMS=self.config.mongodb_max_idle_time_ms,
+                serverSelectionTimeoutMS=self.config.mongodb_server_selection_timeout_ms
             )
             self._database = self.client[database_name]
             
             # Test connection
             await self.client.admin.command('ping')
             
-            logger.info(f"✅ Connected to MongoDB: {database_name}")
+            logger.info(
+                f"✅ Connected to MongoDB: {database_name} "
+                f"(pool: {self.config.mongodb_min_pool_size}-{self.config.mongodb_max_pool_size} connections)"
+            )
             
         except Exception as e:
             logger.error(f"❌ Failed to connect to MongoDB: {e}")

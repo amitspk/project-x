@@ -17,6 +17,7 @@ from sqlalchemy.future import select
 from sqlalchemy import func
 
 from fyi_widget_api.api.models.publisher_models import Publisher, PublisherStatus, PublisherConfig
+from fyi_widget_api.config.config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -71,19 +72,25 @@ class PublisherRepository:
         self.database_url = database_url
         self.engine = None
         self.async_session_factory = None
+        self.config = get_config()
         
     async def connect(self):
-        """Establish database connection and create tables."""
+        """
+        Establish database connection and create tables.
+        
+        Reads connection pool settings from config (environment variables).
+        """
         try:
             logger.info(f"Connecting to PostgreSQL: {self.database_url.split('@')[1] if '@' in self.database_url else 'localhost'}")
             
-            # Create async engine
+            # Create async engine with connection pool settings from config
             self.engine = create_async_engine(
                 self.database_url,
                 echo=False,
-                pool_size=10,
-                max_overflow=20,
-                pool_pre_ping=True
+                pool_size=self.config.postgres_pool_size,
+                max_overflow=self.config.postgres_max_overflow,
+                pool_pre_ping=True,     # Health check before use
+                pool_recycle=self.config.postgres_pool_recycle
             )
             
             # Create session factory

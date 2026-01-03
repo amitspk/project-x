@@ -2,10 +2,15 @@
 
 import logging
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.openapi.utils import get_openapi
+
+# Load .env file before importing config
+# This ensures environment variables are available when pydantic_settings reads them
+load_dotenv()
 
 # Import routers
 from fyi_widget_api.api.routers import questions_router, search_router, qa_router, publishers_router, admin_router
@@ -29,17 +34,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Global database manager / config
-db_manager = DatabaseManager()
-config = get_config()
-SERVICE_PORT = config.service_port
-CORS_ORIGINS = config.cors_origins
+# Global database manager / config (lazy initialization)
+db_manager: DatabaseManager = None
+config = None
+
+
+def get_app_config():
+    """Lazy initialization of config to avoid errors during reload."""
+    global config
+    if config is None:
+        config = get_config()
+    return config
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifecycle management for the application."""
+    global db_manager, config
+    
     logger.info("🚀 Starting API Service...")
+    
+    # Initialize config and db_manager
+    config = get_config()
+    db_manager = DatabaseManager()
     
     # Connect to MongoDB
     await db_manager.connect(
@@ -120,9 +137,11 @@ app = FastAPI(
 )
 
 # CORS - Allow requests from admin console and other frontends
+# Get config lazily for CORS setup
+_cors_config = get_app_config()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS if CORS_ORIGINS else ["*"],  # From config (default: allow all)
+    allow_origins=_cors_config.cors_origins if _cors_config.cors_origins else ["*"],  # From config (default: allow all)
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods (GET, POST, PUT, DELETE, OPTIONS, etc.)
     allow_headers=["*"],  # Allow all headers (including X-API-Key, X-Admin-Key, Content-Type)
@@ -271,7 +290,13 @@ app.include_router(admin_router.router, prefix="/api/v1/admin", tags=["Admin"])
 async def health_check():
     """Health check endpoint."""
     try:
-        # Check database
+        # Check database (db_manager is initialized in lifespan)
+        if db_manager is None:
+            return {
+                "status": "unhealthy",
+                "service": "api-service",
+                "error": "Database manager not initialized"
+            }
         db_healthy = await db_manager.health_check()
         
         return {
@@ -323,5 +348,6 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=SERVICE_PORT)
+    _main_config = get_app_config()
+    uvicorn.run(app, host="0.0.0.0", port=_main_config.service_port)
 

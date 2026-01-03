@@ -9,6 +9,10 @@ from datetime import datetime
 from typing import Optional, Callable, Coroutine, Any, Dict, List
 from dotenv import load_dotenv
 
+# Load .env file before importing config
+# This ensures environment variables are available when pydantic_settings reads them
+load_dotenv()
+
 from fyi_widget_worker_service.core.database import DatabaseManager
 from fyi_widget_worker_service.repositories import JobRepository, PublisherRepository
 from fyi_widget_worker_service.repositories.blog_processing_queue_repository import BlogProcessingQueueRepository
@@ -124,7 +128,7 @@ class BlogProcessingWorker:
         """Start the worker."""
         logger.info("🚀 Starting Worker Service...")
         
-        # Connect to MongoDB
+        # Connect to MongoDB (pool settings read from config internally)
         await self.db_manager.connect(
             mongodb_url=self.config.mongodb_url,
             database_name=self.config.database_name,
@@ -137,6 +141,7 @@ class BlogProcessingWorker:
         # These are called after DB connection to handle lifecycle-dependent dependencies
         
         # 1. Create PublisherRepository (requires DB connection)
+        # Pool settings are read from config internally
         self.publisher_repo = await self.publisher_repo_factory(self.config.postgres_url)
         await self.publisher_repo.connect()
         logger.info("✅ PostgreSQL connected")
@@ -647,11 +652,7 @@ async def main():
     """Main entry point."""
     global worker
     
-    # Load .env file into os.environ so LLM library can read API keys
-    # This is needed because the library reads from os.getenv() when api_key=None
-    load_dotenv()
-    
-    # Load configuration
+    # Load configuration (load_dotenv() was already called at module level)
     config = get_config()
     
     # Setup signal handlers

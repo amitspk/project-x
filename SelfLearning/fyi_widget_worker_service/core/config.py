@@ -36,11 +36,22 @@ class WorkerServiceConfig(BaseSettings):
     mongodb_password: str = Field(default="password123", env="MONGODB_PASSWORD")
     database_name: str = Field(default="blog_qa_db", env="DATABASE_NAME")
     
+    # MongoDB Connection Pool
+    mongodb_max_pool_size: int = Field(default=50, env="MONGODB_MAX_POOL_SIZE", description="Maximum number of connections in MongoDB pool")
+    mongodb_min_pool_size: int = Field(default=10, env="MONGODB_MIN_POOL_SIZE", description="Minimum number of connections in MongoDB pool")
+    mongodb_max_idle_time_ms: int = Field(default=45000, env="MONGODB_MAX_IDLE_TIME_MS", description="Close idle connections after this many milliseconds")
+    mongodb_server_selection_timeout_ms: int = Field(default=5000, env="MONGODB_SERVER_SELECTION_TIMEOUT_MS", description="Timeout for server selection in milliseconds")
+    
     # PostgreSQL (required)
     postgres_url: str = Field(
         default="postgresql+psycopg://postgres:postgres@localhost:5432/blog_qa_publishers",
         env="POSTGRES_URL"
     )
+    
+    # PostgreSQL Connection Pool
+    postgres_pool_size: int = Field(default=20, env="POSTGRES_POOL_SIZE", description="Base number of connections in PostgreSQL pool")
+    postgres_max_overflow: int = Field(default=30, env="POSTGRES_MAX_OVERFLOW", description="Maximum overflow connections beyond pool_size")
+    postgres_pool_recycle: int = Field(default=3600, env="POSTGRES_POOL_RECYCLE", description="Recycle connections after this many seconds")
     
     # OpenAI model (API keys are read by LLM library from env vars)
     openai_model: str = Field(default="gpt-4o-mini", env="OPENAI_MODEL")
