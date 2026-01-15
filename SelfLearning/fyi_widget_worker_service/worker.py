@@ -291,7 +291,16 @@ class BlogProcessingWorker:
             if normalized_url != job.blog_url:
                 logger.info(f"   Normalized URL: {normalized_url}")
             
-            # Fetch publisher config
+            # For testing: if URL contains localhost, use hardcoded test URL for crawling
+            # This allows testing with localhost URLs while using real content
+            TEST_CRAWL_URL = "https://www.rushlane.com/new-kia-clarens-clavis-hte-ex-launch-price-rs-12-55-l-12538043.html"
+            if "localhost" in normalized_url.lower():
+                logger.info(f"🔄 Localhost URL detected, using test URL for crawling: {TEST_CRAWL_URL}")
+                crawl_url = TEST_CRAWL_URL
+            else:
+                crawl_url = normalized_url
+            
+            # Fetch publisher config (use original normalized_url, not crawl_url)
             config = await self.get_publisher_config(normalized_url)
             
             # Helper function to get model value
@@ -371,9 +380,14 @@ class BlogProcessingWorker:
             
             # If no existing content or invalid, crawl the blog
             if crawl_result is None:
-                logger.info(f"🕷️  Crawling: {normalized_url}")
+                logger.info(f"🕷️  Crawling: {crawl_url}")
                 try:
-                    crawl_result = await self.crawler.crawl_url(normalized_url)
+                    crawl_result = await self.crawler.crawl_url(crawl_url)
+                    
+                    # If we used a test URL for crawling, update the result URL to the original
+                    if crawl_url != normalized_url:
+                        crawl_result.url = normalized_url
+                        logger.info(f"   Updated crawl result URL to original: {normalized_url}")
                     
                     # crawl_result is CrawledContent on success, exception raised on failure
                     if not crawl_result or not crawl_result.content:
